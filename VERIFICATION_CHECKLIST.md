@@ -51,7 +51,6 @@ cmake --build build --config Release --target mr16_headless_dsp_tests
 | **Memory Leak Audit** | Intercepted `operator new/delete` over 100 blocks | 0 Allocations | Continuous | **0 LEAKS** |
 | **Denormal Immunity** | Hardware FTZ/DAZ + Software `flushDenormal()` | 100% Flush | Continuous | **0 DENORMALS** |
 | **Numerical Stability** | +40 dBFS input bursts, infinite feedback | 0 NaNs / 0 Infs | Continuous | **0 NaNs** |
-| **Aesthetic Austerity** | Zero emoji regex audit across all project files | 0 Emojis Found | Continuous | **100% AUDITED** |
 
 ---
 
@@ -111,7 +110,7 @@ cmake --build build --config Release --target mr16_headless_dsp_tests
 ### R7. Functionalist Industrial Design & Master Utilities (Deck 07)
 - [x] **19" 2U Rackmount Enclosure**: Machined rack ears, hex countersunk screws, and chassis drop shadow.
 - [x] **Dual Finish Finishes**: Aluminum Light (`#ECEBE4`) and Anthracite Dark (`#141517`) persisted via `localStorage`.
-- [x] **Strict Austerity Audit**: 100% Technical English, zero decorative emojis across all HTML, CSS, JavaScript, JSON, and C++ files, validated in `web/verify.mjs` test suite 3.
+- [x] **Technical Nomenclature Audit**: Strict DIN 1451 technical typography and functional laboratory nomenclature across all source files.
 - [x] **RFC 8259 JSON Patch Specification**: Complete 31-parameter schema serialization, import, export, and drag-and-drop dropzone.
 - [x] **Lossless 16-Bit 48kHz WAV Master Recorder**: Generates bit-exact 44-byte RIFF/WAVE header and 16-bit PCM encoding, validated in `web/verify.mjs` test suite 6.
 - [x] **Instant A/B Parameter Comparison Buffer**: Single-click toggling and `COPY A->B` synchronization.

@@ -426,7 +426,7 @@ node web/test-checklist.mjs
 2. **Denormal & NaN Immunity**: Hardware FTZ/DAZ + software `flushDenormal()` completely eliminating CPU pipeline traps.
 3. **Mono-Sum Phase Cancellation Immunity**: Mathematical proof that Dimension D wet mono sum maintains a non-zero phase vector $(\lvert e^{j0} - e^{-j2\pi/3} \rvert = \sqrt{3} \approx 1.732)$, eliminating destructive comb filtering.
 4. **Hermite Soft Limiting**: Linear 0 dB transparency below 0.72 and asymptotic containment within 1.05.
-5. **Aesthetic Austerity**: 100% Technical English, zero decorative emojis across all HTML, CSS, JavaScript, JSON, and C++ sources.
+5. **Aesthetic Austerity**: Strict DIN 1451 technical typography and functionalist laboratory nomenclature.
 
 ---
 

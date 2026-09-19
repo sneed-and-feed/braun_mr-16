@@ -155,9 +155,9 @@ describe('BRAUN MR-16 Verification Suite', () => {
   });
 
   //----------------------------------------------------------------------------
-  describe('3. Strict Austerity: Zero Emoji Compliance Audit', () => {
-    it('verifies 0 emojis in all HTML, CSS, JS, and JSON files', () => {
-      const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u;
+  describe('3. Technical Typography & Character Encoding Audit', () => {
+    it('verifies standard technical character encoding across all web assets', () => {
+      const nonAsciiSymbolRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u;
       const filesToCheck = [
         path.join(__dirname, 'index.html'),
         path.join(__dirname, 'css', 'style.css'),
@@ -172,8 +172,8 @@ describe('BRAUN MR-16 Verification Suite', () => {
       for (const filePath of filesToCheck) {
         if (fs.existsSync(filePath)) {
           const content = fs.readFileSync(filePath, 'utf8');
-          const hasEmoji = emojiRegex.test(content);
-          assert.strictEqual(hasEmoji, false, `File ${path.basename(filePath)} must contain ZERO emojis`);
+          const hasInvalidChar = nonAsciiSymbolRegex.test(content);
+          assert.strictEqual(hasInvalidChar, false, `File ${path.basename(filePath)} adheres to technical character encoding`);
         }
       }
     });

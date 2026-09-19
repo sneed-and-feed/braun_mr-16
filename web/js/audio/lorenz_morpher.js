@@ -10,8 +10,7 @@
  * - 3D Chaotic Lorenz Attractor trajectory steering (x, y, z) dynamically
  *   perturbing the 16-dimensional modal path via golden-ratio projections
  *
- * Strict real-time safety, zero dynamic allocations during morph callbacks,
- * zero emojis, DIN 1451 technical English nomenclature.
+ * DIN 1451 technical English nomenclature.
  */
 
 import { MANIFOLD_RATIOS, MATERIAL_PROFILES } from './mr16_web_engine.js';
