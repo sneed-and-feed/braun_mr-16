@@ -984,10 +984,16 @@ class BraunMr16App {
     });
 
     // --- Deck 01: Exciter Mode Segment Buttons ---
-    document.getElementById('group-exciter-mode')?.addEventListener('click', (e) => {
-      if (e.target.tagName === 'BUTTON') {
-        const val = parseInt(e.target.dataset.val, 10);
-        this._updateSegmentActive('group-exciter-mode', e.target);
+    const exciterModeGroup = document.getElementById('group-exciter-mode');
+    exciterModeGroup?.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+    });
+    exciterModeGroup?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const btn = e.target.closest('button');
+      if (btn && exciterModeGroup.contains(btn)) {
+        const val = parseInt(btn.dataset.val, 10);
+        this._updateSegmentActive('group-exciter-mode', btn);
         this.engine.setParam('exciter_type', val);
         this._emitJuceParam('exciter_type', val);
       }

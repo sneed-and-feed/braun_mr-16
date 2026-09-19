@@ -579,6 +579,7 @@ export class Mr16WebEngine {
         this.updateChorusParams();
         break;
 
+      case 'exciter_type':
       case 'friction_force':
       case 'friction_speed':
         this.updateFrictionParams();

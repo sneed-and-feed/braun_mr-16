@@ -306,6 +306,27 @@ describe('BRAUN MR-16 Automated DSP Verification Checklist', () => {
       }
       assert.strictEqual(expectedParams.length, 31, 'Exactly 31 parameters declared in core tree');
     });
+
+    it('verifies exciter_type parameter updates and friction generator state handling', async () => {
+      const engineModule = await import('./js/audio/mr16_web_engine.js');
+      const engine = new engineModule.Mr16WebEngine();
+      engine.isInitialized = true;
+      engine.ctx = { currentTime: 0.0 };
+
+      let frictionUpdated = false;
+      engine.updateFrictionParams = () => {
+        frictionUpdated = true;
+      };
+
+      engine.setParam('exciter_type', 1);
+      assert.strictEqual(engine.params.exciter_type, 1, 'exciter_type must be set to 1 (Friction)');
+      assert.strictEqual(frictionUpdated, true, 'updateFrictionParams must be called on exciter_type change');
+
+      frictionUpdated = false;
+      engine.setParam('exciter_type', 0);
+      assert.strictEqual(engine.params.exciter_type, 0, 'exciter_type must be set to 0 (Strike)');
+      assert.strictEqual(frictionUpdated, true, 'updateFrictionParams must be called when switching away from friction');
+    });
   });
 
   //----------------------------------------------------------------------------
