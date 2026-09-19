@@ -1,6 +1,6 @@
 {
   "name": "braun-mr-16",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Dieter Rams / Braun inspired modal acoustic resonator and kinetic impulse synthesizer (16-pole modal matrix, 4 manifolds, 3D Lorenz attractor, tri-phase BBD chorus)",
   "type": "module",
   "scripts": {
