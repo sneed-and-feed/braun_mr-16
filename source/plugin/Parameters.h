@@ -229,7 +229,7 @@ inline const std::array<ParameterMetadata, 33>& getParameterMetadataTable() {
         { 1, "friction_force",    "frictionForce",   "Friction Force",      "%",    0.0f,    1.0f,     0.35f,   false, false },
         { 1, "friction_speed",    "frictionSpeed",   "Friction Speed",      "%",    0.0f,    1.0f,     0.40f,   false, false },
         { 1, "vactrol_sag",       "vactrolSag",      "Vactrol Sag",         "%",    0.0f,    1.0f,     0.60f,   false, false },
-        { 1, "ext_input_gain",    "extInputGain",    "Ext Input Gain",      "dB",   -24.0f,  12.0f,    -24.0f,  false, false },
+        { 1, "ext_input_gain",    "extInputGain",    "Ext Input Gain",      "dB",   -24.0f,  12.0f,    0.0f,    false, false },
         { 1, "poisson_density",   "poissonDensity",  "Poisson Density",     "Hz",   0.0f,    25.0f,    0.0f,    false, false },
         { 1, "euclidean_pulses",  "euclideanPulses", "Euclidean Pulses",    "",     0.0f,    32.0f,    4.0f,    false, false },
         { 1, "euclidean_steps",   "euclideanSteps",  "Euclidean Steps",     "",     1.0f,    32.0f,    16.0f,   false, false },
@@ -297,7 +297,7 @@ struct alignas(64) Mr16ParameterSnapshot {
     float       frictionForce    { 0.35f };
     float       frictionSpeed    { 0.40f };
     float       vactrolSag       { 0.60f };
-    float       extInputGainDb   { -24.0f };
+    float       extInputGainDb   { 0.0f };
     float       poissonDensity   { 0.0f };
     bool        euclideanEnable  { false };
     int         euclideanPulses  { 4 };
@@ -349,7 +349,7 @@ struct alignas(64) Mr16ParameterSnapshot {
         p.euclideanEnable       = euclideanEnable;
         p.euclideanPulses       = euclideanPulses;
         p.euclideanSteps        = euclideanSteps;
-        p.externalAudioEnable   = (exciterType == ExciterType::ExtIn && extInputGainDb > -23.0f);
+        p.externalAudioEnable   = (exciterType == ExciterType::ExtIn && extInputGainDb > -23.9f);
         p.externalSensitivity   = std::pow(10.0f, extInputGainDb * 0.05f);
 
         p.fundamentalHz         = modalFrequency;
@@ -374,6 +374,7 @@ struct alignas(64) Mr16ParameterSnapshot {
 
         p.vactrolSagEnable      = (vactrolSag > 0.02f);
         p.vactrolSagAmount      = vactrolSag;
+        p.vactrolLpgCutoff      = vactrolLpgCutoff;
         p.driveSaturation       = driveSaturationDb;
         p.dryWetMix             = dryWetMix;
         p.masterVolumeDb        = masterTrimDb;

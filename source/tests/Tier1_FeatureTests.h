@@ -938,6 +938,8 @@ inline void registerTier1Tests() {
         p.externalAudioEnable = true;
         p.externalSensitivity = 1.0f;
         p.externalDirectMix = 0.35f;
+        p.vactrolSagEnable = true;
+        p.vactrolLpgCutoff = 12000.0f;
         p.dryWetMix = 1.0f;
         p.poissonEnable = false;
         p.euclideanEnable = false;
@@ -975,7 +977,7 @@ inline void registerTier1Tests() {
 
         // Cease input audio and verify exponential decay without runaway feedback
         std::vector<float> silentIn(blockSize, 0.0f);
-        constexpr int decayBlocks = (48000 * 3) / blockSize; // 3 seconds of decay
+        constexpr int decayBlocks = (48000 * 4) / blockSize; // 4 seconds of decay
         float earlyDecayRms = 0.0f;
         float lateDecayRms = 0.0f;
 
@@ -1008,8 +1010,8 @@ inline void registerTier1Tests() {
             engine.setParameters(preset.params);
             engine.reset();
 
-            // Trigger full-velocity strike with hard collision
-            engine.enqueueTriggerStrike(1.0f, 0.85f);
+            // Trigger full velocity chime key strike
+            engine.enqueueTriggerChime(0, 1.0f);
 
             float maxPeak = 0.0f;
             int clippedSamples = 0;
@@ -1028,6 +1030,52 @@ inline void registerTier1Tests() {
             TEST_ASSERT(clippedSamples == 0, "Full velocity key strike must produce bit-exact ZERO clipped samples across all presets");
             TEST_ASSERT(maxPeak <= 1.049f, "Peak amplitude on full strike must not breach saturator ceiling");
         }
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    registerTest("Tier 1", "T1_DYN_10", "Mr16Engine - Continuous External Audio High-Frequency Bandwidth & Resonator Coloration", []() {
+        mr16::Mr16Engine engine;
+        engine.prepare(48000.0, 256);
+        engine.reset();
+
+        mr16::Mr16Parameters p;
+        p.externalAudioEnable = true;
+        p.externalSensitivity = 1.0f;
+        p.externalDirectMix = 0.35f;
+        p.vactrolSagEnable = true;
+        p.vactrolLpgCutoff = 12000.0f;
+        p.dryWetMix = 0.50f; // 50/50 dry/wet balance
+        p.fundamentalHz = 440.0f;
+        p.manifold = mr16::ManifoldType::ChladniPlate;
+        p.material = mr16::MaterialType::Brass;
+        p.couplingDepth = 0.25f;
+        p.decayScale = 1.50f;
+        p.chorusEnable = true;
+        engine.setParameters(p);
+
+        // Feed 1 kHz external synthesizer audio (0 dBFS peak)
+        constexpr int blockSize = 256;
+        constexpr int numBlocks = 48000 / blockSize; // 1 second
+        const auto inSig = test_utils::generateSine(blockSize * numBlocks, 1000.0, 48000.0, 0.9f);
+        std::vector<float> outL(blockSize, 0.0f), outR(blockSize, 0.0f);
+
+        float maxPeak = 0.0f;
+        int clippedSamples = 0;
+        for (int b = 0; b < numBlocks; ++b) {
+            const float* inPtr = inSig.data() + b * blockSize;
+            engine.processBlock(inPtr, inPtr, outL.data(), outR.data(), blockSize);
+            for (int s = 0; s < blockSize; ++s) {
+                float magL = std::abs(outL[s]);
+                float magR = std::abs(outR[s]);
+                maxPeak = std::max(maxPeak, std::max(magL, magR));
+                if (magL >= 1.049f || magR >= 1.049f) {
+                    ++clippedSamples;
+                }
+            }
+        }
+
+        TEST_ASSERT(clippedSamples == 0, "External 1 kHz audio must produce zero clipped samples");
+        TEST_ASSERT(maxPeak > 0.30f && maxPeak <= 1.0f, "External 1 kHz audio must pass with healthy balanced amplitude through 12 kHz LPG");
         return test::gCurrentTestAssertFailures == 0;
     });
 

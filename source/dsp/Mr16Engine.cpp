@@ -365,8 +365,8 @@ void Mr16Engine::prepare(double sampleRate, int maxBlockSize) noexcept {
     mChorus.prepare(sampleRate);
     mVactrolGate.prepare(sampleRate);
     mVactrolGate.setMode(VactrolMode::FilterOnly);
-    mVactrolGate.setCutoffRange(120.0f, 18000.0f);
-    mVactrolGate.setControlVoltage(0.40f);
+    mVactrolGate.setCutoffRange(40.0f, mParams.vactrolLpgCutoff);
+    mVactrolGate.setControlVoltage(1.0f);
 
     mVolumeSmoother.setSampleRate(mSampleRate);
     mVolumeSmoother.setTimeConstant(0.020f); // 20 ms click-free volume slewing
@@ -382,7 +382,8 @@ void Mr16Engine::reset() noexcept {
     mChorus.reset();
     mVactrolGate.reset();
     mVactrolGate.setMode(VactrolMode::FilterOnly);
-    mVactrolGate.setControlVoltage(0.40f);
+    mVactrolGate.setCutoffRange(40.0f, mParams.vactrolLpgCutoff);
+    mVactrolGate.setControlVoltage(1.0f);
 
     const float targetGain = mParams.outputMute ? 0.0f : dbToGain(mParams.masterVolumeDb);
     mVolumeSmoother.reset(targetGain);
@@ -438,6 +439,8 @@ void Mr16Engine::applyParametersToDsp() noexcept {
 
     // Deck 05: Dynamics & LPG (Tone shaper only, avoiding amplitude choke gating)
     mVactrolGate.setMode(VactrolMode::FilterOnly);
+    mVactrolGate.setCutoffRange(40.0f, mParams.vactrolLpgCutoff);
+    mVactrolGate.setControlVoltage(1.0f);
     mVactrolGate.setDynamicSag(mParams.vactrolSagAmount);
     mVactrolGate.setDecayTime(mParams.vactrolDecaySec);
     mSaturator.setKneeAndCeiling(mParams.saturatorKnee, mParams.saturatorCeiling);

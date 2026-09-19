@@ -1,7 +1,7 @@
 # BRAUN MR-16 · Modaler Resonator & Kinetischer Impulssynthesizer
 
-[![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(45%2F45%20C%2B%2B%20%7C%20100%2F100%20Web)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
-[![Version: 1.0.5](https://img.shields.io/badge/Version-1.0.5-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_mr-16/releases/tag/v1.0.5)
+[![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(46%2F46%20C%2B%2B%20%7C%20100%2F100%20Web)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
+[![Version: 1.0.6](https://img.shields.io/badge/Version-1.0.6-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_mr-16/releases/tag/v1.0.6)
 [![CI](https://github.com/sneed-and-feed/braun_mr-16/actions/workflows/build-and-release.yml/badge.svg)](https://github.com/sneed-and-feed/braun_mr-16/actions)
 [![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](#plugin-installation-daw-setup)
 [![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](#plugin-installation-daw-setup)
@@ -51,18 +51,18 @@ Opens `http://localhost:3816/` with the complete 19" 2U rackmount interface, 25 
 > The instrument initializes in **Standby** mode (`power = false`) by default to protect studio monitors and prevent startup transients. Click the orange **ACTIVE** button in Deck 07 to engage the audio graph.
 > Modern browsers enforce security restrictions on Web Audio AudioWorklets loaded via `file://`. Always launch through `start.bat` or `node server.js` to ensure the audio graph and telemetry instantiate correctly.
 
-### 2.2 Distributable Release Packages (v1.0.5)
+### 2.2 Distributable Release Packages (v1.0.6)
  
-Pre-compiled binary packages and checksum manifests are staged in `dist/` and published under [GitHub Releases v1.0.5](https://github.com/sneed-and-feed/braun_mr-16/releases/tag/v1.0.5):
+Pre-compiled binary packages and checksum manifests are staged in `dist/` and published under [GitHub Releases v1.0.6](https://github.com/sneed-and-feed/braun_mr-16/releases/tag/v1.0.6):
  
 | Platform | Format | Architecture | Distribution Package Archive | Verification Manifest |
 |:---|:---|:---|:---|:---|
-| **Windows** | Standalone (.exe) | x86_64 | [`BRAUN_MR16_v1.0.5_Standalone_Win64.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.5/BRAUN_MR16_v1.0.5_Standalone_Win64.zip) | `dist/SHA256SUMS.txt` |
-| **Windows** | VST3 Plugin | x86_64 | [`BRAUN_MR16_v1.0.5_VST3_Win64.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.5/BRAUN_MR16_v1.0.5_VST3_Win64.zip) | `dist/SHA256SUMS.txt` |
-| **Windows** | CLAP Plugin | x86_64 | [`BRAUN_MR16_v1.0.5_CLAP_Win64.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.5/BRAUN_MR16_v1.0.5_CLAP_Win64.zip) | `dist/SHA256SUMS.txt` |
-| **macOS** | Universal (AU, VST3, CLAP, App) | arm64 + x86_64 | [`BRAUN_MR16_v1.0.5_macOS_Universal.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.5/BRAUN_MR16_v1.0.5_macOS_Universal.zip) | `SHA256SUMS.txt` |
-| **Linux** | Standalone, VST3, CLAP | x86_64 | [`BRAUN_MR16_v1.0.5_Linux_x64.tar.gz`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.5/BRAUN_MR16_v1.0.5_Linux_x64.tar.gz) | `SHA256SUMS.txt` |
-| **Web** | Zero-Install Showcase | Cross-Platform | [`BRAUN_MR16_v1.0.5_Web_Showcase.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.5/BRAUN_MR16_v1.0.5_Web_Showcase.zip) | `dist/SHA256SUMS.txt` |
+| **Windows** | Standalone (.exe) | x86_64 | [`BRAUN_MR16_v1.0.6_Standalone_Win64.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.6/BRAUN_MR16_v1.0.6_Standalone_Win64.zip) | `dist/SHA256SUMS.txt` |
+| **Windows** | VST3 Plugin | x86_64 | [`BRAUN_MR16_v1.0.6_VST3_Win64.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.6/BRAUN_MR16_v1.0.6_VST3_Win64.zip) | `dist/SHA256SUMS.txt` |
+| **Windows** | CLAP Plugin | x86_64 | [`BRAUN_MR16_v1.0.6_CLAP_Win64.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.6/BRAUN_MR16_v1.0.6_CLAP_Win64.zip) | `dist/SHA256SUMS.txt` |
+| **macOS** | Universal (AU, VST3, CLAP, App) | arm64 + x86_64 | [`BRAUN_MR16_v1.0.6_macOS_Universal.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.6/BRAUN_MR16_v1.0.6_macOS_Universal.zip) | `SHA256SUMS.txt` |
+| **Linux** | Standalone, VST3, CLAP | x86_64 | [`BRAUN_MR16_v1.0.6_Linux_x64.tar.gz`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.6/BRAUN_MR16_v1.0.6_Linux_x64.tar.gz) | `SHA256SUMS.txt` |
+| **Web** | Zero-Install Showcase | Cross-Platform | [`BRAUN_MR16_v1.0.6_Web_Showcase.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.6/BRAUN_MR16_v1.0.6_Web_Showcase.zip) | `dist/SHA256SUMS.txt` |
 
 ### 2.3 Platform Requirements
 

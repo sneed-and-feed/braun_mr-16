@@ -67,6 +67,7 @@ struct Mr16Parameters {
     bool  vactrolSagEnable      { false };
     float vactrolSagAmount      { 0.50f };
     float vactrolDecaySec       { 0.080f };
+    float vactrolLpgCutoff      { 12000.0f };
     float driveSaturation       { 0.25f };
     float dryWetMix             { 0.65f };
     float saturatorKnee         { 0.72f };

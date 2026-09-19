@@ -340,7 +340,7 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
 
     const float currentExtGain = mExtGainSmoother.next();
     if (currentExtGain > 1.0e-5f) {
-        constexpr float kExtHeadroomCompensation = 0.035f;
+        constexpr float kExtHeadroomCompensation = 0.08f;
         exciterSum += dcY * (mExtSensitivity * mExtDirectMix * kExtHeadroomCompensation * currentExtGain);
     }
 

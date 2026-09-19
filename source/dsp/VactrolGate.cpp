@@ -76,7 +76,9 @@ float VactrolGate::processSample(float input) noexcept {
     mEnvFollower = flushDenormal(mEnvFollower);
 
     // Compute effective control voltage
-    const float effectiveCv = std::clamp(mTargetCv + mDynamicSag * mEnvFollower, 0.0f, 1.0f);
+    const float effectiveCv = (mMode == VactrolMode::FilterOnly)
+        ? std::clamp(mTargetCv - mDynamicSag * mEnvFollower * 0.35f, 0.05f, 1.0f)
+        : std::clamp(mTargetCv + mDynamicSag * mEnvFollower, 0.0f, 1.0f);
     updateConductance(effectiveCv);
 
     // VCA passband gain
@@ -118,7 +120,9 @@ void VactrolGate::processStereo(float inL, float inR, float& outL, float& outR) 
     mEnvFollower += envAlpha * (maxMag - mEnvFollower);
     mEnvFollower = flushDenormal(mEnvFollower);
 
-    const float effectiveCv = std::clamp(mTargetCv + mDynamicSag * mEnvFollower, 0.0f, 1.0f);
+    const float effectiveCv = (mMode == VactrolMode::FilterOnly)
+        ? std::clamp(mTargetCv - mDynamicSag * mEnvFollower * 0.35f, 0.05f, 1.0f)
+        : std::clamp(mTargetCv + mDynamicSag * mEnvFollower, 0.0f, 1.0f);
     updateConductance(effectiveCv);
 
     const float vcaGain = mConductance * mConductance;
