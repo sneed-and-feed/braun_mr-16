@@ -10,7 +10,7 @@
  * - Acoustic manifold classification against Chladni, Beam, Vocal, and Horn geometries
  * - Returns RFC 8259 compliant ModalProfile data structures
  *
- * Strict real-time safety, zero emojis, DIN 1451 technical English nomenclature.
+ * Strict real-time safety, DIN 1451 technical English nomenclature.
  */
 
 import { MANIFOLD_RATIOS } from './mr16_web_engine.js';

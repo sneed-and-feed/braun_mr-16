@@ -28,7 +28,7 @@
  *    - Mono sum phase cancellation immunity (|Mono - (L+R)/2| < 0.05 dBFS)
  * 5. Real-time performance & deterministic audio execution
  *
- * Strict real-time safety, zero emojis, DIN 1451 technical English.
+ * Strict real-time safety, DIN 1451 technical English.
  */
 
 import { describe, it } from 'node:test';

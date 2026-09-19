@@ -11,7 +11,7 @@
  * - Audition Sound Bar & 4 Machined Strike Triggers
  * - 16-Key Microtonal Chime Performance Strip with Velocity, Scales, and Hotkeys
  * - 60 FPS Vector CRT Oscilloscope Telemetry Bridge
- * - Dieter Rams functionalist laboratory aesthetics (100% Technical English, zero emojis)
+ * - Dieter Rams functionalist laboratory aesthetics (DIN 1451 Technical English)
  */
 
 import { BraunKnob } from './ui/knob.js';

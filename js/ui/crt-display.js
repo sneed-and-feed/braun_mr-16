@@ -11,7 +11,7 @@
  *   Mode 3: MODAL FFT - 16 discrete resonant phosphor bar meters with ballistic peak-hold indicators and tabular Hz readouts
  * - Power standby beam collapse animation
  * - Zero garbage collection in render loop
- * - Strict Dieter Rams functionalist typography & nomenclature (zero emojis)
+ * - Strict Dieter Rams functionalist typography & nomenclature
  */
 
 export class BraunCrtDisplay {

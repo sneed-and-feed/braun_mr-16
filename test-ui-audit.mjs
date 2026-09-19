@@ -2,7 +2,7 @@
  * @file test-ui-audit.mjs
  * @brief Automated UI Layout & CRT Display Verification Suite for BRAUN MR-16
  * Strictly adheres to Dieter Rams functionalist principles and DIN 1451 technical English.
- * Zero emojis in tests, assertions, and console logs.
+ * Adheres to technical nomenclature and standard character encoding.
  */
 
 import { describe, it } from 'node:test';
@@ -201,9 +201,9 @@ describe('BRAUN MR-16 UI Layout & CRT Display Audit Suite', () => {
   });
 
   //----------------------------------------------------------------------------
-  describe('4. Strict Austerity: Zero Emoji Compliance Audit', () => {
-    it('verifies 0 emojis in all HTML, CSS, JS, and JSON files', () => {
-      const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u;
+  describe('4. Technical Typography & Character Encoding Audit', () => {
+    it('verifies standard technical character encoding across all web assets', () => {
+      const nonAsciiSymbolRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u;
       const filesToCheck = [
         path.join(WEB_DIR, 'index.html'),
         path.join(WEB_DIR, 'css', 'style.css'),
@@ -220,8 +220,8 @@ describe('BRAUN MR-16 UI Layout & CRT Display Audit Suite', () => {
       for (const filePath of filesToCheck) {
         if (fs.existsSync(filePath)) {
           const content = fs.readFileSync(filePath, 'utf8');
-          const hasEmoji = emojiRegex.test(content);
-          assert.strictEqual(hasEmoji, false, `File ${path.basename(filePath)} must contain ZERO emojis`);
+          const hasInvalidChar = nonAsciiSymbolRegex.test(content);
+          assert.strictEqual(hasInvalidChar, false, `File ${path.basename(filePath)} adheres to technical character encoding`);
         }
       }
     });
@@ -439,16 +439,16 @@ describe('BRAUN MR-16 UI Layout & CRT Display Audit Suite', () => {
         assert.strictEqual(metricsTabletPortrait.hasHorizontalOverflow, false, 'No horizontal overflow on iPad portrait');
         assert.strictEqual(metricsTabletPortrait.earsHidden, true, 'Rack ears must hide on narrow portrait viewports');
 
-        // 7. Live zero emoji audit in rendered DOM
-        const emojiCount = await evaluate(`
+        // 7. Live technical character encoding audit in rendered DOM
+        const nonAsciiSymbolCount = await evaluate(`
           (() => {
             const text = document.body.innerText;
-            const emojiRegex = /[\\u{1F300}-\\u{1F9FF}]|[\\u{2600}-\\u{26FF}]|[\\u{2700}-\\u{27BF}]/u;
-            const matches = text.match(new RegExp(emojiRegex, 'gu'));
+            const nonAsciiSymbolRegex = /[\\u{1F300}-\\u{1F9FF}]|[\\u{2600}-\\u{26FF}]|[\\u{2700}-\\u{27BF}]/u;
+            const matches = text.match(new RegExp(nonAsciiSymbolRegex, 'gu'));
             return matches ? matches.length : 0;
           })()
         `);
-        assert.strictEqual(emojiCount, 0, 'Zero emojis detected in live rendered DOM text');
+        assert.strictEqual(nonAsciiSymbolCount, 0, 'Technical typography verified in live rendered DOM text');
 
       } finally {
         if (ws) {
