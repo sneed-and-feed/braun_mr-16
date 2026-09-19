@@ -96,7 +96,7 @@ public:
 private:
     juce::AudioProcessorValueTreeState apvts;
     mr16::Mr16AtomicPointers atomicPointers;
-    std::atomic<bool> isPoweredOn { false };
+    std::atomic<bool> isPoweredOn { true };
     std::atomic<bool> mPendingEngineReset { false };
     int mCurrentProgram { 0 };
 

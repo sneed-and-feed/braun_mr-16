@@ -254,8 +254,197 @@ class BraunMr16App {
     this.activeProfileSlot = 'A';
 
     this.telemetryRafId = null;
+    this._isJuceRecording = false;
+    this._juceBridgeInitialized = false;
 
     this._setupDOMReferences();
+  }
+
+  get isJuce() {
+    return Boolean(
+      (typeof window !== 'undefined' && (window.__IS_JUCE__ || window.__JUCE__?.backend || window.__JUCE__)) ||
+      (typeof window !== 'undefined' && window.location && (window.location.protocol === 'juce:' || window.location.hostname === 'juce.backend'))
+    );
+  }
+
+  _emitJuceParam(id, value) {
+    if (this.isJuce && typeof window !== 'undefined' && window.__JUCE__?.backend) {
+      try {
+        window.__JUCE__.backend.emitEvent('paramChange', { id, value });
+      } catch (err) {
+        console.warn('[JUCE] emitEvent paramChange error:', err);
+      }
+    }
+  }
+
+  _emitJuceExciter(data) {
+    if (this.isJuce && typeof window !== 'undefined' && window.__JUCE__?.backend) {
+      try {
+        window.__JUCE__.backend.emitEvent('exciterTrigger', data);
+      } catch (err) {
+        console.warn('[JUCE] emitEvent exciterTrigger error:', err);
+      }
+    }
+  }
+
+  _initJuceBridge() {
+    if (typeof window === 'undefined') return;
+
+    const setupBackend = () => {
+      const backend = window.__JUCE__?.backend;
+      if (!backend || this._juceBridgeInitialized) return;
+      this._juceBridgeInitialized = true;
+
+      if (typeof backend.addEventListener === 'function') {
+        // 1. Listen for paramUpdate events from JUCE C++ APVTS / host automation
+        backend.addEventListener('paramUpdate', (data) => {
+          if (!data || typeof data !== 'object') return;
+          const { id, webId, value } = data;
+          const targetId = id || webId;
+          if (targetId === 'power_state' || targetId === 'power' || targetId === 'powerState') {
+            const isPowered = (value > 0.5);
+            if (this.engine.isPowered !== isPowered) {
+              this.engine.setPower(isPowered);
+            }
+            if (this.dom.btnPower) {
+              this.dom.btnPower.classList.toggle('is-active', isPowered);
+              const statusText = this.dom.btnPower.querySelector('.braun-status-text');
+              const led = this.dom.btnPower.querySelector('.braun-led');
+              if (statusText) statusText.textContent = isPowered ? 'ACTIVE' : 'STANDBY';
+              if (led) led.classList.toggle('is-active-green', isPowered);
+            }
+            if (this.crt) this.crt.setPower(isPowered);
+            return;
+          }
+
+          if (typeof this.engine.params[targetId] !== 'undefined') {
+            this.engine.params[targetId] = value;
+          }
+
+          let knob = this.knobs[targetId] || (webId && this.knobs[webId]);
+          if (knob && typeof value === 'number') {
+            let knobVal = value;
+            if ((targetId === 'modal_coupling' || targetId === 'modalCoupling') && value <= 1.0) {
+              knobVal = value * 100;
+            } else if ((targetId === 'chorus_dimension' || targetId === 'chorusDimension') && value <= 1.0) {
+              knobVal = value * 100;
+            }
+            knob.setValue(knobVal, false);
+          }
+        });
+
+        // 2. Listen for telemetryFrame events for 60 FPS CRT scope & meters
+        backend.addEventListener('telemetryFrame', (data) => {
+          if (!data || typeof data !== 'object') return;
+
+          const scope = data.scopeL || data.scopeSamplesL;
+          if (this.crt) {
+            const telemetry = {};
+            if (scope && Array.isArray(scope)) {
+              telemetry.timeData = scope;
+            }
+            if (data.modalEnergies && Array.isArray(data.modalEnergies)) {
+              telemetry.modalEnergies = data.modalEnergies;
+            }
+            if (typeof data.lorenzX === 'number') {
+              telemetry.lorenzState = {
+                x: data.lorenzX,
+                y: data.lorenzY || 0,
+                z: data.lorenzZ || 0,
+                rate: this.engine.params.lorenz_rate || 0.85,
+                chaos: (this.engine.params.lorenz_chaos || 0.5) * 28.0
+              };
+            }
+            if (typeof data.exciterActivity === 'number' && data.exciterActivity > 0.05) {
+              telemetry.transientKick = data.exciterActivity;
+            }
+            this.crt.updateTelemetry(telemetry);
+          }
+
+          if (data.modalEnergies && Array.isArray(data.modalEnergies)) {
+            for (let i = 0; i < 16; i++) {
+              const bar = document.getElementById(`meter_${i}`);
+              if (bar) {
+                const energy = data.modalEnergies[i] || 0;
+                bar.style.width = `${Math.min(100, Math.max(0, energy * 100))}%`;
+              }
+            }
+          }
+        });
+
+        // 3. Listen for recordingState events
+        backend.addEventListener('recordingState', (data) => {
+          if (!data) return;
+          const isRec = Boolean(data.recording);
+          this._isJuceRecording = isRec;
+          if (this.dom.btnRecordWav) {
+            this.dom.btnRecordWav.classList.toggle('is-active', isRec);
+            const recText = this.dom.btnRecordWav.querySelector('.braun-rec-text');
+            const led = this.dom.btnRecordWav.querySelector('.braun-led');
+            if (recText) recText.textContent = isRec ? 'STOP & SAVE' : 'REC WAV';
+            if (led) led.classList.toggle('is-recording', isRec);
+          }
+        });
+      }
+
+      // 4. Wire knob context menus to showContextMenu
+      for (const [id, knob] of Object.entries(this.knobs)) {
+        if (!knob) continue;
+        knob.onContextMenu = (e) => {
+          try {
+            backend.emitEvent('showContextMenu', {
+              id: knob.paramId || id,
+              x: Math.round(e.screenX || e.clientX || 0),
+              y: Math.round(e.screenY || e.clientY || 0)
+            });
+          } catch (err) {
+            console.warn('[JUCE] showContextMenu error:', err);
+          }
+        };
+      }
+    };
+
+    if (window.__JUCE__?.backend) {
+      setupBackend();
+    } else {
+      let attempts = 0;
+      const poll = setInterval(() => {
+        attempts++;
+        if (window.__JUCE__?.backend) {
+          clearInterval(poll);
+          setupBackend();
+        } else if (attempts >= 50) {
+          clearInterval(poll);
+        }
+      }, 100);
+      if (typeof poll.unref === 'function') {
+        poll.unref();
+      }
+    }
+  }
+
+  triggerDirac() {
+    this._ensureActiveAudio();
+    this.engine.triggerDirac();
+    this._emitJuceExciter({ type: 'strike', vel: 1.0, hard: 1.0 });
+  }
+
+  triggerFeltHammer() {
+    this._ensureActiveAudio();
+    this.engine.triggerFeltHammer();
+    this._emitJuceExciter({ type: 'strike', vel: 0.8, hard: 0.65 });
+  }
+
+  triggerStickSlip(speed = 0.6, force = 0.5) {
+    this._ensureActiveAudio();
+    this.engine.triggerBowedFriction(speed);
+    this._emitJuceExciter({ type: 'friction', speed, force });
+  }
+
+  triggerAirJet(vel = 0.8) {
+    this._ensureActiveAudio();
+    this.engine.triggerAirJet(0.45);
+    this._emitJuceExciter({ type: 'vactrol', vel });
   }
 
   async init() {
@@ -268,6 +457,7 @@ class BraunMr16App {
     this._initEventListeners();
     await this._loadPresets();
     this._initTheme();
+    this._initJuceBridge();
 
     // Snapshot Initial Buffer A & B
     this.bufferA = JSON.parse(JSON.stringify(this.engine.params));
@@ -360,6 +550,20 @@ class BraunMr16App {
         ...options,
         onChange: (val) => {
           this.engine.setParam(options.paramId, val);
+          this._emitJuceParam(options.paramId, val);
+        },
+        onContextMenu: (e) => {
+          if (this.isJuce && typeof window !== 'undefined' && window.__JUCE__?.backend) {
+            try {
+              window.__JUCE__.backend.emitEvent('showContextMenu', {
+                id: options.paramId,
+                x: Math.round(e.screenX || e.clientX || 0),
+                y: Math.round(e.screenY || e.clientY || 0)
+              });
+            } catch (err) {
+              console.warn('[JUCE] showContextMenu error:', err);
+            }
+          }
         }
       });
       this.knobs[options.paramId] = knob;
@@ -529,6 +733,7 @@ class BraunMr16App {
     if (this.knobs['crt_intensity']) {
       this.knobs['crt_intensity'].onChange = (val) => {
         if (this.crt) this.crt.setIntensity(val);
+        this._emitJuceParam('crt_intensity', val);
       };
     }
   }
@@ -620,6 +825,7 @@ class BraunMr16App {
     this._ensureActiveAudio();
     const freq = this.chimePitches[index];
     this.engine.triggerStrike(this.engine.params.strike_hardness, velocity, freq);
+    this._emitJuceExciter({ type: 'chime', key: index, vel: velocity });
 
     // Visual feedback
     if (this.dom.chimeStrip) {
@@ -634,20 +840,16 @@ class BraunMr16App {
   _initEventListeners() {
     // --- Audition Sound Bar ---
     document.getElementById('btn-audition-impulse')?.addEventListener('click', () => {
-      this._ensureActiveAudio();
-      this.engine.triggerDirac();
+      this.triggerDirac();
     });
     document.getElementById('btn-audition-hammer')?.addEventListener('click', () => {
-      this._ensureActiveAudio();
-      this.engine.triggerFeltHammer();
+      this.triggerFeltHammer();
     });
     document.getElementById('btn-audition-friction')?.addEventListener('click', () => {
-      this._ensureActiveAudio();
-      this.engine.triggerBowedFriction(0.6);
+      this.triggerStickSlip(0.6, 0.5);
     });
     document.getElementById('btn-audition-air')?.addEventListener('click', () => {
-      this._ensureActiveAudio();
-      this.engine.triggerAirJet(0.45);
+      this.triggerAirJet(0.8);
     });
     document.getElementById('btn-audition-poisson')?.addEventListener('click', (e) => {
       this._ensureActiveAudio();
@@ -656,10 +858,12 @@ class BraunMr16App {
         this.engine.setParam('poisson_density', 0);
         if (this.knobs['poisson_density']) this.knobs['poisson_density'].setValue(0);
         btn.classList.remove('is-active');
+        this._emitJuceParam('poisson_density', 0.0);
       } else {
         this.engine.setParam('poisson_density', 18.0);
         if (this.knobs['poisson_density']) this.knobs['poisson_density'].setValue(18.0);
         btn.classList.add('is-active');
+        this._emitJuceParam('poisson_density', 18.0);
       }
     });
 
@@ -675,7 +879,21 @@ class BraunMr16App {
         if (e.key === 'Escape') {
           if (typeof e.target.blur === 'function') e.target.blur();
         }
-        return;
+        if (e.target.tagName === 'SELECT') {
+          const keyLower = e.key ? e.key.toLowerCase() : '';
+          if (e.code === 'Space' || CHIME_HOTKEYS.includes(keyLower)) {
+            e.preventDefault();
+            if (typeof e.target.blur === 'function') e.target.blur();
+            if (document.activeElement && typeof document.activeElement.blur === 'function') {
+              document.activeElement.blur();
+            }
+            // Proceed directly to execute Space or chime key trigger
+          } else {
+            return;
+          }
+        } else {
+          return;
+        }
       }
 
       if (e.key === 'Escape') {
@@ -694,8 +912,7 @@ class BraunMr16App {
 
       if (e.code === 'Space') {
         e.preventDefault();
-        this._ensureActiveAudio();
-        this.engine.triggerDirac();
+        this.triggerDirac();
         return;
       }
 
@@ -708,33 +925,40 @@ class BraunMr16App {
     });
 
     // --- Tactile Strike Buttons ---
-    document.getElementById('btn-strike-dirac')?.addEventListener('click', () => {
-      this._ensureActiveAudio();
-      this.engine.triggerDirac();
-    });
-    document.getElementById('btn-strike-hammer')?.addEventListener('click', () => {
-      this._ensureActiveAudio();
-      this.engine.triggerFeltHammer();
-    });
-    document.getElementById('btn-strike-friction')?.addEventListener('click', () => {
-      this._ensureActiveAudio();
-      this.engine.triggerBowedFriction(0.6);
-    });
-    document.getElementById('btn-strike-air')?.addEventListener('click', () => {
-      this._ensureActiveAudio();
-      this.engine.triggerAirJet(0.45);
-    });
+    const btnStrikeDirac = document.getElementById('btn-strike-dirac');
+    btnStrikeDirac?.addEventListener('click', () => this.triggerDirac());
+    btnStrikeDirac?.addEventListener('mousedown', () => this._emitJuceExciter({ type: 'pad', index: 0, vel: 1.0 }));
+
+    const btnStrikeHammer = document.getElementById('btn-strike-hammer');
+    btnStrikeHammer?.addEventListener('click', () => this.triggerFeltHammer());
+    btnStrikeHammer?.addEventListener('mousedown', () => this._emitJuceExciter({ type: 'pad', index: 1, vel: 1.0 }));
+
+    const btnStrikeFriction = document.getElementById('btn-strike-friction');
+    btnStrikeFriction?.addEventListener('click', () => this.triggerStickSlip(0.6, 0.5));
+    btnStrikeFriction?.addEventListener('mousedown', () => this._emitJuceExciter({ type: 'pad', index: 2, vel: 1.0 }));
+
+    const btnStrikeAir = document.getElementById('btn-strike-air');
+    btnStrikeAir?.addEventListener('click', () => this.triggerAirJet(0.8));
+    btnStrikeAir?.addEventListener('mousedown', () => this._emitJuceExciter({ type: 'pad', index: 3, vel: 1.0 }));
 
     // --- Performance Scale & Root Selectors ---
     this.dom.selectScale?.addEventListener('change', (e) => {
       this.activeScaleId = e.target.value;
       this._recomputeChimePitches();
       this._renderChimeKeys();
+      this.dom.selectScale.blur();
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+      }
     });
     this.dom.selectRoot?.addEventListener('change', (e) => {
       this.activeRootKey = e.target.value;
       this._recomputeChimePitches();
       this._renderChimeKeys();
+      this.dom.selectRoot.blur();
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+      }
     });
 
     // --- Deck 01: Exciter Mode Segment Buttons ---
@@ -743,6 +967,7 @@ class BraunMr16App {
         const val = parseInt(e.target.dataset.val, 10);
         this._updateSegmentActive('group-exciter-mode', e.target);
         this.engine.setParam('exciter_type', val);
+        this._emitJuceParam('exciter_type', val);
       }
     });
 
@@ -752,6 +977,7 @@ class BraunMr16App {
         const val = parseInt(e.target.dataset.val, 10);
         this._updateSegmentActive('group-manifold', e.target);
         this.engine.setParam('manifold_type', val);
+        this._emitJuceParam('manifold_type', val);
       }
     });
 
@@ -760,6 +986,7 @@ class BraunMr16App {
         const val = parseInt(e.target.dataset.val, 10);
         this._updateSegmentActive('group-material', e.target);
         this.engine.setParam('material_profile', val);
+        this._emitJuceParam('material_profile', val);
       }
     });
 
@@ -767,6 +994,7 @@ class BraunMr16App {
     this.dom.btnChorusEnable?.addEventListener('click', () => {
       const active = !this.engine.params.chorus_enable;
       this.engine.setParam('chorus_enable', active);
+      this._emitJuceParam('chorus_enable', active ? 1.0 : 0.0);
       this.dom.btnChorusEnable.classList.toggle('is-active', active);
       const text = this.dom.btnChorusEnable.querySelector('span:last-child');
       if (text) text.textContent = active ? 'CHORUS ACTIVE' : 'CHORUS BYPASS';
@@ -784,6 +1012,7 @@ class BraunMr16App {
         const w = dimensionWidths[val] || 75.0;
         this.engine.setParam('chorus_dimension', w);
         if (this.knobs['chorus_dimension']) this.knobs['chorus_dimension'].setValue(w);
+        this._emitJuceParam('chorus_dimension', w);
       }
     });
 
@@ -791,6 +1020,7 @@ class BraunMr16App {
     this.dom.btnSoftLimit?.addEventListener('click', () => {
       const active = !this.engine.params.soft_limiter;
       this.engine.setParam('soft_limiter', active);
+      this._emitJuceParam('soft_limiter', active ? 1.0 : 0.0);
       this.dom.btnSoftLimit.classList.toggle('is-active', active);
       const text = this.dom.btnSoftLimit.querySelector('span:last-child');
       if (text) text.textContent = active ? 'LIMITER ACTIVE' : 'LIMITER BYPASS';
@@ -806,6 +1036,8 @@ class BraunMr16App {
         const mode = e.target.dataset.val;
         this._updateSegmentActive('group-crt-mode', e.target);
         if (this.crt) this.crt.setMode(mode);
+        const modeIdx = mode === 'CHLADNI' ? 0 : (mode === 'ATTRACTOR' ? 1 : 2);
+        this._emitJuceParam('display_mode', modeIdx);
       }
     });
 
@@ -825,24 +1057,33 @@ class BraunMr16App {
       } else {
         this.engine.setPower(false);
       }
+      this._emitJuceParam('power_state', isPowered ? 1.0 : 0.0);
     });
 
     // --- Header Utilities: Lossless WAV Recorder ---
     this.dom.btnRecordWav?.addEventListener('click', () => {
-      const isRec = !this.recorder.isRecording;
+      const isRec = !this.recorder.isRecording && !this._isJuceRecording;
       const recText = this.dom.btnRecordWav.querySelector('.braun-rec-text');
       const led = this.dom.btnRecordWav.querySelector('.braun-led');
 
-      if (isRec) {
-        this.recorder.start();
-        this.dom.btnRecordWav.classList.add('is-active');
-        if (recText) recText.textContent = 'STOP & SAVE';
-        if (led) led.classList.add('is-recording');
+      if (this.isJuce && typeof window !== 'undefined' && window.__JUCE__?.backend) {
+        if (isRec) {
+          window.__JUCE__.backend.emitEvent('startRecording', {});
+        } else {
+          window.__JUCE__.backend.emitEvent('stopRecording', {});
+        }
       } else {
-        this.recorder.stop();
-        this.dom.btnRecordWav.classList.remove('is-active');
-        if (recText) recText.textContent = 'REC WAV';
-        if (led) led.classList.remove('is-recording');
+        if (isRec) {
+          this.recorder.start();
+          this.dom.btnRecordWav.classList.add('is-active');
+          if (recText) recText.textContent = 'STOP & SAVE';
+          if (led) led.classList.add('is-recording');
+        } else {
+          this.recorder.stop();
+          this.dom.btnRecordWav.classList.remove('is-active');
+          if (recText) recText.textContent = 'REC WAV';
+          if (led) led.classList.remove('is-recording');
+        }
       }
     });
 
@@ -889,6 +1130,7 @@ class BraunMr16App {
     this.dom.btnUiMode?.addEventListener('click', () => {
       const isNative = this.dom.btnUiMode.textContent.includes('NATIVE');
       this.dom.btnUiMode.innerHTML = isNative ? '<span>UI: WEB</span>' : '<span>UI: NATIVE</span>';
+      this._emitJuceParam('toggleNativeUI', 1.0);
     });
 
     // --- Preset Selector ---
@@ -896,6 +1138,57 @@ class BraunMr16App {
       const presetId = e.target.value;
       if (this.presets[presetId]) {
         this.applyPreset(this.presets[presetId]);
+      }
+      this.dom.selectPreset.blur();
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+      }
+    });
+
+    this.dom.selectPreset?.addEventListener('pointerup', () => {
+      setTimeout(() => {
+        if (this.dom.selectPreset) this.dom.selectPreset.blur();
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+          document.activeElement.blur();
+        }
+      }, 0);
+    });
+
+    this.dom.selectPreset?.addEventListener('click', () => {
+      setTimeout(() => {
+        if (this.dom.selectPreset) this.dom.selectPreset.blur();
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+          document.activeElement.blur();
+        }
+      }, 0);
+    });
+
+    this.dom.selectPreset?.addEventListener('blur', () => {
+      if (document.activeElement === this.dom.selectPreset && typeof this.dom.selectPreset.blur === 'function') {
+        this.dom.selectPreset.blur();
+      }
+    });
+
+    this.dom.selectPreset?.addEventListener('keydown', (e) => {
+      const keyLower = e.key ? e.key.toLowerCase() : '';
+      if (e.code === 'Space' || CHIME_HOTKEYS.includes(keyLower)) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.dom.selectPreset.blur();
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+          document.activeElement.blur();
+        }
+        if (e.code === 'Space') {
+          this._ensureActiveAudio();
+          this.engine.triggerDirac();
+        } else {
+          const idx = CHIME_HOTKEYS.indexOf(keyLower);
+          if (idx !== -1) {
+            this.triggerChimeKey(idx, 0.85);
+          }
+        }
+      } else if (e.key === 'Escape') {
+        this.dom.selectPreset.blur();
       }
     });
 
@@ -996,6 +1289,10 @@ class BraunMr16App {
     // --- Theme Finish Selector ---
     this.dom.selectTheme?.addEventListener('change', (e) => {
       this.setTheme(e.target.value);
+      this.dom.selectTheme.blur();
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+      }
     });
   }
 
@@ -1271,6 +1568,7 @@ class BraunMr16App {
     for (const id in params) {
       const val = params[id];
       this.engine.setParam(id, val);
+      this._emitJuceParam(id, val);
       let knobVal = val;
       if (id === 'modal_coupling' && val <= 1.0) {
         knobVal = val * 100;

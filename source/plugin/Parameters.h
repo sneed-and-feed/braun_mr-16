@@ -260,7 +260,7 @@ inline const std::array<ParameterMetadata, 32>& getParameterMetadataTable() {
         { 5, "drive_saturation",  "driveSaturation", "Resonator Drive",     "dB",   0.0f,    24.0f,    0.0f,    false, false },
         { 5, "master_trim_db",    "masterTrimDb",    "Output Trim",         "dB",   -24.0f,  12.0f,    0.0f,    false, false },
         { 5, "dry_wet_mix",       "dryWetMix",       "Dry / Wet Mix",       "%",    0.0f,    1.0f,     0.65f,   false, false },
-        { 5, "power_state",       "powerState",      "Power Standby",       "",     0.0f,    1.0f,     0.0f,    true,  false },
+        { 5, "power_state",       "powerState",      "Power Standby",       "",     0.0f,    1.0f,     1.0f,    true,  false },
 
         // Deck 06: Vector Phosphor CRT Display
         { 6, "display_mode",      "displayMode",     "Vector Display Mode", "",     0.0f,    2.0f,     0.0f,    false, true  }
@@ -327,7 +327,7 @@ struct alignas(64) Mr16ParameterSnapshot {
     float driveSaturationDb { 0.0f };
     float masterTrimDb      { 0.0f };
     float dryWetMix         { 0.65f };
-    bool  powerState        { false };
+    bool  powerState        { true };
 
     // Deck 06: Vector Phosphor CRT Display
     DisplayMode displayMode { DisplayMode::Chladni };
@@ -818,7 +818,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<juce::AudioParameterBool>(
         ParamIDs::powerState,
         "Power Standby",
-        false));
+        true));
 
     // ------------------------------------------------------------------------
     // Deck 06: Vector Phosphor CRT Display

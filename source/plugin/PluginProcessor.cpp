@@ -472,6 +472,9 @@ void BRAUN_MR16AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 
 void BRAUN_MR16AudioProcessor::triggerStrike(float velocity, float hardness) noexcept
 {
+    if (!isPoweredOn.load(std::memory_order_relaxed))
+        setPower(true);
+
 #if MR16_HAS_DSP_ENGINE
     mr16Engine.enqueueTriggerStrike(velocity, hardness);
 #else
@@ -481,6 +484,9 @@ void BRAUN_MR16AudioProcessor::triggerStrike(float velocity, float hardness) noe
 
 void BRAUN_MR16AudioProcessor::triggerStrikeButton(int buttonIndex, float velocity) noexcept
 {
+    if (!isPoweredOn.load(std::memory_order_relaxed))
+        setPower(true);
+
 #if MR16_HAS_DSP_ENGINE
     mr16Engine.enqueueTriggerButton(buttonIndex, velocity);
 #else
@@ -490,6 +496,9 @@ void BRAUN_MR16AudioProcessor::triggerStrikeButton(int buttonIndex, float veloci
 
 void BRAUN_MR16AudioProcessor::triggerChimeKey(int keyIndex, float velocity) noexcept
 {
+    if (!isPoweredOn.load(std::memory_order_relaxed))
+        setPower(true);
+
 #if MR16_HAS_DSP_ENGINE
     mr16Engine.enqueueTriggerChime(keyIndex, velocity);
 #else
@@ -499,6 +508,9 @@ void BRAUN_MR16AudioProcessor::triggerChimeKey(int keyIndex, float velocity) noe
 
 void BRAUN_MR16AudioProcessor::triggerMidiNote(int midiNote, float velocity) noexcept
 {
+    if (!isPoweredOn.load(std::memory_order_relaxed))
+        setPower(true);
+
 #if MR16_HAS_DSP_ENGINE
     mr16Engine.enqueueMidiNoteOn(midiNote, velocity);
 #else

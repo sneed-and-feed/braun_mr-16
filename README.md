@@ -1,6 +1,6 @@
 # BRAUN MR-16 · Modaler Resonator & Kinetischer Impulssynthesizer
 
-[![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(31%2F31%20Web%20%7C%20C%2B%2B%20Headless)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
+[![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(34%2F34%20C%2B%2B%20%7C%2097%2F97%20Web)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
 [![Version: 1.0.0](https://img.shields.io/badge/Version-1.0.0-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_mr-16/releases/tag/v1.0.0)
 [![CI](https://github.com/sneed-and-feed/braun_mr-16/actions/workflows/build-and-release.yml/badge.svg)](https://github.com/sneed-and-feed/braun_mr-16/actions)
 [![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](#plugin-installation-daw-setup)
@@ -190,15 +190,23 @@ graph TD
 ## 4. Subsystems & Functional Decks
 
 ### Deck 01: Kinetic Exciter Engine
-- **Hunt-Crossley Contact Mechanics**: Physical mass-spring collision model simulating hammer and felt mallet strikes against a rigid boundary:
-  $$F_c(x, \dot{x}) = k_c \, x(t)^\alpha + \lambda_c \, x(t)^\alpha \, \dot{x}(t)$$
-  Hardness knob modulates mallet elastic modulus ($k_c$) and non-linear exponent ($\alpha \in [1.5, 2.8]$), shifting transient brightness.
+
+#### Hunt-Crossley Contact Mechanics
+Physical mass-spring collision model simulating hammer and felt mallet strikes against a rigid boundary:
+
+```math
+F_c(x, \dot{x}) = k_c \, x(t)^\alpha + \lambda_c \, x(t)^\alpha \, \dot{x}(t)
+```
+
+The hardness knob modulates mallet elastic modulus $k_c$ and non-linear exponent $\alpha \in [1.5, 2.8]$, shifting transient brightness.
+
+#### Friction, Optical Vactrol & Clocks
 - **Karnopp Stick-Slip Friction**: Velocity-dependent friction model with Stribeck curve reproducing continuous bowed glass and metallic scrape.
 - **Buchla 292 Optical Vactrol Sag**: Optocoupler simulation with asymmetric fast attack ($2\text{ ms}$) and dual-exponential release ($40\text{ ms} / 350\text{ ms}$).
 - **External Audio Input**: Ingests external DAW tracks or live instruments, buffered through a $15\text{ Hz}$ DC blocking highpass filter and transient envelope detector.
 - **Autonomous Clocks**:
   - *Poisson Stochastic Rain*: Event intervals follow an exponential distribution $\Delta t = -\ln(1 - U) / \lambda$ with Irwin-Hall droplet mass.
-  - *Euclidean Polyrhythm Ring*: Interlocking geometric clock pulses $E(k, n)$ using Bjorklund's algorithm ($1 \le k \le n \le 16$).
+  - *Euclidean Polyrhythm Ring*: Interlocking geometric clock pulses $E(k, n)$ using Bjorklund's algorithm $(1 \le k \le n \le 16)$.
 - **16-Key Microtonal Chime Strip**: Tactile pitch triggers with scale quantization supporting 8 systems: 12-TET, Just Intonation, Pythagorean, Slendro, Pelog, Wendy Carlos Alpha, Bohlen-Pierce, and Harmonic Series.
 
 ### Deck 02: 16-Pole Modal Resonator Matrix
@@ -209,40 +217,74 @@ graph TD
   3. *Vocal Formant Tract*: Acoustic tube formant progressions across open and closed vowels.
   4. *Poincaré Hyperbolic Horn*: Negative-curvature hyperbolic acoustic flare with airy dispersion.
 - **5 Calibrated Material Damping Profiles**:
-  - *Wood (Spruce/Rosewood)*: Steep high-frequency absorption ($\kappa_m = (1 + 0.12 m^{1.6})^{-1}$).
+  - *Wood (Spruce/Rosewood)*: Steep high-frequency absorption $(\kappa_m = (1 + 0.12 m^{1.6})^{-1})$.
   - *Glass (Borosilicate)*: High Q overtones with sustained ring-down ($Q \in [150, 450]$).
   - *Steel (High-Carbon)*: Linear metallic decay across modes.
   - *Brass (Bell Bronze)*: Dense harmonic inter-coupling and shimmer.
   - *Nylon (Polymer)*: Rapid viscous energy dissipation ($Q \in [8, 35]$).
-- **$O(N)$ Orthogonal Householder Scattering Matrix**:
-  $$\mathbf{H} = \mathbf{I} - \frac{2}{N} \mathbf{1} \mathbf{1}^T$$
-  Implemented via a central summing bus scaled by $-\frac{1}{8} \cdot \text{coupling}$, conserving energy with only 32 connections instead of 256.
+
+#### Orthogonal Householder Scattering Matrix ($O(N)$)
+Energy-conserving scattering matrix across all 16 resonant modes:
+
+```math
+\mathbf{H} = \mathbf{I} - \frac{2}{N} \mathbf{1} \mathbf{1}^T
+```
+
+Implemented via a central summing bus scaled by $-\frac{1}{8} \cdot \text{coupling}$, conserving energy with only 32 connections instead of 256.
 
 ### Deck 03: 3D Chaotic Lorenz Attractor
-- **Classical 4th-Order Runge-Kutta (RK4)**: Solves the Lorenz continuous dynamical system at audio rate:
-  $$\frac{dx}{dt} = \sigma (y - x), \quad \frac{dy}{dt} = x (\rho - z) - y, \quad \frac{dz}{dt} = x y - \beta z$$
-  with canonical parameters $\sigma = 10.0, \rho = 28.0, \beta = 8/3$.
-- **Modulation Routing**:
-  - Normalized $X$ detunes odd modal frequencies ($\pm 1.5\%$).
-  - Normalized $Y$ detunes even modal frequencies.
-  - Normalized $Z$ breathes modal Q-factor resonance spread ($\pm 25\%$).
+
+#### Continuous Dynamical System (RK4)
+Solves the classical Lorenz attractor at audio rate using 4th-order Runge-Kutta integration:
+
+```math
+\frac{dx}{dt} = \sigma (y - x), \quad \frac{dy}{dt} = x (\rho - z) - y, \quad \frac{dz}{dt} = x y - \beta z
+```
+
+with canonical parameters $\sigma = 10.0, \rho = 28.0, \beta = 8/3$.
+
+#### Modulation Routing
+- Normalized $X$ detunes odd modal frequencies $(\pm 1.5\%)$.
+- Normalized $Y$ detunes even modal frequencies.
+- Normalized $Z$ breathes modal Q-factor resonance spread $(\pm 25\%)$.
 
 ### Deck 04: Tri-Phase Spatial BBD Chorus
 - **Tri-Phase Modulation Mechanics**: 3 analog bucket-brigade delay lines driven by equidistant $120^\circ$ LFO phase offsets ($0^\circ, 120^\circ, 240^\circ$).
 - **Hermite Fractional Interpolation**: 4-point, 3rd-order Catmull-Rom cubic spline interpolation for clean pitch modulation without comb aliasing.
 - **NE570 Compander Emulation**: $1.8\text{ kHz}$ pre-emphasis high-shelf and $9.5\text{ kHz}$ 2-pole Butterworth reconstruction filter.
-- **Dimension D Matrix & Mono Phase Cancellation Immunity**:
-  $$\text{Out}_L(t) = \text{Dry}_L(t) + \frac{g}{\sqrt{2}} [d_1(t) - d_2(t)], \quad \text{Out}_R(t) = \text{Dry}_R(t) + \frac{g}{\sqrt{2}} [d_2(t) - d_3(t)]$$
-  In mono sum, $d_2$ cancels out identically:
-  $$\text{Wet}_{\text{mono}}(t) = \frac{g}{2\sqrt{2}} [d_1(t) - d_3(t)]$$
-  The phase difference magnitude $|e^{j0} - e^{-j2\pi/3}| = \sqrt{3} \approx 1.732 \ne 0$, proving complete immunity to destructive comb-filter null cancellation.
+
+#### Dimension D Matrix & Mono Phase Cancellation Immunity
+Stereo spatialization matrix with dual differential delays:
+
+```math
+\text{Out}_L(t) = \text{Dry}_L(t) + \frac{g}{\sqrt{2}} \left[ d_1(t) - d_2(t) \right], \quad \text{Out}_R(t) = \text{Dry}_R(t) + \frac{g}{\sqrt{2}} \left[ d_2(t) - d_3(t) \right]
+```
+
+In mono sum, $d_2$ cancels out identically:
+
+```math
+\text{Wet}_{\mathrm{mono}}(t) = \frac{g}{2\sqrt{2}} \left[ d_1(t) - d_3(t) \right]
+```
+
+The phase difference magnitude $\lvert e^{j0} - e^{-j2\pi/3} \rvert = \sqrt{3} \approx 1.732 \ne 0$, proving complete immunity to destructive comb-filter null cancellation.
 
 ### Deck 05: Spatial Dispersion, Vactrol LPG & Dynamics
-- **Golden-Ratio Stereo Panning**: Modes $m \in \{0, \dots, 15\}$ positioned via the golden angle $\Phi = 137.507764^\circ$:
-  $$\theta_m = \operatorname{fmod}(m \cdot 137.507764^\circ, 360^\circ) - 180^\circ$$
-- **Hermite Soft-Knee Bounded Saturator**:
-  $$y(x) = \begin{cases} x & |x| \le 0.72 \\ \operatorname{sgn}(x) [0.72 + 0.33 \cdot (u \cdot (1 + u(1 - u)))] & 0.72 < |x| < 1.05 \\ \operatorname{sgn}(x) \cdot 1.05 & |x| \ge 1.05 \end{cases}$$
-  Provides 100% linear transparency below $-2.85\text{ dBFS}$ and asymptotic saturation up to $+18\text{ dBFS}$.
+
+#### Golden-Ratio Stereo Panning
+Modes $m \in \lbrace 0, \dots, 15 \rbrace$ are positioned across the stereo panorama via the golden angle $\Phi = 137.507764^\circ$:
+
+```math
+\theta_m = \mathrm{fmod}(m \cdot 137.507764^\circ, 360^\circ) - 180^\circ
+```
+
+#### Hermite Soft-Knee Bounded Saturator
+Continuous first-derivative limiter with asymptotic saturation:
+
+```math
+y(x) = \begin{cases} x & \lvert x \rvert \le 0.72 \\ \mathrm{sgn}(x) \left[ 0.72 + 0.33 \cdot \left( u \cdot (1 + u(1 - u)) \right) \right] & 0.72 < \lvert x \rvert < 1.05 \\ \mathrm{sgn}(x) \cdot 1.05 & \lvert x \rvert \ge 1.05 \end{cases}
+```
+
+Provides 100% linear transparency below $-2.85\text{ dBFS}$ and asymptotic saturation up to $+18\text{ dBFS}$.
 
 ### Deck 06: Vector Phosphor CRT Scope
 - High-DPI 60 FPS vector CRT display with authentic phosphor bloom (`#24FF6A` P1 Green / `#FFB000` P3 Amber):
@@ -262,37 +304,37 @@ graph TD
 
 | Deck | Parameter ID (`apvtsId`) | Web Property | Range | Default | Units | Description |
 |:---|:---|:---|:---:|:---:|:---:|:---|
-| **01** | `exciter_type` | `exciterType` | 0 - 3 | 0 (Strike) | - | 0: Strike, 1: Friction, 2: Vactrol, 3: Ext In |
-| **01** | `strike_hardness` | `strikeHardness` | 0.0 - 1.0 | 0.65 | % | Mallet stiffness & transient HF content |
-| **01** | `strike_velocity` | `strikeVelocity` | 0.0 - 1.0 | 0.80 | % | Kinetic impact force |
-| **01** | `friction_force` | `frictionForce` | 0.0 - 1.0 | 0.50 | % | Normal contact pressure in Karnopp bow |
-| **01** | `friction_speed` | `frictionSpeed` | 0.0 - 1.0 | 0.40 | % | Relative rubbing velocity |
-| **01** | `vactrol_sag` | `vactrolSag` | 0.0 - 1.0 | 0.35 | % | Optical photocarrier release decay |
-| **01** | `ext_input_gain` | `extInputGain` | -24.0 - +12.0 | 0.0 | dB | External audio sensitivity trim |
-| **01** | `poisson_density` | `poissonDensity` | 0.0 - 50.0 | 0.0 (Off) | Hz | Mean stochastic trigger rate |
-| **01** | `euclidean_pulses` | `euclideanPulses` | 1 - 16 | 4 | pulses | Active Euclidean pulses |
-| **01** | `euclidean_steps` | `euclideanSteps` | 1 - 16 | 16 | steps | Total clock step resolution |
-| **02** | `manifold_type` | `manifoldType` | 0 - 3 | 0 (Chladni) | - | 0: Chladni, 1: Beam, 2: Vocal, 3: Horn |
-| **02** | `modal_frequency` | `modalFrequency` | 20.0 - 2000.0 | 220.0 | Hz | Base fundamental frequency ($f_0$) |
-| **02** | `modal_damping` | `modalDamping` | 0.05 - 10.0 | 1.80 | s | RT60 modal decay time |
-| **02** | `material_profile` | `materialProfile` | 0 - 4 | 2 (Steel) | - | 0: Wood, 1: Glass, 2: Steel, 3: Brass, 4: Nylon |
-| **02** | `modal_coupling` | `modalCoupling` | 0.0 - 1.0 | 0.40 | % | Householder energy scattering depth |
-| **02** | `modal_spread` | `modalSpread` | 0.25 - 2.0 | 1.00 | x | Overtone ratio frequency stretching |
-| **02** | `modal_q` | `modalQ` | 1.0 - 500.0 | 50.0 | Q | Resonance sharpness multiplier |
-| **03** | `lorenz_rate` | `lorenzRate` | 0.01 - 10.0 | 0.85 | Hz | Chaotic orbit speed |
-| **03** | `lorenz_chaos` | `lorenzChaos` | 0.0 - 1.0 | 0.50 | % | Attractor non-linearity depth ($\rho$) |
-| **03** | `lorenz_freq_mod` | `lorenzFreqMod` | 0.0 - 100.0 | 15.0 | % | Modal frequency detune depth |
-| **03** | `lorenz_q_mod` | `lorenzQMod` | 0.0 - 100.0 | 20.0 | % | Modal Q-factor breathing depth |
-| **04** | `chorus_enable` | `chorusEnable` | Bool | 1 (True) | - | BBD chorus network bypass toggle |
-| **04** | `chorus_rate_hz` | `chorusRateHz` | 0.05 - 8.0 | 0.65 | Hz | Tri-phase LFO modulation rate |
-| **04** | `chorus_depth_ms` | `chorusDepthMs` | 0.1 - 5.0 | 1.40 | ms | BBD delay modulation amplitude |
-| **04** | `chorus_dimension` | `chorusDimension` | 0.0 - 1.0 | 0.75 | % | Dimension D cross-phase matrix width |
-| **04** | `chorus_mix` | `chorusMix` | 0.0 - 100.0 | 45.0 | % | Wet/dry chorus balance |
-| **05** | `golden_pan_spread`| `goldenPanSpread` | 0.0 - 100.0 | 85.0 | % | Golden angle modal stereo dispersion |
-| **05** | `vactrol_lpg_cutoff`| `vactrolLpgCutoff`| 20.0 - 20000.0 | 14000.0 | Hz | Buchla dynamic lowpass gate ceiling |
-| **05** | `drive_saturation` | `driveSaturation` | 0.0 - 100.0 | 25.0 | % | Hermite soft-knee saturation drive |
-| **05** | `master_trim_db` | `masterTrimDb` | -24.0 - +12.0 | 0.0 | dB | Master output volume trim |
-| **05** | `dry_wet_mix` | `dryWetMix` | 0.0 - 100.0 | 65.0 | % | Exciter dry vs resonator wet balance |
+| 01 | `exciter_type` | `exciterType` | 0 - 3 | 0 (Strike) | - | 0: Strike, 1: Friction, 2: Vactrol, 3: Ext In |
+| 01 | `strike_hardness` | `strikeHardness` | 0.0 - 1.0 | 0.65 | % | Mallet stiffness & transient HF content |
+| 01 | `strike_velocity` | `strikeVelocity` | 0.0 - 1.0 | 0.80 | % | Kinetic impact force |
+| 01 | `friction_force` | `frictionForce` | 0.0 - 1.0 | 0.50 | % | Normal contact pressure in Karnopp bow |
+| 01 | `friction_speed` | `frictionSpeed` | 0.0 - 1.0 | 0.40 | % | Relative rubbing velocity |
+| 01 | `vactrol_sag` | `vactrolSag` | 0.0 - 1.0 | 0.35 | % | Optical photocarrier release decay |
+| 01 | `ext_input_gain` | `extInputGain` | -24.0 - +12.0 | 0.0 | dB | External audio sensitivity trim |
+| 01 | `poisson_density` | `poissonDensity` | 0.0 - 50.0 | 0.0 (Off) | Hz | Mean stochastic trigger rate |
+| 01 | `euclidean_pulses` | `euclideanPulses` | 1 - 16 | 4 | pulses | Active Euclidean pulses |
+| 01 | `euclidean_steps` | `euclideanSteps` | 1 - 16 | 16 | steps | Total clock step resolution |
+| 02 | `manifold_type` | `manifoldType` | 0 - 3 | 0 (Chladni) | - | 0: Chladni, 1: Beam, 2: Vocal, 3: Horn |
+| 02 | `modal_frequency` | `modalFrequency` | 20.0 - 2000.0 | 220.0 | Hz | Base fundamental frequency ($f_0$) |
+| 02 | `modal_damping` | `modalDamping` | 0.05 - 10.0 | 1.80 | s | RT60 modal decay time |
+| 02 | `material_profile` | `materialProfile` | 0 - 4 | 2 (Steel) | - | 0: Wood, 1: Glass, 2: Steel, 3: Brass, 4: Nylon |
+| 02 | `modal_coupling` | `modalCoupling` | 0.0 - 1.0 | 0.40 | % | Householder energy scattering depth |
+| 02 | `modal_spread` | `modalSpread` | 0.25 - 2.0 | 1.00 | x | Overtone ratio frequency stretching |
+| 02 | `modal_q` | `modalQ` | 1.0 - 500.0 | 50.0 | Q | Resonance sharpness multiplier |
+| 03 | `lorenz_rate` | `lorenzRate` | 0.01 - 10.0 | 0.85 | Hz | Chaotic orbit speed |
+| 03 | `lorenz_chaos` | `lorenzChaos` | 0.0 - 1.0 | 0.50 | % | Attractor non-linearity depth ($\rho$) |
+| 03 | `lorenz_freq_mod` | `lorenzFreqMod` | 0.0 - 100.0 | 15.0 | % | Modal frequency detune depth |
+| 03 | `lorenz_q_mod` | `lorenzQMod` | 0.0 - 100.0 | 20.0 | % | Modal Q-factor breathing depth |
+| 04 | `chorus_enable` | `chorusEnable` | Bool | 1 (True) | - | BBD chorus network bypass toggle |
+| 04 | `chorus_rate_hz` | `chorusRateHz` | 0.05 - 8.0 | 0.65 | Hz | Tri-phase LFO modulation rate |
+| 04 | `chorus_depth_ms` | `chorusDepthMs` | 0.1 - 5.0 | 1.40 | ms | BBD delay modulation amplitude |
+| 04 | `chorus_dimension` | `chorusDimension` | 0.0 - 1.0 | 0.75 | % | Dimension D cross-phase matrix width |
+| 04 | `chorus_mix` | `chorusMix` | 0.0 - 100.0 | 45.0 | % | Wet/dry chorus balance |
+| 05 | `golden_pan_spread`| `goldenPanSpread` | 0.0 - 100.0 | 85.0 | % | Golden angle modal stereo dispersion |
+| 05 | `vactrol_lpg_cutoff`| `vactrolLpgCutoff`| 20.0 - 20000.0 | 14000.0 | Hz | Buchla dynamic lowpass gate ceiling |
+| 05 | `drive_saturation` | `driveSaturation` | 0.0 - 100.0 | 25.0 | % | Hermite soft-knee saturation drive |
+| 05 | `master_trim_db` | `masterTrimDb` | -24.0 - +12.0 | 0.0 | dB | Master output volume trim |
+| 05 | `dry_wet_mix` | `dryWetMix` | 0.0 - 100.0 | 65.0 | % | Exciter dry vs resonator wet balance |
 
 ---
 
@@ -382,26 +424,9 @@ node web/test-checklist.mjs
 ### Verification Assertions
 1. **Real-Time Safety**: Zero heap allocations (`gAllocationCount == 0`) and zero locks during all block rendering.
 2. **Denormal & NaN Immunity**: Hardware FTZ/DAZ + software `flushDenormal()` completely eliminating CPU pipeline traps.
-3. **Mono-Sum Phase Cancellation Immunity**: Mathematical proof that Dimension D wet mono sum maintains a non-zero phase vector ($|e^{j0} - e^{-j2\pi/3}| = \sqrt{3} \approx 1.732$), eliminating destructive comb filtering.
+3. **Mono-Sum Phase Cancellation Immunity**: Mathematical proof that Dimension D wet mono sum maintains a non-zero phase vector $(\lvert e^{j0} - e^{-j2\pi/3} \rvert = \sqrt{3} \approx 1.732)$, eliminating destructive comb filtering.
 4. **Hermite Soft Limiting**: Linear 0 dB transparency below 0.72 and asymptotic containment within 1.05.
 5. **Aesthetic Austerity**: 100% Technical English, zero decorative emojis across all HTML, CSS, JavaScript, JSON, and C++ sources.
-
----
-
-## 9. Dieter Rams: 10 Principles of Good Design Compliance
-
-| Principle | BRAUN MR-16 Implementation |
-|:---|:---|
-| **1. Innovative** | Unites Hunt-Crossley contact mechanics, 16-pole TPT resonators, 3D Lorenz chaos, and BBD chorus into a singular physical body. |
-| **2. Useful** | Operates as both a standalone playable physical acoustic instrument and an external studio resonator insert. |
-| **3. Aesthetic** | Brushed aluminum `#ECEBE4` and anthracite `#141517` finishes with authentic phosphor oscilloscope bloom. |
-| **4. Understandable**| 7-deck signal flow follows acoustic intuition: Exciter -> Resonator -> Modulation -> Chorus -> Dynamics -> Scope. |
-| **5. Unobtrusive** | Neutral laboratory interface with clear graticules, high-contrast typography, and zero extraneous ornament. |
-| **6. Honest** | Does not simulate artificial glossy reverbs; directly computes physical elastodynamic standing waves and friction. |
-| **7. Long-lasting** | Zero dependencies, standard C++20 and W3C Web Audio API standards ensure decades of archival longevity. |
-| **8. Thorough down to the last detail** | Calibrated rotary knob damping, touch isolation, 44-byte WAV header assembly, and mono cancellation immunity. |
-| **9. Environmentally friendly** | High-performance C++20 and SIMD optimization minimize CPU cycles, thermal footprint, and power consumption. |
-| **10. As little design as possible** | *"Weniger, aber besser"* — Every knob, segment, and telemetry read-out serves a direct acoustic purpose. |
 
 ---
 

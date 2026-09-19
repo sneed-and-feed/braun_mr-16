@@ -804,7 +804,7 @@ void BRAUN_MR16AudioProcessorEditor::handleParamChangeFromWeb(const juce::var& d
         return;
     }
 
-    if (id == "power_state")
+    if (id == "power_state" || id == "power" || id == "powerState")
     {
         processorRef.setPower(val > 0.5f);
         return;
@@ -830,24 +830,63 @@ void BRAUN_MR16AudioProcessorEditor::handleParamChangeFromWeb(const juce::var& d
 void BRAUN_MR16AudioProcessorEditor::handleExciterTriggerFromWeb(const juce::var& data)
 {
     if (!data.isObject()) return;
+
+    if (!processorRef.isPower())
+        processorRef.setPower(true);
+
     const juce::String type = data.getProperty("type", "").toString();
 
-    if (type == "strike")
+    if (type.equalsIgnoreCase("strike"))
     {
         float vel = static_cast<float>(data.getProperty("vel", 0.8));
         float hard = static_cast<float>(data.getProperty("hard", 0.65));
         processorRef.triggerStrike(vel, hard);
     }
-    else if (type == "chime")
+    else if (type.equalsIgnoreCase("dirac"))
+    {
+        float vel = static_cast<float>(data.getProperty("vel", 1.0));
+        float hard = static_cast<float>(data.getProperty("hard", 1.0));
+        processorRef.triggerStrike(vel, hard);
+    }
+    else if (type.equalsIgnoreCase("hammer"))
+    {
+        float vel = static_cast<float>(data.getProperty("vel", 0.8));
+        float hard = static_cast<float>(data.getProperty("hard", 0.65));
+        processorRef.triggerStrike(vel, hard);
+    }
+    else if (type.equalsIgnoreCase("friction"))
+    {
+        float speed = static_cast<float>(data.getProperty("speed", 0.6));
+        float force = static_cast<float>(data.getProperty("force", 0.5));
+        if (auto* pSpeed = processorRef.getAPVTS().getParameter(mr16::ParamIDs::frictionSpeed.getParamID()))
+            pSpeed->setValueNotifyingHost(pSpeed->convertTo0to1(speed));
+        if (auto* pForce = processorRef.getAPVTS().getParameter(mr16::ParamIDs::frictionForce.getParamID()))
+            pForce->setValueNotifyingHost(pForce->convertTo0to1(force));
+        processorRef.triggerStrike(speed, force);
+    }
+    else if (type.equalsIgnoreCase("vactrol") || type.equalsIgnoreCase("airjet"))
+    {
+        float vel = static_cast<float>(data.getProperty("vel", 0.8));
+        if (auto* pSag = processorRef.getAPVTS().getParameter(mr16::ParamIDs::vactrolSag.getParamID()))
+            pSag->setValueNotifyingHost(pSag->convertTo0to1(vel));
+        processorRef.triggerStrike(vel, 0.5f);
+    }
+    else if (type.equalsIgnoreCase("pad"))
+    {
+        int index = static_cast<int>(data.getProperty("index", data.getProperty("pad", data.getProperty("button", 0))));
+        float vel = static_cast<float>(data.getProperty("vel", 1.0));
+        processorRef.triggerStrikeButton(index, vel);
+    }
+    else if (type.equalsIgnoreCase("chime"))
     {
         int key = static_cast<int>(data.getProperty("key", 0));
         float vel = static_cast<float>(data.getProperty("vel", 1.0));
         processorRef.triggerChimeKey(key, vel);
     }
-    else if (type == "note")
+    else if (type.equalsIgnoreCase("note"))
     {
-        int midi = static_cast<int>(data.getProperty("midi", 60));
-        float vel = static_cast<float>(data.getProperty("velocity", 0.8));
+        int midi = static_cast<int>(data.getProperty("midi", data.getProperty("note", 60)));
+        float vel = static_cast<float>(data.getProperty("velocity", data.getProperty("vel", 0.8)));
         processorRef.triggerMidiNote(midi, vel);
     }
 }
@@ -887,11 +926,12 @@ void BRAUN_MR16AudioProcessorEditor::syncAllParametersToWeb()
     const auto& table = mr16::getParameterMetadataTable();
     for (const auto& meta : table)
     {
-        if (auto* param = processorRef.getAPVTS().getParameter(meta.apvtsId))
+        if (auto* rawVal = processorRef.getAPVTS().getRawParameterValue(meta.apvtsId))
         {
-            sendParameterUpdateToWeb(meta.apvtsId, meta.webId, param->getValue());
+            sendParameterUpdateToWeb(meta.apvtsId, meta.webId, rawVal->load(std::memory_order_relaxed));
         }
     }
+    sendParameterUpdateToWeb("power_state", "powerState", processorRef.isPower() ? 1.0f : 0.0f);
     sendRecordingStateUpdateToWeb(processorRef.isRecording());
 }
 
@@ -909,6 +949,11 @@ void BRAUN_MR16AudioProcessorEditor::sendTelemetryToWeb()
     obj->setProperty("lorenzY", latestTelemetryFrame.lorenzY);
     obj->setProperty("lorenzZ", latestTelemetryFrame.lorenzZ);
     obj->setProperty("exciterActivity", latestTelemetryFrame.exciterActivity);
+
+    juce::Array<juce::var> samples;
+    for (size_t i = 0; i < 256; ++i)
+        samples.add(latestTelemetryFrame.scopeSamplesL[i]);
+    obj->setProperty("scopeL", samples);
 
     webComponent->emitEventIfBrowserIsVisible("telemetryFrame", juce::var(obj.get()));
 }
