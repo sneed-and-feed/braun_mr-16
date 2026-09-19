@@ -242,7 +242,7 @@ void ModalResonatorMatrix::processSample(float exciterInput, float& outL, float&
         const float x = exciterInput + mFeedbackModes[i] * (0.28f * mCouplingDepth);
 
         // TPT SVF Bandpass Step (Zero-Delay Instantaneous Resolvent)
-        const float vHp = mA1[i] * (x - mK[i] * mS1[i] - mS2[i]);
+        const float vHp = mA1[i] * (x - (mK[i] + mG[i]) * mS1[i] - mS2[i]);
         const float vBp = mG[i] * vHp + mS1[i];
         const float vLp = mG[i] * vBp + mS2[i];
 
@@ -257,18 +257,18 @@ void ModalResonatorMatrix::processSample(float exciterInput, float& outL, float&
     // Evaluated in O(N) operations (<10 ns)
     float sumModes = 0.0f;
     for (size_t i = 0; i < kNumModes; ++i) {
-        sumModes += modeOutputs[i];
+        sumModes += modeOutputs[i] * mK[i];
     }
     const float householderFactor = (mCouplingDepth * (2.0f / 16.0f)) * sumModes;
 
     std::array<float, kNumModes> scattered;
     for (size_t i = 0; i < kNumModes; ++i) {
-        scattered[i] = flushDenormal(modeOutputs[i] - householderFactor);
+        scattered[i] = flushDenormal((modeOutputs[i] * mK[i]) - householderFactor);
         // Store scattered state for next-sample inter-modal energy exchange
         mFeedbackModes[i] = scattered[i];
 
         // Real-time modal energy envelope tracking for Phosphor CRT Scope
-        const float absVal = std::abs(scattered[i]);
+        const float absVal = std::abs(modeOutputs[i]);
         mModalEnergies[i] = flushDenormal(0.992f * mModalEnergies[i] + 0.008f * absVal);
     }
 
@@ -276,8 +276,8 @@ void ModalResonatorMatrix::processSample(float exciterInput, float& outL, float&
     float sumL = 0.0f;
     float sumR = 0.0f;
     for (size_t i = 0; i < kNumModes; ++i) {
-        sumL += scattered[i] * mPanL[i];
-        sumR += scattered[i] * mPanR[i];
+        sumL += modeOutputs[i] * mPanL[i];
+        sumR += modeOutputs[i] * mPanR[i];
     }
 
     outL = flushDenormal(sumL);

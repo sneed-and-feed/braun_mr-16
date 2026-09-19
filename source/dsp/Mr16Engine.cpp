@@ -491,16 +491,20 @@ void Mr16Engine::drainEventQueue() noexcept {
         switch (ev.type) {
             case TriggerEvent::Type::Strike:
                 mExciter.triggerStrike(ev.velocity, ev.hardness);
+                mVactrolGate.trigger(ev.velocity);
                 break;
             case TriggerEvent::Type::StrikeButton:
                 mExciter.triggerStrikeButton(ev.index, ev.velocity);
+                mVactrolGate.trigger(ev.velocity);
                 break;
             case TriggerEvent::Type::ChimeKey:
                 mExciter.triggerChimeKey(ev.index, ev.velocity);
+                mVactrolGate.trigger(ev.velocity);
                 break;
             case TriggerEvent::Type::NoteOn:
                 mModalMatrix.setFundamentalHz(ev.freqHz);
                 mExciter.triggerStrike(ev.velocity, 0.50f + 0.40f * ev.velocity);
+                mVactrolGate.trigger(ev.velocity);
                 break;
         }
         mQueueReadHead = (mQueueReadHead + 1) & kEventQueueMask;

@@ -61,7 +61,7 @@ struct Mr16Parameters {
     float chorusMix             { 0.45f };
 
     // Deck 05: Spatial Dispersion & Dynamics
-    bool  vactrolSagEnable      { true };
+    bool  vactrolSagEnable      { false };
     float vactrolSagAmount      { 0.50f };
     float vactrolDecaySec       { 0.080f };
     float saturatorKnee         { 0.72f };

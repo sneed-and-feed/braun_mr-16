@@ -533,23 +533,47 @@ inline void registerTier1Tests() {
         // Enqueue kinetic strike
         engine.enqueueTriggerStrike(0.85f, 0.70f);
 
-        const int numBlocks = 10;
         const int blockSize = 256;
+        const int totalBlocks = 200; // ~1.07 seconds at 48 kHz
         std::vector<float> inL(blockSize, 0.0f), inR(blockSize, 0.0f);
         std::vector<float> outL(blockSize, 0.0f), outR(blockSize, 0.0f);
 
-        float peakOut = 0.0f;
-        for (int b = 0; b < numBlocks; ++b) {
+        float peakInitial = 0.0f;
+        float peakAt1Sec = 0.0f;
+        float earlyEnergy = 0.0f;
+        float lateEnergy = 0.0f;
+        int earlySampleCount = 0;
+        int lateSampleCount = 0;
+
+        for (int b = 0; b < totalBlocks; ++b) {
             engine.processBlock(inL.data(), inR.data(), outL.data(), outR.data(), blockSize);
             for (int s = 0; s < blockSize; ++s) {
-                peakOut = std::max(peakOut, std::max(std::abs(outL[s]), std::abs(outR[s])));
-                TEST_ASSERT(std::isfinite(outL[s]) && std::isfinite(outR[s]), "Engine output must be finite");
-                TEST_ASSERT(std::abs(outL[s]) <= 1.05f && std::abs(outR[s]) <= 1.05f,
+                const float sL = outL[s];
+                const float sR = outR[s];
+                TEST_ASSERT(std::isfinite(sL) && std::isfinite(sR), "Engine output must be finite");
+                TEST_ASSERT(std::abs(sL) <= 1.05f && std::abs(sR) <= 1.05f,
                             "Engine output must be bounded within saturator ceiling 1.05");
+
+                const float maxMag = std::max(std::abs(sL), std::abs(sR));
+                if (b < 10) {
+                    peakInitial = std::max(peakInitial, maxMag);
+                    earlyEnergy += sL * sL + sR * sR;
+                    earlySampleCount += 2;
+                } else if (b >= 180) { // ~0.96s to 1.07s
+                    peakAt1Sec = std::max(peakAt1Sec, maxMag);
+                    lateEnergy += sL * sL + sR * sR;
+                    lateSampleCount += 2;
+                }
             }
         }
 
-        TEST_ASSERT(peakOut > 0.005f, "Engine strike trigger must propagate into audible output");
+        const float earlyRms = std::sqrt(earlyEnergy / std::max(1, earlySampleCount));
+        const float lateRms = std::sqrt(lateEnergy / std::max(1, lateSampleCount));
+
+        TEST_ASSERT(peakInitial > 0.005f, "Engine strike trigger must propagate into audible output");
+        TEST_ASSERT(peakAt1Sec < 0.05f, "Engine output must naturally decay at 1.0s without self-oscillation");
+        TEST_ASSERT(lateRms < earlyRms * 0.2f, "Engine output RMS must significantly decay from strike transient");
+
         return test::gCurrentTestAssertFailures == 0;
     });
 
