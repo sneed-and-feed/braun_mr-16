@@ -1,0 +1,786 @@
+/**
+ * @file style.css
+ * @brief BRAUN MR-16 Modal Resonator · Dieter Rams Functionalist Industrial Design System
+ * Package-deal sibling unit to BRAUN AS-42 and BRAUN RB-26 ("Weniger, aber besser").
+ * Exact design tokens: #ECEBE4, #141517, #EE592B, #24FF6A, #FFB000.
+ * Strict DIN 1451 Mittelschrift typography and laboratory austerity.
+ */
+
+:root {
+  /* Braun Aluminum Light Chassis Theme (Default Laboratory Finish) */
+  --bg-app: #ECEBE4;
+  --bg-panel: #E2E0D8;
+  --bg-panel-inset: #D7D5CC;
+  --bg-bezel: #121414;
+  --border-line: #CBC8BD;
+  --border-subtle: #D8D6CD;
+
+  --text-primary: #1C1D1E;
+  --text-secondary: #5E6064;
+  --text-muted: #8E9094;
+  --text-dim: #B0B0B0;
+
+  --knob-cap: #D4D2C9;
+  --knob-border: #BBB8AD;
+  --knob-indicator: #1C1D1E;
+  --knob-track: #D0CEC4;
+  --knob-fill: #1C1D1E;
+
+  --braun-orange: #EE592B;
+  --braun-orange-glow: rgba(238, 89, 43, 0.45);
+  --braun-green: #2A7B4C;
+  --braun-amber: #E5A93C;
+
+  --phosphor-color: #24FF6A;
+  --phosphor-glow: rgba(36, 255, 106, 0.40);
+  --phosphor-amber: #FFB000;
+  --phosphor-amber-glow: rgba(255, 176, 0, 0.45);
+
+  --font-sans: "DIN 1451 Mittelschrift", "DIN 1451", "DIN Alternate", "DIN Neuzeit Grotesk", -apple-system, BlinkMacSystemFont, "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", "Consolas", "Roboto Mono", "DIN 1451", monospace;
+  --panel-radius: 3px;
+}
+
+[data-theme="dark"],
+[data-theme="matte-black"] {
+  /* Braun Anthracite Dark Chassis (Control Room Matte Black Finish) */
+  --bg-app: #141517;
+  --bg-panel: #1E2023;
+  --bg-panel-inset: #151618;
+  --bg-bezel: #0A0B0C;
+  --border-line: #3A3A3A;
+  --border-subtle: #2C2E33;
+
+  --text-primary: #F0F0F0;
+  --text-secondary: #BDBDBD;
+  --text-muted: #8E8E8E;
+  --text-dim: #606060;
+
+  --knob-cap: #2B2D31;
+  --knob-border: #4A4D52;
+  --knob-indicator: #F0F0F0;
+  --knob-track: #2A2C30;
+  --knob-fill: #EE592B;
+
+  --braun-orange: #EE592B;
+  --braun-orange-glow: rgba(238, 89, 43, 0.55);
+  --braun-green: #24FF6A;
+  --braun-amber: #FFB000;
+
+  --phosphor-color: #24FF6A;
+  --phosphor-glow: rgba(36, 255, 106, 0.55);
+  --phosphor-amber: #FFB000;
+  --phosphor-amber-glow: rgba(255, 176, 0, 0.55);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+html {
+  overscroll-behavior: none;
+  overscroll-behavior-y: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  background-color: var(--bg-app);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  overscroll-behavior: none;
+  overscroll-behavior-y: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  touch-action: pan-y;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: max(16px, env(safe-area-inset-top))
+           max(12px, env(safe-area-inset-right))
+           max(24px, env(safe-area-inset-bottom))
+           max(12px, env(safe-area-inset-left));
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* --- Drag & Drop RFC 8259 JSON Patch Overlay --- */
+.braun-drop-overlay {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(20, 21, 23, 0.88);
+  z-index: 999;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  border: 2px dashed var(--braun-orange);
+}
+
+.braun-chassis.is-drag-over .braun-drop-overlay {
+  display: flex;
+}
+
+.braun-drop-text {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: var(--braun-orange);
+  text-transform: uppercase;
+  border: 1px solid var(--braun-orange);
+  padding: 16px 28px;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+/* --- Typography & Labels --- */
+.braun-brand {
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.braun-model {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.braun-panel-title {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.braun-deck-subtitle {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.braun-deck-num {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--braun-orange);
+  margin-right: 6px;
+}
+
+.braun-label-inline {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* --- Buttons & Functional Selects --- */
+.braun-btn {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-line);
+  border-radius: var(--panel-radius);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.braun-btn:hover {
+  border-color: var(--text-primary);
+}
+
+.braun-btn:active,
+.braun-btn.is-active {
+  background-color: var(--braun-orange);
+  color: #FFFFFF;
+  border-color: var(--braun-orange);
+}
+
+.braun-btn.is-active .braun-led {
+  background-color: #FFFFFF;
+  box-shadow: 0 0 6px #FFFFFF;
+}
+
+.braun-select-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.braun-select {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-line);
+  border-radius: var(--panel-radius);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 8px;
+  cursor: pointer;
+  outline: none;
+}
+
+.braun-select:focus {
+  border-color: var(--braun-orange);
+}
+
+/* Status Indicator LEDs */
+.braun-led {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--text-muted);
+  display: inline-block;
+  transition: all 0.2s ease;
+}
+
+.braun-led.is-active-green {
+  background-color: var(--braun-green);
+  box-shadow: 0 0 6px var(--braun-green);
+}
+
+.braun-led.is-active-orange {
+  background-color: var(--braun-orange);
+  box-shadow: 0 0 6px var(--braun-orange);
+}
+
+.braun-led.is-recording {
+  background-color: #FF2442;
+  box-shadow: 0 0 8px #FF2442;
+  animation: ledPulse 0.9s infinite alternate ease-in-out;
+}
+
+@keyframes ledPulse {
+  0% { opacity: 0.4; }
+  100% { opacity: 1.0; }
+}
+
+/* --- Rotary Knobs & Tactile Controls --- */
+.braun-knobs-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-around;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.braun-knob-wrapper {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  touch-action: pan-y;
+  outline: none;
+  cursor: default;
+}
+
+.braun-knob-wrapper:focus-visible .braun-knob-cap {
+  box-shadow: 0 0 0 2px var(--braun-orange);
+}
+
+.braun-knob-label {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  text-align: center;
+  touch-action: pan-y;
+  cursor: default;
+}
+
+.braun-knob-assembly {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  cursor: ns-resize;
+  border-radius: 50%;
+}
+
+.braun-knob-hero .braun-knob-assembly,
+.braun-knob-large .braun-knob-assembly {
+  width: 64px;
+  height: 64px;
+}
+
+.braun-knob-secondary .braun-knob-assembly,
+.braun-knob-medium .braun-knob-assembly {
+  width: 52px;
+  height: 52px;
+}
+
+.braun-knob-standard .braun-knob-assembly,
+.braun-knob-small .braun-knob-assembly {
+  width: 42px;
+  height: 42px;
+}
+
+.braun-knob-compact .braun-knob-assembly,
+.braun-knob-mini .braun-knob-assembly {
+  width: 32px;
+  height: 32px;
+}
+
+.braun-knob-scale {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  transform: rotate(140deg);
+}
+
+.braun-knob-track {
+  fill: none;
+  stroke: var(--knob-track);
+  stroke-width: 4;
+}
+
+.braun-knob-fill {
+  fill: none;
+  stroke: var(--knob-fill);
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.05s ease-out;
+}
+
+.braun-knob-cap {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, var(--knob-cap) 0%, var(--bg-panel-inset) 85%);
+  border: 1px solid var(--knob-border);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform;
+}
+
+.braun-knob-hero .braun-knob-cap,
+.braun-knob-large .braun-knob-cap {
+  top: 7px;
+  left: 7px;
+  right: 7px;
+  bottom: 7px;
+}
+
+.braun-knob-secondary .braun-knob-cap,
+.braun-knob-medium .braun-knob-cap {
+  top: 6px;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+}
+
+.braun-knob-standard .braun-knob-cap,
+.braun-knob-small .braun-knob-cap {
+  top: 5px;
+  left: 5px;
+  right: 5px;
+  bottom: 5px;
+}
+
+.braun-knob-compact .braun-knob-cap,
+.braun-knob-mini .braun-knob-cap {
+  top: 4px;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+}
+
+.braun-knob-indicator {
+  position: absolute;
+  top: 3px;
+  width: 2px;
+  height: 8px;
+  background-color: var(--knob-indicator);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.braun-knob-hero .braun-knob-indicator,
+.braun-knob-large .braun-knob-indicator {
+  top: 3px;
+  width: 2.5px;
+  height: 10px;
+  background-color: var(--braun-orange);
+}
+
+.braun-knob-secondary .braun-knob-indicator,
+.braun-knob-medium .braun-knob-indicator {
+  top: 3px;
+  width: 2px;
+  height: 8px;
+}
+
+.braun-knob-standard .braun-knob-indicator,
+.braun-knob-small .braun-knob-indicator {
+  top: 2px;
+  width: 1.5px;
+  height: 6px;
+}
+
+.braun-knob-compact .braun-knob-indicator,
+.braun-knob-mini .braun-knob-indicator {
+  top: 2px;
+  width: 1.5px;
+  height: 5px;
+}
+
+.braun-knob-wrapper.is-active .braun-knob-indicator,
+.braun-knob-wrapper:hover .braun-knob-indicator {
+  background-color: var(--braun-orange);
+}
+
+.braun-knob-value-display {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  margin-top: 5px;
+  touch-action: pan-y;
+  cursor: pointer;
+  font-family: var(--font-mono);
+}
+
+.braun-knob-value-text {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.braun-knob-unit {
+  font-size: 8px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.braun-knob-direct-input {
+  width: 48px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: var(--bg-panel-inset);
+  color: var(--text-primary);
+  border: 1px solid var(--braun-orange);
+  border-radius: 2px;
+  text-align: center;
+  padding: 1px 2px;
+  margin-top: 3px;
+  outline: none;
+}
+
+/* --- Discrete Segmented Button Clusters --- */
+.braun-segment-group {
+  display: inline-flex;
+  border: 1px solid var(--border-line);
+  border-radius: var(--panel-radius);
+  overflow: hidden;
+  background-color: var(--bg-panel-inset);
+}
+
+.braun-segment-btn {
+  background: none;
+  border: none;
+  border-right: 1px solid var(--border-line);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.braun-segment-btn:last-child {
+  border-right: none;
+}
+
+.braun-segment-btn:hover {
+  color: var(--text-primary);
+}
+
+.braun-segment-btn.is-selected,
+.braun-segment-btn.is-active,
+.braun-segment-btn.active {
+  background-color: var(--text-primary);
+  color: var(--bg-panel);
+}
+
+[data-theme="dark"] .braun-segment-btn.is-selected,
+[data-theme="dark"] .braun-segment-btn.is-active,
+[data-theme="dark"] .braun-segment-btn.active {
+  background-color: var(--braun-orange);
+  color: #FFFFFF;
+}
+
+/* --- Deck 03: Sample Extraction Dropzone & Slot Manager --- */
+.braun-sample-dropzone {
+  background-color: var(--bg-panel-inset);
+  border: 1px dashed var(--border-line);
+  border-radius: var(--panel-radius);
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+  touch-action: pan-y;
+}
+
+.braun-sample-dropzone.is-drag-over,
+.braun-sample-dropzone:hover {
+  border-color: var(--braun-orange);
+}
+
+.braun-sample-dropzone.is-drag-over {
+  background-color: rgba(238, 89, 43, 0.08);
+  box-shadow: inset 0 0 8px var(--braun-orange-glow);
+}
+
+.braun-dropzone-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  touch-action: pan-y;
+}
+
+.braun-slot-cluster {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  touch-action: pan-y;
+}
+
+.braun-dropzone-target {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 2px;
+  padding: 5px 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background-color 0.12s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  touch-action: pan-y;
+}
+
+.braun-dropzone-target:hover {
+  border-color: var(--braun-orange);
+  background-color: var(--bg-app);
+}
+
+.braun-dropzone-text {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.braun-sample-dropzone.is-drag-over .braun-dropzone-text,
+.braun-dropzone-target:hover .braun-dropzone-text {
+  color: var(--braun-orange);
+}
+
+/* --- Tactile Pushbuttons & Strike Pads --- */
+.braun-strike-cluster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.braun-strike-btn {
+  background-color: var(--bg-panel-inset);
+  border: 1px solid var(--border-line);
+  border-radius: var(--panel-radius);
+  padding: 8px 12px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: transform 0.05s ease, background-color 0.1s ease;
+}
+
+.braun-strike-btn:active,
+.braun-strike-btn.is-active {
+  background-color: var(--braun-orange);
+  color: #FFFFFF;
+  border-color: var(--braun-orange);
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* --- 16-Key Microtonal Chime Strip --- */
+.braun-chime-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background-color: var(--bg-panel-inset);
+  padding: 12px 16px;
+  border-radius: var(--panel-radius);
+  border: 1px solid var(--border-line);
+  touch-action: pan-y;
+}
+
+.braun-chime-strip {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  gap: 4px;
+  height: 60px;
+  touch-action: none;
+}
+
+.braun-chime-key {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-line);
+  border-radius: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 2px;
+  cursor: pointer;
+  transition: background-color 0.08s ease, transform 0.05s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  touch-action: none;
+}
+
+.braun-chime-key:hover {
+  border-color: var(--braun-orange);
+}
+
+.braun-chime-key:active,
+.braun-chime-key.is-active {
+  background-color: var(--braun-orange);
+  color: #FFFFFF;
+  border-color: var(--braun-orange);
+  transform: translateY(1px);
+}
+
+.braun-chime-key.is-active .chime-key-badge,
+.braun-chime-key.is-active .chime-key-note {
+  color: #FFFFFF;
+}
+
+.chime-key-badge {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.chime-key-note {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* --- Optical CRT Cavity & Phosphor Bezel --- */
+.braun-crt-cavity {
+  background-color: var(--bg-bezel);
+  border: 2px solid #000;
+  border-radius: 4px;
+  padding: 8px;
+  box-shadow: inset 0 4px 18px rgba(0, 0, 0, 0.85), 0 1px 0 rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.braun-crt-canvas {
+  width: 100%;
+  max-width: 100%;
+  height: 200px;
+  min-height: 160px;
+  display: block;
+  background-color: #121414;
+  border-radius: 2px;
+  touch-action: pan-y;
+}
+
+.braun-crt-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  gap: 12px;
+  flex-wrap: wrap;
+  background-color: rgba(0, 0, 0, 0.25);
+  border-radius: 2px;
+}
+
+/* --- Footer Principles --- */
+.braun-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background-color: var(--bg-panel-inset);
+  border-top: 1px solid var(--border-line);
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+  gap: 8px;
+}

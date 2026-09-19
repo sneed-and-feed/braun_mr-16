@@ -1,0 +1,392 @@
+/**
+ * @file rack.css
+ * @brief BRAUN MR-16 Modal Resonator · 19-Inch 2U Studio Rackmount Enclosure
+ * Features precision milled rack ears, countersunk hex screws, brushed faceplate,
+ * expansive 7-deck signal-flow architecture, and tablet touch isolation.
+ */
+
+/* --- 19-Inch Rack Outer Chassis Assembly --- */
+.braun-rack-outer {
+  width: 100%;
+  max-width: 1420px;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  background-color: var(--bg-app);
+  margin: 0 auto;
+  touch-action: pan-y;
+}
+
+/* 19" Studio Rack Mounting Ears (Left & Right Flanges) */
+.braun-rack-ear {
+  width: 28px;
+  min-width: 28px;
+  background: linear-gradient(to right, var(--bg-panel-inset), var(--bg-panel));
+  border: 1px solid var(--border-line);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  touch-action: pan-y;
+}
+
+.braun-rack-ear.ear-left {
+  border-right: none;
+}
+
+.braun-rack-ear.ear-right {
+  background: linear-gradient(to left, var(--bg-panel-inset), var(--bg-panel));
+  border-left: none;
+}
+
+/* Precision Machined Hex Socket Screws (2U Standard) */
+.braun-rack-screw {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--knob-border) 25%, var(--bg-panel-inset) 80%);
+  border: 1px solid var(--border-line);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.15);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.braun-rack-screw::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  background-color: var(--text-primary);
+  opacity: 0.55;
+}
+
+/* --- Main 2U Faceplate Chassis --- */
+.braun-chassis {
+  flex: 1;
+  width: 100%;
+  max-width: 1360px;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-line);
+  border-radius: 2px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: visible;
+  touch-action: pan-y;
+}
+
+/* --- Header / Deck 07: Master Utilities --- */
+.braun-header {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--border-line);
+  background-color: var(--bg-panel);
+  touch-action: pan-y;
+}
+
+.braun-header-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  gap: 8px;
+  flex-wrap: wrap;
+  touch-action: pan-y;
+}
+
+.braun-logo-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  touch-action: pan-y;
+}
+
+.braun-utility-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  touch-action: pan-y;
+}
+
+/* Audition Bar (Tactile Impulse Generator) */
+.braun-audition-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  background-color: var(--bg-panel-inset);
+  border-top: 1px solid var(--border-line);
+  flex-wrap: wrap;
+  gap: 8px;
+  touch-action: pan-y;
+}
+
+.braun-audition-cluster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  touch-action: pan-y;
+}
+
+.braun-selector-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.braun-audition-btn {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-line);
+  border-radius: var(--panel-radius);
+  padding: 5px 11px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  touch-action: pan-y;
+}
+
+.braun-audition-btn:hover {
+  border-color: var(--text-primary);
+}
+
+.braun-audition-btn:active,
+.braun-audition-btn.is-active {
+  background-color: var(--braun-orange);
+  color: #FFFFFF;
+  border-color: var(--braun-orange);
+}
+
+/* --- Expansive 19" Multi-Deck Rack Architecture (Decks 01 - 06) --- */
+.braun-rack-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 0;
+  border-bottom: 1px solid var(--border-line);
+  touch-action: pan-y;
+}
+
+.braun-deck {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+  background-color: var(--bg-panel);
+  touch-action: pan-y;
+}
+
+/* Row 1: Upper Synthesizer Tier (Decks 01 & 02) */
+.braun-deck-01 {
+  grid-column: span 6;
+  border-right: 1px solid var(--border-line);
+  border-bottom: 1px solid var(--border-line);
+}
+
+.braun-deck-02 {
+  grid-column: span 6;
+  border-bottom: 1px solid var(--border-line);
+  padding: 16px 20px;
+}
+
+/* Row 2: Middle Processing & Scope Tier (Decks 03, 04 & 06) */
+.braun-deck-03 {
+  grid-column: span 4;
+  border-right: 1px solid var(--border-line);
+  border-bottom: 1px solid var(--border-line);
+}
+
+.braun-deck-04 {
+  grid-column: span 3;
+  border-right: 1px solid var(--border-line);
+  border-bottom: 1px solid var(--border-line);
+}
+
+.braun-deck-04 .braun-knobs-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 12px;
+  justify-items: center;
+}
+
+.braun-deck-06 {
+  grid-column: span 5;
+  border-bottom: 1px solid var(--border-line);
+  padding: 16px 20px;
+}
+
+/* Row 3: Lower Dynamics Tier (Deck 05) */
+.braun-deck-05 {
+  grid-column: span 12;
+  border-bottom: none;
+  padding: 14px 20px;
+}
+
+.braun-deck-05 .braun-deck-controls {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.braun-deck-05 .braun-sub-row {
+  flex: 0 1 auto;
+  gap: 12px;
+}
+
+.braun-deck-05 .braun-knobs-row-spread {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  gap: 16px;
+  padding: 0;
+}
+
+.braun-deck-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 8px;
+  touch-action: pan-y;
+  flex-wrap: wrap;
+}
+
+.braun-deck-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  touch-action: pan-y;
+}
+
+.braun-sub-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  touch-action: pan-y;
+}
+
+.braun-knobs-row-spread {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 4px 6px;
+  touch-action: pan-y;
+}
+
+/* --- Performance Deck (Lower Section) --- */
+.braun-performance-section {
+  padding: 14px 20px;
+  background-color: var(--bg-panel);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-line);
+  touch-action: pan-y;
+}
+
+.braun-performance-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  touch-action: pan-y;
+  flex-wrap: wrap;
+}
+
+/* --- Responsive Layout for Tablets & Mobile --- */
+@media (max-width: 1100px) {
+  .braun-rack-grid {
+    grid-template-columns: repeat(12, 1fr);
+  }
+  .braun-deck-01 {
+    grid-column: span 12;
+    border-right: none;
+  }
+  .braun-deck-02 {
+    grid-column: span 12;
+    border-right: none;
+  }
+  .braun-deck-03 {
+    grid-column: span 6;
+    border-right: 1px solid var(--border-line);
+  }
+  .braun-deck-04 {
+    grid-column: span 6;
+    border-right: none;
+  }
+  .braun-deck-06 {
+    grid-column: span 12;
+    border-right: none;
+  }
+  .braun-deck-05 {
+    grid-column: span 12;
+    border-right: none;
+  }
+  .braun-deck-05 .braun-deck-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .braun-deck-05 .braun-knobs-row-spread {
+    justify-content: space-around;
+  }
+}
+
+@media (max-width: 820px) {
+  .braun-rack-outer {
+    flex-direction: column;
+  }
+  .braun-rack-ear {
+    display: none;
+  }
+  .braun-rack-grid {
+    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+  }
+  .braun-deck {
+    grid-column: span 1 !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border-line) !important;
+    padding: 16px 14px;
+  }
+  .braun-deck-05 {
+    border-bottom: none !important;
+  }
+  .braun-deck-05 .braun-deck-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .braun-deck-05 .braun-knobs-row-spread {
+    justify-content: space-around;
+  }
+  .braun-deck-04 .braun-knobs-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .braun-header-main {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .braun-chime-strip {
+    height: 48px;
+  }
+  .braun-crt-canvas {
+    height: 200px;
+  }
+}

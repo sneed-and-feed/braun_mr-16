@@ -1,0 +1,390 @@
+name: Build & Multiplatform Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Publish GitHub release draft/tag'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  # ==============================================================================
+  # 1. Web Audio & JavaScript Verification Suite
+  # ==============================================================================
+  test-web:
+    name: Web Audio Verification (Node.js 20)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      - name: Run Web Audio Verification Suite
+        run: npm test
+
+      - name: Package Web Showcase Bundle
+        run: |
+          VERSION=$(node -p "require('./package.json').version || '1.0.0'")
+          mkdir -p dist/web staging/web
+          cp -r web server.js start.bat package.json LICENSE README.md staging/web/
+          cat << 'EOF' > staging/web/INSTALL.txt
+          BRAUN MR-16 MODAL RESONATOR & KINETIC SYNTHESIZER
+          WEB SHOWCASE BUNDLE (CROSS-PLATFORM ZERO-INSTALL)
+          Standard: DIN 1451 Technical Specification
+
+          1. EXECUTION:
+             Windows: Double-click 'start.bat'
+             macOS/Linux: Run 'node server.js' or 'npm start'
+
+          2. BROWSER ACCESS:
+             Navigate to http://localhost:3816/
+             Requires modern browser with Web Audio API support.
+
+          3. SPECIFICATION:
+             100% Client-side DSP, zero remote network calls, offline capable.
+          EOF
+          cd staging/web && zip -r ../../dist/web/BRAUN_MR16_v${VERSION}_Web_Showcase.zip .
+          cd ../..
+          sha256sum dist/web/BRAUN_MR16_v${VERSION}_Web_Showcase.zip > dist/web/BRAUN_MR16_v${VERSION}_Web_Showcase.zip.sha256
+
+      - name: Upload Web Showcase Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BRAUN_MR16_Web_Showcase
+          path: dist/web/*
+          retention-days: 14
+
+  # ==============================================================================
+  # 2. macOS Dedicated Build & Universal Packaging (Apple Silicon & Intel x86_64)
+  # ==============================================================================
+  build-macos:
+    name: macOS Universal (VST3, AU, CLAP, Standalone)
+    runs-on: macos-14
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Build Tools
+        run: |
+          brew install ninja
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run Web Audio Verification Suite
+        run: npm test
+
+      - name: Configure CMake (macOS Universal arm64 + x86_64)
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="10.15" \
+            -DMR16_BUILD_TESTS=ON \
+            -DMR16_USE_WEBVIEW=ON
+
+      - name: Compile Targets (Release)
+        run: |
+          cmake --build build --config Release --target BRAUN_MR16_All mr16_headless_dsp_tests -j 4
+
+      - name: Run Headless DSP Verification Tests
+        run: |
+          ./build/mr16_headless_dsp_tests
+
+      - name: Stage & Package macOS Universal Distribution
+        run: |
+          VERSION=$(node -p "require('./package.json').version || '1.0.0'")
+          DIST_DIR="dist/macos"
+          STAGE_DIR="staging/macos/BRAUN_MR16_v${VERSION}_macOS"
+          mkdir -p "${DIST_DIR}" "${STAGE_DIR}"
+
+          # Locate built artifacts in artefacts directory
+          STANDALONE_SRC=$(find build -name "BRAUN_MR16.app" -type d | head -n 1)
+          VST3_SRC=$(find build -name "BRAUN_MR16.vst3" -type d | head -n 1)
+          CLAP_SRC=$(find build -name "BRAUN_MR16.clap" | head -n 1)
+          AU_SRC=$(find build -name "BRAUN_MR16.component" -type d | head -n 1)
+
+          echo "Found Standalone: ${STANDALONE_SRC}"
+          echo "Found VST3:       ${VST3_SRC}"
+          echo "Found CLAP:       ${CLAP_SRC}"
+          echo "Found AU:         ${AU_SRC}"
+
+          if [ -d "${STANDALONE_SRC}" ]; then cp -R "${STANDALONE_SRC}" "${STAGE_DIR}/"; fi
+          if [ -d "${VST3_SRC}" ]; then cp -R "${VST3_SRC}" "${STAGE_DIR}/"; fi
+          if [ -f "${CLAP_SRC}" ] || [ -d "${CLAP_SRC}" ]; then cp -R "${CLAP_SRC}" "${STAGE_DIR}/"; fi
+          if [ -d "${AU_SRC}" ]; then cp -R "${AU_SRC}" "${STAGE_DIR}/"; fi
+
+          cp LICENSE "${STAGE_DIR}/"
+          cp README.md "${STAGE_DIR}/"
+
+          cat << 'EOF' > "${STAGE_DIR}/INSTALL.txt"
+          BRAUN MR-16 MODAL RESONATOR & KINETIC SYNTHESIZER
+          MACOS UNIVERSAL (ARM64 & X86_64) INSTALLATION GUIDE
+          Standard: DIN 1451 Technical Specification
+
+          1. VST3 PLUGIN INSTALLATION:
+             Copy 'BRAUN_MR16.vst3' into:
+             /Library/Audio/Plug-Ins/VST3/
+             (or ~/Library/Audio/Plug-Ins/VST3/)
+
+          2. AUDIO UNIT (AU) PLUGIN INSTALLATION:
+             Copy 'BRAUN_MR16.component' into:
+             /Library/Audio/Plug-Ins/Components/
+             (or ~/Library/Audio/Plug-Ins/Components/)
+
+          3. CLAP PLUGIN INSTALLATION:
+             Copy 'BRAUN_MR16.clap' into:
+             /Library/Audio/Plug-Ins/CLAP/
+             (or ~/Library/Audio/Plug-Ins/CLAP/)
+
+          4. STANDALONE APPLICATION:
+             Move 'BRAUN_MR16.app' to /Applications.
+
+          5. ARCHITECTURE SUPPORT:
+             Universal Binary supporting Apple Silicon (M1/M2/M3/M4) and Intel x86_64.
+             Minimum macOS target: 10.15 (Catalina) through macOS 14+ (Sonoma).
+          EOF
+
+          ZIP_NAME="BRAUN_MR16_v${VERSION}_macOS_Universal.zip"
+          cd staging/macos && zip -r -y "../../${DIST_DIR}/${ZIP_NAME}" "BRAUN_MR16_v${VERSION}_macOS"
+          cd ../..
+
+          shasum -a 256 "${DIST_DIR}/${ZIP_NAME}" > "${DIST_DIR}/${ZIP_NAME}.sha256"
+          cat "${DIST_DIR}/${ZIP_NAME}.sha256"
+
+      - name: Upload macOS Universal Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BRAUN_MR16_macOS_Universal
+          path: dist/macos/*
+          retention-days: 14
+
+  # ==============================================================================
+  # 3. Windows x64 Build & Packaging (MSVC C++20)
+  # ==============================================================================
+  build-windows:
+    name: Windows x64 (VST3, CLAP, Standalone)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run Web Audio Verification Suite
+        shell: pwsh
+        run: npm test
+
+      - name: Configure CMake (Visual Studio 2022)
+        shell: pwsh
+        run: |
+          cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DMR16_BUILD_TESTS=ON
+
+      - name: Compile Targets (Release)
+        shell: pwsh
+        run: |
+          cmake --build build --config Release --target BRAUN_MR16_All mr16_headless_dsp_tests -j 4
+
+      - name: Run Headless DSP Verification Tests
+        shell: pwsh
+        run: |
+          .\build\Release\mr16_headless_dsp_tests.exe
+
+      - name: Execute Local Packaging Pipeline
+        shell: pwsh
+        run: |
+          .\scripts\package-release.ps1
+
+      - name: Upload Windows Distribution Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: BRAUN_MR16_Windows_x64
+          path: dist/windows/*
+          retention-days: 14
+
+  # ==============================================================================
+  # 4. Linux x64 Build & Packaging (GCC / Clang)
+  # ==============================================================================
+  build-linux:
+    name: Linux x64 (VST3, CLAP, Standalone)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Linux Audio & Graphical Toolchain Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libx11-dev \
+            libxinerama-dev \
+            libxext-dev \
+            libfreetype6-dev \
+            libgl1-mesa-dev \
+            libwebkit2gtk-4.1-dev \
+            libcurl4-openssl-dev \
+            ninja-build
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run Web Audio Verification Suite
+        run: npm test
+
+      - name: Configure CMake (Linux Release)
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DMR16_BUILD_TESTS=ON
+
+      - name: Compile Targets (Release)
+        run: |
+          cmake --build build --config Release --target BRAUN_MR16_All mr16_headless_dsp_tests -j 4
+
+      - name: Run Headless DSP Verification Tests
+        run: |
+          ./build/mr16_headless_dsp_tests
+
+      - name: Stage & Package Linux x64 Distribution
+        run: |
+          VERSION=$(node -p "require('./package.json').version || '1.0.0'")
+          DIST_DIR="dist/linux"
+          STAGE_DIR="staging/linux/BRAUN_MR16_v${VERSION}_Linux_x64"
+          mkdir -p "${DIST_DIR}" "${STAGE_DIR}"
+
+          STANDALONE_SRC=$(find build -name "BRAUN_MR16" -type f -executable | grep -v "CMakeFiles" | head -n 1)
+          VST3_SRC=$(find build -name "BRAUN_MR16.vst3" -type d | head -n 1)
+          CLAP_SRC=$(find build -name "BRAUN_MR16.clap" | head -n 1)
+
+          if [ -n "${STANDALONE_SRC}" ]; then cp "${STANDALONE_SRC}" "${STAGE_DIR}/BRAUN_MR16"; fi
+          if [ -d "${VST3_SRC}" ]; then cp -R "${VST3_SRC}" "${STAGE_DIR}/"; fi
+          if [ -e "${CLAP_SRC}" ]; then cp -R "${CLAP_SRC}" "${STAGE_DIR}/"; fi
+
+          cp LICENSE "${STAGE_DIR}/"
+          cp README.md "${STAGE_DIR}/"
+
+          cat << 'EOF' > "${STAGE_DIR}/INSTALL.txt"
+          BRAUN MR-16 MODAL RESONATOR & KINETIC SYNTHESIZER
+          LINUX X86_64 INSTALLATION GUIDE
+          Standard: DIN 1451 Technical Specification
+
+          1. VST3 PLUGIN INSTALLATION:
+             Copy 'BRAUN_MR16.vst3' into:
+             ~/.vst3/
+             (or /usr/lib/vst3/ for system-wide availability)
+
+          2. CLAP PLUGIN INSTALLATION:
+             Copy 'BRAUN_MR16.clap' into:
+             ~/.clap/
+             (or /usr/lib/clap/ for system-wide availability)
+
+          3. STANDALONE APPLICATION:
+             Make executable: chmod +x BRAUN_MR16
+             Launch with ALSA or JACK audio server active.
+          EOF
+
+          ARCHIVE_NAME="BRAUN_MR16_v${VERSION}_Linux_x64.tar.gz"
+          tar -czvf "${DIST_DIR}/${ARCHIVE_NAME}" -C staging/linux "BRAUN_MR16_v${VERSION}_Linux_x64"
+
+          sha256sum "${DIST_DIR}/${ARCHIVE_NAME}" > "${DIST_DIR}/${ARCHIVE_NAME}.sha256"
+          cat "${DIST_DIR}/${ARCHIVE_NAME}.sha256"
+
+      - name: Upload Linux x64 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BRAUN_MR16_Linux_x64
+          path: dist/linux/*
+          retention-days: 14
+
+  # ==============================================================================
+  # 5. Release Consolidation & GitHub Release Publishing
+  # ==============================================================================
+  publish-release:
+    name: Consolidate & Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.create_release == true
+    needs: [test-web, build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Web Showcase
+        uses: actions/download-artifact@v4
+        with:
+          name: BRAUN_MR16_Web_Showcase
+          path: release_staging/web
+
+      - name: Download macOS Universal
+        uses: actions/download-artifact@v4
+        with:
+          name: BRAUN_MR16_macOS_Universal
+          path: release_staging/macos
+
+      - name: Download Windows x64
+        uses: actions/download-artifact@v4
+        with:
+          name: BRAUN_MR16_Windows_x64
+          path: release_staging/windows
+
+      - name: Download Linux x64
+        uses: actions/download-artifact@v4
+        with:
+          name: BRAUN_MR16_Linux_x64
+          path: release_staging/linux
+
+      - name: Compile Consolidated Master SHA256SUMS Manifest
+        run: |
+          mkdir -p release_assets
+          find release_staging -type f \( -name "*.zip" -o -name "*.tar.gz" \) -exec cp {} release_assets/ \;
+          cd release_assets
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release_assets/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
