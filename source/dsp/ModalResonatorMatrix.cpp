@@ -15,6 +15,8 @@ void ModalResonatorMatrix::reset() noexcept {
     mModFreqMultipliers.fill(1.0f);
     mModQSpread = 1.0f;
     mModPanOffset = 0.0f;
+    mQScale = 1.0f;
+    mOvertoneSpread = 1.0f;
 
     updateMaterialParameters();
     setManifold(mManifold, mManifoldMorph);
@@ -119,6 +121,17 @@ void ModalResonatorMatrix::setDecayScale(float decayScale) noexcept {
     updateFilterCoefficients();
 }
 
+void ModalResonatorMatrix::setQScale(float qScale) noexcept {
+    mQScale = std::clamp(qScale, 0.05f, 20.0f);
+    calculateDampingAndQ();
+    updateFilterCoefficients();
+}
+
+void ModalResonatorMatrix::setOvertoneSpread(float spread) noexcept {
+    mOvertoneSpread = std::clamp(spread, 0.2f, 3.0f);
+    updateFilterCoefficients();
+}
+
 void ModalResonatorMatrix::setCouplingDepth(float coupling) noexcept {
     mCouplingDepth = std::clamp(coupling, 0.0f, 1.0f);
 }
@@ -167,18 +180,19 @@ void ModalResonatorMatrix::calculateDampingAndQ() noexcept {
         const float baseQ = (loss > 1.0e-5f) ? (1.0f / loss) : 1000.0f;
         const float cleanBaseQ = std::isfinite(baseQ) ? baseQ : 50.0f;
         const float cleanDecay = std::isfinite(mDecayScale) ? mDecayScale : 1.0f;
-        mBaseQ[i] = std::clamp(cleanBaseQ * cleanDecay, 0.5f, 2500.0f);
+        mBaseQ[i] = std::clamp(cleanBaseQ * cleanDecay * mQScale, 0.5f, 4000.0f);
     }
 }
 
 void ModalResonatorMatrix::updateFilterCoefficients() noexcept {
     const float nyquist = mSampleRate * 0.495f;
+    const float spreadFactor = std::clamp(mOvertoneSpread, 0.2f, 3.0f);
 
     for (size_t i = 0; i < kNumModes; ++i) {
         const float m = static_cast<float>(i);
         const float dispersion = std::sqrt(1.0f + mStiffnessB * m * m);
         const float beating = 1.0f + mClusterDetune * std::sin(m * kPi / 2.5f);
-        const float effectiveRatio = mBaseRatios[i] * dispersion * beating;
+        const float effectiveRatio = 1.0f + (mBaseRatios[i] * dispersion * beating - 1.0f) * spreadFactor;
 
         // Effective modulated center frequency
         const float mult = std::isfinite(mModFreqMultipliers[i]) ? mModFreqMultipliers[i] : 1.0f;

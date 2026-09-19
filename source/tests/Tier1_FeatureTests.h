@@ -394,6 +394,80 @@ inline void registerTier1Tests() {
         return test::gCurrentTestAssertFailures == 0;
     });
 
+    registerTest("Tier 1", "T1_MOD_09", "Modal Resonator Matrix - Resonance Q Factor Scaling", []() {
+        mr16::ModalResonatorMatrix matrixLowQ, matrixHighQ;
+        matrixLowQ.prepare(48000.0);
+        matrixLowQ.setFundamentalHz(440.0f);
+        matrixLowQ.setQScale(0.2f);
+
+        matrixHighQ.prepare(48000.0);
+        matrixHighQ.setFundamentalHz(440.0f);
+        matrixHighQ.setQScale(5.0f);
+
+        TEST_ASSERT_NEAR(matrixLowQ.getQScale(), 0.2f, 0.01f, "Low Q scale getter must match set value");
+        TEST_ASSERT_NEAR(matrixHighQ.getQScale(), 5.0f, 0.01f, "High Q scale getter must match set value");
+
+        const size_t n = 24000;
+        std::vector<float> lowL(n), highL(n);
+        float outL, outR;
+        matrixLowQ.processSample(1.0f, outL, outR); lowL[0] = outL;
+        matrixHighQ.processSample(1.0f, outL, outR); highL[0] = outL;
+
+        for (size_t i = 1; i < n; ++i) {
+            matrixLowQ.processSample(0.0f, outL, outR); lowL[i] = outL;
+            matrixHighQ.processSample(0.0f, outL, outR); highL[i] = outL;
+        }
+
+        double lowLateRMS = test_utils::computeRMS(lowL, 12000, 4000);
+        double highLateRMS = test_utils::computeRMS(highL, 12000, 4000);
+        TEST_ASSERT(highLateRMS > lowLateRMS, "Higher Q scale must sustain resonance significantly longer than lower Q scale");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    registerTest("Tier 1", "T1_MOD_10", "Modal Resonator Matrix - Overtone Spread Harmonic Stretching", []() {
+        mr16::ModalResonatorMatrix matrix;
+        matrix.prepare(48000.0);
+        matrix.setFundamentalHz(200.0f);
+        matrix.setManifold(mr16::ManifoldType::ChladniPlate);
+
+        // Narrow spread: 0.5x
+        matrix.setOvertoneSpread(0.5f);
+        TEST_ASSERT_NEAR(matrix.getOvertoneSpread(), 0.5f, 0.01f, "Overtone spread getter must match set value");
+        const auto freqsNarrow = matrix.getCurrentFrequencies();
+        TEST_ASSERT_NEAR(freqsNarrow[0], 200.0f, 0.5f, "Fundamental must remain 200 Hz under narrow overtone spread");
+
+        // Wide spread: 2.0x
+        matrix.setOvertoneSpread(2.0f);
+        TEST_ASSERT_NEAR(matrix.getOvertoneSpread(), 2.0f, 0.01f, "Overtone spread getter must match set value");
+        const auto freqsWide = matrix.getCurrentFrequencies();
+        TEST_ASSERT_NEAR(freqsWide[0], 200.0f, 0.5f, "Fundamental must remain 200 Hz under wide overtone spread");
+
+        // Higher overtones must be spaced further apart with wide spread than narrow spread
+        TEST_ASSERT(freqsWide[1] > freqsNarrow[1], "Overtone 1 frequency must be higher under wide spread than narrow spread");
+        TEST_ASSERT(freqsWide[4] > freqsNarrow[4], "Overtone 4 frequency must be higher under wide spread than narrow spread");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    registerTest("Tier 1", "T1_MOD_11", "Mr16Engine - Modal Q and Overtone Spread Parameter Integration", []() {
+        mr16::Mr16Engine engine;
+        engine.prepare(48000.0, 512);
+
+        auto params = engine.getParameters();
+        params.modalQScale = 3.5f;
+        params.overtoneSpread = 1.8f;
+        params.chaosDetuneCents = 300.0f;
+        params.vactrolSagEnable = true;
+        params.vactrolSagAmount = 0.8f;
+
+        engine.setParameters(params);
+        const auto& updated = engine.getParameters();
+        TEST_ASSERT_NEAR(updated.modalQScale, 3.5f, 0.01f, "Engine modalQScale parameter must be updated");
+        TEST_ASSERT_NEAR(updated.overtoneSpread, 1.8f, 0.01f, "Engine overtoneSpread parameter must be updated");
+        TEST_ASSERT_NEAR(updated.chaosDetuneCents, 300.0f, 0.01f, "Engine chaosDetuneCents parameter must be updated");
+        TEST_ASSERT(updated.vactrolSagEnable, "Engine vactrolSagEnable parameter must be true");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
     // ========================================================================
     // T1_LOR: 3D Chaotic Lorenz Attractor Subsystem Tests
     // ========================================================================
@@ -520,6 +594,42 @@ inline void registerTier1Tests() {
             TEST_ASSERT_NEAR(outL, testSig[i], 1.0e-5, "Bypassed chorus must pass audio bit-exact in left channel");
             TEST_ASSERT_NEAR(outR, testSig[i], 1.0e-5, "Bypassed chorus must pass audio bit-exact in right channel");
         }
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    registerTest("Tier 1", "T1_CHO_04", "Tri-Phase BBD Chorus - Continuous Dimension Spread Width Scaling", []() {
+        mr16::SpatialChorus chorusMono, chorusWide;
+        chorusMono.prepare(48000.0);
+        chorusWide.prepare(48000.0);
+
+        chorusMono.setParameters(0.75f, 2.5f, 1.0f);
+        chorusMono.setDimensionSpread(0.0f); // Pure mono wet
+
+        chorusWide.setParameters(0.75f, 2.5f, 1.0f);
+        chorusWide.setDimensionSpread(1.0f); // Standard Dimension spread
+
+        const size_t n = 24000;
+        auto monoSine = test_utils::generateSine(n, 440.0, 48000.0, 0.5f);
+
+        std::vector<float> monoL(n), monoR(n), wideL(n), wideR(n);
+        for (size_t i = 0; i < n; ++i) {
+            chorusMono.process(monoSine[i], monoSine[i], monoL[i], monoR[i]);
+            chorusWide.process(monoSine[i], monoSine[i], wideL[i], wideR[i]);
+        }
+
+        double monoSideRms = 0.0;
+        double wideSideRms = 0.0;
+        for (size_t i = 2000; i < n; ++i) {
+            const float sideM = monoL[i] - monoR[i];
+            const float sideW = wideL[i] - wideR[i];
+            monoSideRms += sideM * sideM;
+            wideSideRms += sideW * sideW;
+        }
+        monoSideRms = std::sqrt(monoSideRms / (n - 2000));
+        wideSideRms = std::sqrt(wideSideRms / (n - 2000));
+
+        TEST_ASSERT_NEAR(static_cast<float>(monoSideRms), 0.0f, 1.0e-5f, "Zero dimension spread must produce pure mono wet signal (zero side energy)");
+        TEST_ASSERT(wideSideRms > 0.05, "Standard dimension spread must produce significant stereo side energy");
         return test::gCurrentTestAssertFailures == 0;
     });
 
@@ -746,6 +856,76 @@ inline void registerTier1Tests() {
         }
         TEST_ASSERT(maxStepDelta < 0.015f, "Exciter mode switch out of friction must slew smoothly without step impulse (< 0.015)");
 
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    registerTest("Tier 1", "T1_DYN_07", "Mr16Engine - Master Dry / Wet Mix External Audio Blending", []() {
+        mr16::Mr16Engine engineDry, engineWet;
+        engineDry.prepare(48000.0, 128);
+        engineWet.prepare(48000.0, 128);
+
+        mr16::Mr16Parameters pDry;
+        pDry.externalAudioEnable = true;
+        pDry.externalSensitivity = 1.0f;
+        pDry.dryWetMix = 0.0f; // 100% dry external input feedthrough
+        pDry.outputMute = false;
+        engineDry.setParameters(pDry);
+
+        mr16::Mr16Parameters pWet;
+        pWet.externalAudioEnable = true;
+        pWet.externalSensitivity = 1.0f;
+        pWet.dryWetMix = 1.0f; // 100% wet resonator output
+        pWet.outputMute = false;
+        engineWet.setParameters(pWet);
+
+        constexpr int blockSize = 128;
+        const auto inSig = test_utils::generateSine(blockSize * 10, 1000.0, 48000.0, 0.5f);
+        std::vector<float> dryOutL(blockSize, 0.0f), dryOutR(blockSize, 0.0f);
+        std::vector<float> wetOutL(blockSize, 0.0f), wetOutR(blockSize, 0.0f);
+
+        for (int b = 0; b < 10; ++b) {
+            const float* inPtr = inSig.data() + b * blockSize;
+            engineDry.processBlock(inPtr, inPtr, dryOutL.data(), dryOutR.data(), blockSize);
+            engineWet.processBlock(inPtr, inPtr, wetOutL.data(), wetOutR.data(), blockSize);
+        }
+
+        // With dryWetMix = 0.0, output should pass input signal cleanly
+        for (int s = 0; s < blockSize; ++s) {
+            const float expected = inSig[9 * blockSize + s];
+            TEST_ASSERT_NEAR(dryOutL[s], expected, 1.0e-4f, "100% dry mix must pass input signal cleanly");
+        }
+
+        TEST_ASSERT(test_utils::isSignalFinite(wetOutL), "Wet output must remain finite");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    registerTest("Tier 1", "T1_MOD_12", "Modal Resonator Matrix - Decay Scale Proportional RT60 Damping", []() {
+        mr16::ModalResonatorMatrix shortMatrix, longMatrix;
+        shortMatrix.prepare(48000.0);
+        longMatrix.prepare(48000.0);
+
+        shortMatrix.setFundamentalHz(440.0f);
+        shortMatrix.setDecayScale(0.20f); // Short decay (fast damping)
+
+        longMatrix.setFundamentalHz(440.0f);
+        longMatrix.setDecayScale(3.00f); // Long decay (slow damping)
+
+        float sL = 0.0f, sR = 0.0f;
+        float lL = 0.0f, lR = 0.0f;
+        shortMatrix.processSample(1.0f, sL, sR);
+        longMatrix.processSample(1.0f, lL, lR);
+
+        const size_t ringSamples = 48000;
+        std::vector<float> shortRing(ringSamples), longRing(ringSamples);
+        for (size_t i = 0; i < ringSamples; ++i) {
+            shortMatrix.processSample(0.0f, shortRing[i], sR);
+            longMatrix.processSample(0.0f, longRing[i], lR);
+        }
+
+        double shortTailEnergy = test_utils::computeRMS(shortRing, 24000, 24000);
+        double longTailEnergy = test_utils::computeRMS(longRing, 24000, 24000);
+
+        TEST_ASSERT(longTailEnergy > shortTailEnergy * 10.0, "Long decay scale (3.0s) must retain significantly more tail energy than short decay scale (0.2s)");
         return test::gCurrentTestAssertFailures == 0;
     });
 

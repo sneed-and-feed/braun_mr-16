@@ -41,6 +41,7 @@ namespace ParamIDs {
     inline const juce::ParameterID materialProfile  { "material_profile", 1 };
     inline const juce::ParameterID modalCoupling    { "modal_coupling", 1 };
     inline const juce::ParameterID modalSpread      { "modal_spread", 1 };
+    inline const juce::ParameterID modalQ           { "modal_q", 1 };
 
     // Deck 03: Kinetic Morph & 3D Chaotic Attractor
     inline const juce::ParameterID lorenzRate       { "lorenz_rate", 1 };
@@ -219,8 +220,8 @@ struct ParameterMetadata {
     bool isChoice;
 };
 
-inline const std::array<ParameterMetadata, 32>& getParameterMetadataTable() {
-    static const std::array<ParameterMetadata, 32> table {{
+inline const std::array<ParameterMetadata, 33>& getParameterMetadataTable() {
+    static const std::array<ParameterMetadata, 33> table {{
         // Deck 01: Kinetic Exciter Engine
         { 1, "exciter_type",      "exciterType",     "Exciter Model",       "",     0.0f,    3.0f,     0.0f,    false, true  },
         { 1, "strike_hardness",   "strikeHardness",  "Strike Hardness",     "%",    0.0f,    1.0f,     0.50f,   false, false },
@@ -236,10 +237,11 @@ inline const std::array<ParameterMetadata, 32>& getParameterMetadataTable() {
         // Deck 02: 16-Pole Modal Resonator Matrix
         { 2, "manifold_type",     "manifoldType",    "Resonant Manifold",   "",     0.0f,    3.0f,     0.0f,    false, true  },
         { 2, "modal_frequency",   "modalFrequency",  "Fundamental Freq",    "Hz",   20.0f,   5000.0f,  440.0f,  false, false },
-        { 2, "modal_damping",     "modalDamping",    "Modal Damping",       "%",    0.005f,  1.0f,     0.15f,   false, false },
+        { 2, "modal_damping",     "modalDamping",    "Modal Damping RT60",  "s",    0.05f,   10.0f,    1.80f,   false, false },
         { 2, "material_profile",  "materialProfile", "Material Profile",    "",     0.0f,    4.0f,     0.0f,    false, true  },
         { 2, "modal_coupling",    "modalCoupling",   "Modal Coupling",      "%",    0.0f,    1.0f,     0.25f,   false, false },
         { 2, "modal_spread",      "modalSpread",     "Harmonic Dispersion", "x",    0.2f,    3.0f,     1.00f,   false, false },
+        { 2, "modal_q",           "modalQ",          "Resonance Q",         "Q",    5.0f,    500.0f,   50.0f,   false, false },
 
         // Deck 03: Kinetic Morph & 3D Chaotic Attractor
         { 3, "lorenz_rate",       "lorenzRate",      "Chaos Rate",          "Hz",   0.01f,   10.0f,    0.50f,   false, false },
@@ -257,7 +259,7 @@ inline const std::array<ParameterMetadata, 32>& getParameterMetadataTable() {
         // Deck 05: Spatial Dispersion, Vactrol LPG & Dynamics
         { 5, "golden_pan_spread", "goldenPanSpread", "Spatial Dispersion",  "%",    0.0f,    1.0f,     0.80f,   false, false },
         { 5, "vactrol_lpg_cutoff","vactrolLpgCutoff","Vactrol LPG Cutoff",  "Hz",   100.0f,  20000.0f, 12000.0f,false, false },
-        { 5, "drive_saturation",  "driveSaturation", "Resonator Drive",     "dB",   0.0f,    24.0f,    0.0f,    false, false },
+        { 5, "drive_saturation",  "driveSaturation", "Resonator Drive",     "%",    0.0f,    1.0f,     0.25f,   false, false },
         { 5, "master_trim_db",    "masterTrimDb",    "Output Trim",         "dB",   -24.0f,  12.0f,    0.0f,    false, false },
         { 5, "dry_wet_mix",       "dryWetMix",       "Dry / Wet Mix",       "%",    0.0f,    1.0f,     0.65f,   false, false },
         { 5, "power_state",       "powerState",      "Power Standby",       "",     0.0f,    1.0f,     1.0f,    true,  false },
@@ -304,10 +306,11 @@ struct alignas(64) Mr16ParameterSnapshot {
     // Deck 02: 16-Pole Modal Resonator Matrix
     ManifoldType    manifoldType    { ManifoldType::ChladniPlate };
     float           modalFrequency  { 440.0f };
-    float           modalDamping    { 0.15f };
+    float           modalDamping    { 1.80f };
     MaterialProfile materialProfile { MaterialProfile::Wood };
     float           modalCoupling   { 0.25f };
     float           modalSpread     { 1.00f };
+    float           modalQ          { 50.0f };
 
     // Deck 03: Kinetic Morph & 3D Chaotic Attractor
     float lorenzRate       { 0.50f };
@@ -325,7 +328,7 @@ struct alignas(64) Mr16ParameterSnapshot {
     // Deck 05: Spatial Dispersion, Vactrol LPG & Dynamics
     float goldenPanSpread   { 0.80f };
     float vactrolLpgCutoff  { 12000.0f };
-    float driveSaturationDb { 0.0f };
+    float driveSaturationDb { 0.25f };
     float masterTrimDb      { 0.0f };
     float dryWetMix         { 0.65f };
     bool  powerState        { true };
@@ -352,22 +355,27 @@ struct alignas(64) Mr16ParameterSnapshot {
         p.fundamentalHz         = modalFrequency;
         p.manifold              = static_cast<braun::mr16::ManifoldType>(static_cast<int>(manifoldType));
         p.material              = static_cast<braun::mr16::MaterialType>(static_cast<int>(materialProfile));
-        p.decayScale            = std::clamp(1.0f / (modalDamping * 6.0f + 0.001f), 0.1f, 10.0f);
+        p.decayScale            = modalDamping;
         p.couplingDepth         = modalCoupling;
         p.stereoWidth           = goldenPanSpread;
+        p.modalQScale           = modalQ / 50.0f;
+        p.overtoneSpread        = modalSpread;
 
         p.chaosRateHz           = lorenzRate;
         p.chaosDepth            = lorenzChaos;
-        p.chaosDetuneCents      = lorenzFreqMod * 100.0f;
+        p.chaosDetuneCents      = lorenzFreqMod * 300.0f;
 
         p.chorusEnable          = chorusEnable;
         p.chorusRateHz          = chorusRateHz;
         p.chorusDepthMs         = chorusDepthMs;
         p.chorusMix             = chorusMix;
-        const int dimIdx        = static_cast<int>(std::round(chorusDimension * 3.0f));
-        p.chorusDimensionMode   = static_cast<braun::mr16::DimensionMode>(std::clamp(dimIdx, 0, 3));
+        p.chorusDimension       = chorusDimension;
+        p.chorusDimensionMode   = braun::mr16::DimensionMode::Manual;
 
+        p.vactrolSagEnable      = (vactrolSag > 0.02f);
         p.vactrolSagAmount      = vactrolSag;
+        p.driveSaturation       = driveSaturationDb;
+        p.dryWetMix             = dryWetMix;
         p.masterVolumeDb        = masterTrimDb;
         p.outputMute            = !powerState;
         return p;
@@ -397,6 +405,7 @@ struct Mr16AtomicPointers {
     std::atomic<float>* materialProfile  { nullptr };
     std::atomic<float>* modalCoupling    { nullptr };
     std::atomic<float>* modalSpread      { nullptr };
+    std::atomic<float>* modalQ           { nullptr };
 
     std::atomic<float>* lorenzRate       { nullptr };
     std::atomic<float>* lorenzChaos      { nullptr };
@@ -436,6 +445,7 @@ struct Mr16AtomicPointers {
         materialProfile  = apvts.getRawParameterValue(ParamIDs::materialProfile.getParamID());
         modalCoupling    = apvts.getRawParameterValue(ParamIDs::modalCoupling.getParamID());
         modalSpread      = apvts.getRawParameterValue(ParamIDs::modalSpread.getParamID());
+        modalQ           = apvts.getRawParameterValue(ParamIDs::modalQ.getParamID());
 
         lorenzRate       = apvts.getRawParameterValue(ParamIDs::lorenzRate.getParamID());
         lorenzChaos      = apvts.getRawParameterValue(ParamIDs::lorenzChaos.getParamID());
@@ -490,6 +500,7 @@ struct Mr16AtomicPointers {
         }
         if (modalCoupling)   s.modalCoupling   = modalCoupling->load(std::memory_order_relaxed);
         if (modalSpread)     s.modalSpread     = modalSpread->load(std::memory_order_relaxed);
+        if (modalQ)          s.modalQ          = modalQ->load(std::memory_order_relaxed);
 
         // Deck 03
         if (lorenzRate)      s.lorenzRate      = lorenzRate->load(std::memory_order_relaxed);
@@ -640,12 +651,12 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::modalDamping,
-        "Modal Damping",
-        juce::NormalisableRange<float>(0.005f, 1.0f, 0.001f, 0.5f),
-        0.15f,
-        juce::AudioParameterFloatAttributes().withLabel("%")
+        "Modal Damping RT60",
+        juce::NormalisableRange<float>(0.05f, 10.0f, 0.01f, 0.35f),
+        1.80f,
+        juce::AudioParameterFloatAttributes().withLabel("s")
             .withStringFromValueFunction([](float val, int) {
-                return juce::String(val * 100.0f, 1) + " %";
+                return juce::String(val, 2) + " s";
             })));
 
     params.push_back(std::make_unique<juce::AudioParameterChoice>(
@@ -672,6 +683,16 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         juce::AudioParameterFloatAttributes().withLabel("x")
             .withStringFromValueFunction([](float val, int) {
                 return juce::String(val, 2) + " x";
+            })));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        ParamIDs::modalQ,
+        "Resonance Q",
+        juce::NormalisableRange<float>(5.0f, 500.0f, 0.1f, 0.4f),
+        50.0f,
+        juce::AudioParameterFloatAttributes().withLabel("Q")
+            .withStringFromValueFunction([](float val, int) {
+                return juce::String(val, 1) + " Q";
             })));
 
     // ------------------------------------------------------------------------
@@ -791,11 +812,11 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::driveSaturation,
         "Resonator Drive",
-        juce::NormalisableRange<float>(0.0f, 24.0f, 0.1f, 1.0f),
-        0.0f,
-        juce::AudioParameterFloatAttributes().withLabel("dB")
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f, 1.0f),
+        0.25f,
+        juce::AudioParameterFloatAttributes().withLabel("%")
             .withStringFromValueFunction([](float val, int) {
-                return juce::String(val, 1) + " dB";
+                return juce::String(static_cast<int>(std::round(val * 100.0f))) + " %";
             })));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(

@@ -26,6 +26,7 @@ export class BraunCrtDisplay {
     this.ctx = canvas.getContext ? canvas.getContext('2d') : null;
     this.mode = options.mode || 'CHLADNI'; // 'CHLADNI' | 'ATTRACTOR' | 'MODAL_FFT'
     this.phosphorType = options.phosphorType || 'GREEN_P1'; // 'GREEN_P1' | 'AMBER_P3'
+    this.scopeSource = options.scopeSource || 'OUT'; // 'OUT' | 'IN'
     this.intensity = options.intensity ?? 85.0; // 0 - 100%
     this.isPowered = options.isPowered ?? true;
     this.isRunning = false;
@@ -123,6 +124,10 @@ export class BraunCrtDisplay {
     if (mode === 'CHLADNI' || mode === 'ATTRACTOR' || mode === 'MODAL_FFT') {
       this.mode = mode;
     }
+  }
+
+  setScopeSource(source) {
+    this.scopeSource = (source === 'IN' ? 'IN' : 'OUT');
   }
 
   setPower(powered) {
@@ -391,11 +396,16 @@ export class BraunCrtDisplay {
     }
     ctx.restore();
 
+    // Render 60 FPS CRT vector oscilloscope waveform
+    if (this.scopeSource === 'IN' || this.showWaveform) {
+      this._drawVectorScopeWaveform(ctx, w, h);
+    }
+
     // Mode readout in upper-right corner (DIN tabular)
     ctx.fillStyle = this.phosphorColor;
     ctx.font = '9px "DIN 1451 Mittelschrift", monospace';
     ctx.textAlign = 'right';
-    ctx.fillText(`CRT: ${this.mode}`, w - 12, 16);
+    ctx.fillText(`CRT: ${this.mode} · SCOPE: ${this.scopeSource}`, w - 12, 16);
 
     // Phosphor indicator in upper-left corner
     ctx.fillStyle = this.phosphorDim;
@@ -707,5 +717,33 @@ export class BraunCrtDisplay {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
       ctx.fillText(freq < 1000 ? `${freq}` : `${(freq / 1000).toFixed(1)}k`, x + barWidth / 2, h - 8);
     }
+  }
+
+  // --- Oscilloscope Waveform Vector Trace ---
+  _drawVectorScopeWaveform(ctx, w, h) {
+    if (!this.timeData || this.timeData.length === 0) return;
+    const len = this.timeData.length;
+    const midY = h / 2;
+    const amp = h * 0.40;
+
+    ctx.save();
+    ctx.shadowColor = this.phosphorGlow;
+    ctx.shadowBlur = (this.scopeSource === 'IN') ? 10 : 6;
+    ctx.strokeStyle = this.phosphorColor;
+    ctx.lineWidth = (this.scopeSource === 'IN') ? 1.8 : 1.2;
+    ctx.beginPath();
+
+    const padding = 16;
+    const drawW = w - padding * 2;
+    for (let i = 0; i < drawW; i++) {
+      const idx = Math.floor((i / drawW) * len);
+      const val = this.timeData[idx] || 0.0;
+      const x = padding + i;
+      const y = midY - val * amp;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.restore();
   }
 }

@@ -78,6 +78,9 @@ public:
     static constexpr int kScopeBufferSize = 2048;
     void pushScopeSamples(const float* left, const float* right, int numSamples) noexcept;
     void getScopeSamples(float* destL, float* destR, int numSamplesToRead) const noexcept;
+    void setScopeSource(int source) noexcept;
+    int getScopeSource() const noexcept;
+    bool isMonitoringInput() const noexcept;
 
     // Lossless WAV Background Recorder
     void startRecording();
@@ -99,6 +102,7 @@ private:
     std::atomic<bool> isPoweredOn { true };
     std::atomic<bool> mPendingEngineReset { false };
     std::atomic<bool> mEuclideanEnable { false };
+    std::atomic<int> mScopeSource { 0 };
     int mCurrentProgram { 0 };
 
 #if MR16_HAS_DSP_ENGINE

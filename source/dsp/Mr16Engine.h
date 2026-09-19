@@ -47,6 +47,8 @@ struct Mr16Parameters {
     float decayScale            { 1.0f };
     float couplingDepth         { 0.25f };
     float stereoWidth           { 0.85f };
+    float modalQScale           { 1.0f };
+    float overtoneSpread        { 1.0f };
 
     // Deck 03: 3D Chaotic Lorenz Attractor
     float chaosRateHz           { 1.0f };
@@ -59,11 +61,14 @@ struct Mr16Parameters {
     float chorusRateHz          { 0.55f };
     float chorusDepthMs         { 2.20f };
     float chorusMix             { 0.45f };
+    float chorusDimension       { 0.75f };
 
     // Deck 05: Spatial Dispersion & Dynamics
     bool  vactrolSagEnable      { false };
     float vactrolSagAmount      { 0.50f };
     float vactrolDecaySec       { 0.080f };
+    float driveSaturation       { 0.25f };
+    float dryWetMix             { 0.65f };
     float saturatorKnee         { 0.72f };
     float saturatorCeiling      { 1.05f };
 

@@ -414,6 +414,8 @@ void Mr16Engine::applyParametersToDsp() noexcept {
     mModalMatrix.setDecayScale(mParams.decayScale);
     mModalMatrix.setCouplingDepth(mParams.couplingDepth);
     mModalMatrix.setStereoWidth(mParams.stereoWidth);
+    mModalMatrix.setQScale(mParams.modalQScale);
+    mModalMatrix.setOvertoneSpread(mParams.overtoneSpread);
 
     // Deck 03: 3D Lorenz Attractor
     mLorenz.setRateHz(mParams.chaosRateHz);
@@ -427,6 +429,7 @@ void Mr16Engine::applyParametersToDsp() noexcept {
     } else {
         mChorus.setMode(mParams.chorusDimensionMode);
     }
+    mChorus.setDimensionSpread(mParams.chorusDimension);
 
     // Deck 05: Dynamics & LPG
     mVactrolGate.setDynamicSag(mParams.vactrolSagAmount);
@@ -585,8 +588,9 @@ void Mr16Engine::processBlock(const float* inL, const float* inR,
         // Step 5: Master Volume Slewing & Bounded C1 Hermite Soft Saturator (Deck 05/07)
         // --------------------------------------------------------------------
         const float currentGain = mVolumeSmoother.next();
-        const float scaledL = lpgL * currentGain;
-        const float scaledR = lpgR * currentGain;
+        const float driveGain = 1.0f + mParams.driveSaturation * 2.5f;
+        const float scaledL = lpgL * currentGain * driveGain;
+        const float scaledR = lpgR * currentGain * driveGain;
 
         const float satL = mSaturator.processSample(scaledL);
         const float satR = mSaturator.processSample(scaledR);
@@ -603,6 +607,14 @@ void Mr16Engine::processBlock(const float* inL, const float* inR,
         // Master physical resonance saturation boundary check
         finalL = mSaturator.processSample(finalL);
         finalR = mSaturator.processSample(finalR);
+
+        // Deck 05: Master Dry / Wet Mix
+        if (mParams.externalAudioEnable && (inL != nullptr || inR != nullptr)) {
+            const float dryMix = std::clamp(1.0f - mParams.dryWetMix, 0.0f, 1.0f);
+            const float wetMix = std::clamp(mParams.dryWetMix, 0.0f, 1.0f);
+            finalL = dryMix * sampleInL + wetMix * finalL;
+            finalR = dryMix * sampleInR + wetMix * finalR;
+        }
 
         outL[i] = finalL;
         outR[i] = finalR;

@@ -130,12 +130,13 @@ private:
     std::vector<std::unique_ptr<ButtonSlot>> buttonSlots;
     std::vector<std::unique_ptr<ComboSlot>> comboSlots;
 
-    // Audition Exciter trigger buttons
+    // Audition Exciter trigger buttons & Monitor source
     juce::TextButton strikeTriggerBtn;
     juce::TextButton frictionTriggerBtn;
     juce::TextButton vactrolTriggerBtn;
     juce::TextButton poissonTriggerBtn;
     juce::TextButton diracTriggerBtn;
+    juce::TextButton scopeSourceButton;
 
     void setupNativeControls();
     void updateNativeControlVisibility();

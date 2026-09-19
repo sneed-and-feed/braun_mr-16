@@ -203,7 +203,7 @@ const paramsMeta = [
   // Deck 02
   { id: 'manifold_type', webId: 'manifoldType', name: 'Manifold', deck: 2, min: 0, max: 3, def: 0, isChoice: true, choices: ['Chladni', 'Beam', 'Formant', 'Poincare'] },
   { id: 'modal_frequency', webId: 'modalFrequency', name: 'Fundamental', deck: 2, min: 20, max: 5000, def: 440, unit: 'Hz' },
-  { id: 'modal_damping', webId: 'modalDamping', name: 'Damping', deck: 2, min: 0.005, max: 1, def: 0.15, unit: '%' },
+  { id: 'modal_damping', webId: 'modalDamping', name: 'Damping', deck: 2, min: 0.05, max: 10, def: 1.80, unit: 's' },
   { id: 'material_profile', webId: 'materialProfile', name: 'Material', deck: 2, min: 0, max: 4, def: 0, isChoice: true, choices: ['Wood', 'Glass', 'Steel', 'Brass', 'Nylon'] },
   { id: 'modal_coupling', webId: 'modalCoupling', name: 'Coupling', deck: 2, min: 0, max: 1, def: 0.25, unit: '%' },
   { id: 'modal_spread', webId: 'modalSpread', name: 'Harmonic Spread', deck: 2, min: 0.2, max: 3, def: 1.0, unit: 'x' },
@@ -224,7 +224,7 @@ const paramsMeta = [
   // Deck 05
   { id: 'golden_pan_spread', webId: 'goldenPanSpread', name: 'Spatial Pan', deck: 5, min: 0, max: 1, def: 0.8, unit: '%' },
   { id: 'vactrol_lpg_cutoff', webId: 'vactrolLpgCutoff', name: 'LPG Cutoff', deck: 5, min: 100, max: 20000, def: 12000, unit: 'Hz' },
-  { id: 'drive_saturation', webId: 'driveSaturation', name: 'Drive Saturation', deck: 5, min: 0, max: 24, def: 0, unit: 'dB' },
+  { id: 'drive_saturation', webId: 'driveSaturation', name: 'Drive Saturation', deck: 5, min: 0, max: 1, def: 0.25, unit: '%' },
   { id: 'master_trim_db', webId: 'masterTrimDb', name: 'Master Trim', deck: 5, min: -24, max: 12, def: 0, unit: 'dB' },
   { id: 'dry_wet_mix', webId: 'dryWetMix', name: 'Dry / Wet', deck: 5, min: 0, max: 1, def: 0.65, unit: '%' }
 ];
@@ -810,6 +810,12 @@ void BRAUN_MR16AudioProcessorEditor::handleParamChangeFromWeb(const juce::var& d
         return;
     }
 
+    if (id == "scope_source" || id == "scopeSource")
+    {
+        processorRef.setScopeSource(static_cast<int>(std::round(val)));
+        return;
+    }
+
     const auto& table = mr16::getParameterMetadataTable();
     for (const auto& meta : table)
     {
@@ -817,9 +823,14 @@ void BRAUN_MR16AudioProcessorEditor::handleParamChangeFromWeb(const juce::var& d
         {
             if (auto* param = processorRef.getAPVTS().getParameter(meta.apvtsId))
             {
+                float targetVal = val;
+                if (meta.unit != nullptr && std::string_view(meta.unit) == "%" && meta.maxVal <= 1.0f && targetVal > 1.0f)
+                {
+                    targetVal *= 0.01f;
+                }
                 const float norm = meta.isChoice
-                                     ? param->convertTo0to1(std::round(val))
-                                     : param->convertTo0to1(val);
+                                     ? param->convertTo0to1(std::round(targetVal))
+                                     : param->convertTo0to1(targetVal);
                 param->setValueNotifyingHost(std::clamp(norm, 0.0f, 1.0f));
             }
             break;
@@ -1068,6 +1079,12 @@ void BRAUN_MR16AudioProcessorEditor::timerCallback()
             presetComboBox.setSelectedId(currentProg + 1, juce::dontSendNotification);
         }
 
+        const bool monIn = processorRef.isMonitoringInput();
+        scopeSourceButton.setButtonText(monIn ? "SCOPE: IN" : "SCOPE: OUT");
+        scopeSourceButton.setColour(juce::TextButton::buttonColourId,
+                                    monIn ? findColour(mr16::BraunColours::braunOrangeColourId)
+                                          : findColour(mr16::BraunColours::bgPanelInsetColourId));
+
         auto crtArea = getLocalBounds().withTrimmedTop(54).removeFromTop(130).reduced(16, 4);
         repaint(crtArea);
     }
@@ -1176,6 +1193,17 @@ void BRAUN_MR16AudioProcessorEditor::setupNativeControls()
     diracTriggerBtn.onClick = [this] { processorRef.triggerStrike(1.0f, 1.0f); };
     addChildComponent(diracTriggerBtn);
 
+    scopeSourceButton.setButtonText(processorRef.isMonitoringInput() ? "SCOPE: IN" : "SCOPE: OUT");
+    scopeSourceButton.onClick = [this] {
+        const int newSrc = (processorRef.getScopeSource() == 0) ? 1 : 0;
+        processorRef.setScopeSource(newSrc);
+        scopeSourceButton.setButtonText(processorRef.isMonitoringInput() ? "SCOPE: IN" : "SCOPE: OUT");
+        scopeSourceButton.setColour(juce::TextButton::buttonColourId,
+            processorRef.isMonitoringInput() ? findColour(mr16::BraunColours::braunOrangeColourId)
+                                             : findColour(mr16::BraunColours::bgPanelInsetColourId));
+    };
+    addChildComponent(scopeSourceButton);
+
     // Build all 32 APVTS controls
     auto& apvts = processorRef.getAPVTS();
     const auto& table = mr16::getParameterMetadataTable();
@@ -1269,6 +1297,7 @@ void BRAUN_MR16AudioProcessorEditor::updateNativeControlVisibility()
     vactrolTriggerBtn.setVisible(show);
     poissonTriggerBtn.setVisible(show);
     diracTriggerBtn.setVisible(show);
+    scopeSourceButton.setVisible(show);
 
     for (auto& s : knobSlots)
     {
@@ -1311,6 +1340,7 @@ void BRAUN_MR16AudioProcessorEditor::updateNativeControlVisibility()
         vactrolTriggerBtn.toFront(false);
         poissonTriggerBtn.toFront(false);
         diracTriggerBtn.toFront(false);
+        scopeSourceButton.toFront(false);
 #if JUCE_WEB_BROWSER
         viewModeButton.toFront(true);
 #endif
@@ -1542,7 +1572,8 @@ void BRAUN_MR16AudioProcessorEditor::drawCrtDisplay(juce::Graphics& g, juce::Rec
     g.setColour(findColour(mr16::BraunColours::phosphorColourId).withAlpha(0.65f));
     g.setFont(juce::Font(juce::FontOptions(8.5f, juce::Font::bold)));
     juce::String modeName = (mode == 0) ? "CHLADNI 2D" : (mode == 1) ? "ATTRACTOR 3D" : "MODAL FFT";
-    g.drawText(modeName, scopeScreen.reduced(6), juce::Justification::topRight);
+    juce::String srcName = processorRef.isMonitoringInput() ? "SCOPE: IN" : "SCOPE: OUT";
+    g.drawText(modeName + juce::String(" ") + juce::String::charToString(0x00B7) + " " + srcName, scopeScreen.reduced(6), juce::Justification::topRight);
 
     // Right side: 16 Modal Energy Bars
     const int nBars = 16;
@@ -1637,6 +1668,7 @@ void BRAUN_MR16AudioProcessorEditor::layoutNativeControls()
     vactrolTriggerBtn.setBounds(audition.removeFromLeft(110).reduced(4, 2));
     poissonTriggerBtn.setBounds(audition.removeFromLeft(130).reduced(4, 2));
     diracTriggerBtn.setBounds(audition.removeFromLeft(110).reduced(4, 2));
+    scopeSourceButton.setBounds(audition.removeFromRight(100).reduced(4, 2));
 
     // 4. 5 Signal-Flow Decks Grid
     auto gridArea = bounds.reduced(16, 6);

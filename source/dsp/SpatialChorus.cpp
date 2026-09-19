@@ -61,6 +61,10 @@ void SpatialChorus::setParameters(float rateHz, float depthMs, float mix) noexce
     updateLfoIncrement();
 }
 
+void SpatialChorus::setDimensionSpread(float spread) noexcept {
+    mDimensionSpread = std::clamp(std::isfinite(spread) ? spread : 1.0f, 0.0f, 2.0f);
+}
+
 void SpatialChorus::updateLfoIncrement() noexcept {
     mLfoInc = kTwoPi * (mRateHz / mSampleRate);
 }
@@ -178,8 +182,12 @@ void SpatialChorus::process(float inL, float inR, float& outL, float& outR) noex
     // Peak sum: (+d1 - 0.5*d2 + 0.5*d3) has max excursion of 2.0.
     // Normalized with factor 0.5f ensures wet signal maintains exact unity gain headroom.
     // Mono sum: 0.5 * (0.5*d1 + 0.5*d2 + 1.0*d3) (Strictly positive, ZERO comb cancellation!)
-    const float wetL = 0.5f * (tap1 - 0.5f * tap2 + 0.5f * tap3);
-    const float wetR = 0.5f * (-0.5f * tap1 + tap2 + 0.5f * tap3);
+    const float rawWetL = 0.5f * (tap1 - 0.5f * tap2 + 0.5f * tap3);
+    const float rawWetR = 0.5f * (-0.5f * tap1 + tap2 + 0.5f * tap3);
+    const float mid = 0.5f * (rawWetL + rawWetR);
+    const float side = 0.5f * (rawWetL - rawWetR);
+    const float wetL = mid + mDimensionSpread * side;
+    const float wetR = mid - mDimensionSpread * side;
 
     // Blend dry/wet
     const float dryGain = 1.0f - mMix;

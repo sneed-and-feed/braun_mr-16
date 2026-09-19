@@ -40,6 +40,7 @@ public:
 
     void setMode(DimensionMode mode) noexcept;
     void setParameters(float rateHz, float depthMs, float mix) noexcept;
+    void setDimensionSpread(float spread) noexcept;
     void setEnabled(bool enabled) noexcept { mEnabled = enabled; }
 
     [[nodiscard]] bool isEnabled() const noexcept { return mEnabled; }
@@ -47,6 +48,7 @@ public:
     [[nodiscard]] float getRateHz() const noexcept { return mRateHz; }
     [[nodiscard]] float getDepthMs() const noexcept { return mDepthMs; }
     [[nodiscard]] float getMix() const noexcept { return mMix; }
+    [[nodiscard]] float getDimensionSpread() const noexcept { return mDimensionSpread; }
 
     // Process a single stereo sample pair
     void process(float inL, float inR, float& outL, float& outR) noexcept;
@@ -101,6 +103,7 @@ private:
     float mRateHz { 0.55f };
     float mDepthMs { 2.20f };
     float mMix { 0.45f };
+    float mDimensionSpread { 1.0f };
     float mBaseDelayMs { 5.50f };
 
     // LFO phase accumulator

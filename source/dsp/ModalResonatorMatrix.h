@@ -76,6 +76,8 @@ public:
     void setManifold(ManifoldType type, float morph = 0.0f) noexcept;
     void setMaterial(MaterialType material) noexcept;
     void setDecayScale(float decayScale) noexcept;
+    void setQScale(float qScale) noexcept;
+    void setOvertoneSpread(float spread) noexcept;
     void setCouplingDepth(float coupling) noexcept;
     void setStereoWidth(float width) noexcept;
 
@@ -100,6 +102,8 @@ public:
     }
 
     [[nodiscard]] float getFundamentalHz() const noexcept { return mFundamentalHz; }
+    [[nodiscard]] float getQScale() const noexcept { return mQScale; }
+    [[nodiscard]] float getOvertoneSpread() const noexcept { return mOvertoneSpread; }
     [[nodiscard]] ManifoldType getManifoldType() const noexcept { return mManifold; }
     [[nodiscard]] MaterialType getMaterialType() const noexcept { return mMaterial; }
     [[nodiscard]] float getStiffnessB() const noexcept { return mStiffnessB; }
@@ -115,6 +119,8 @@ private:
     float mSampleRate { 48000.0f };
     float mFundamentalHz { 220.0f };
     float mDecayScale { 1.0f };
+    float mQScale { 1.0f };
+    float mOvertoneSpread { 1.0f };
     float mCouplingDepth { 0.25f };
     float mStereoWidth { 0.85f };
     float mManifoldMorph { 0.0f };

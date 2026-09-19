@@ -256,6 +256,7 @@ class BraunMr16App {
     this.telemetryRafId = null;
     this._isJuceRecording = false;
     this._juceBridgeInitialized = false;
+    this.scopeSource = 'OUT';
 
     this._setupDOMReferences();
   }
@@ -321,6 +322,17 @@ class BraunMr16App {
             this.engine.params[targetId] = value;
           }
 
+          const isPercentKnob = [
+            'chorus_mix', 'chorusMix',
+            'modal_coupling', 'modalCoupling',
+            'chorus_dimension', 'chorusDimension',
+            'golden_pan_spread', 'goldenPanSpread',
+            'drive_saturation', 'driveSaturation',
+            'lorenz_freq_mod', 'lorenzFreqMod',
+            'lorenz_q_mod', 'lorenzQMod',
+            'dry_wet_mix', 'dryWetMix'
+          ].includes(targetId);
+
           let knob = this.knobs[targetId] || (webId && this.knobs[webId]);
           if (knob && typeof value === 'number') {
             let knobVal = value;
@@ -328,8 +340,18 @@ class BraunMr16App {
               knobVal = value * 100;
             } else if ((targetId === 'chorus_dimension' || targetId === 'chorusDimension') && value <= 1.0) {
               knobVal = value * 100;
+            } else if (isPercentKnob && value <= 1.0) {
+              knobVal = value * 100;
             }
             knob.setValue(knobVal, false);
+          }
+
+          if (targetId === 'exciter_type' || targetId === 'exciterType') {
+            const modeVal = parseInt(value, 10);
+            const group = document.getElementById('group-exciter-mode');
+            const btn = group?.querySelector(`button[data-val="${modeVal}"]`);
+            if (btn) this._updateSegmentActive('group-exciter-mode', btn);
+            this._updateExciterControls(modeVal);
           }
         });
 
@@ -736,6 +758,8 @@ class BraunMr16App {
         this._emitJuceParam('crt_intensity', val);
       };
     }
+
+    this._updateExciterControls(this.engine.params.exciter_type || 0);
   }
 
   _initCrtDisplay() {
@@ -994,8 +1018,12 @@ class BraunMr16App {
       if (btn && exciterModeGroup.contains(btn)) {
         const val = parseInt(btn.dataset.val, 10);
         this._updateSegmentActive('group-exciter-mode', btn);
+        this._updateExciterControls(val);
         this.engine.setParam('exciter_type', val);
         this._emitJuceParam('exciter_type', val);
+        if (val === 3) {
+          this.setScopeSource('IN');
+        }
       }
     });
 
@@ -1080,6 +1108,15 @@ class BraunMr16App {
         const type = e.target.dataset.val;
         this._updateSegmentActive('group-phosphor-type', e.target);
         if (this.crt) this.crt.setPhosphorType(type);
+      }
+    });
+
+    // --- Deck 06: CRT Scope Monitor Source Segment Buttons ---
+    document.getElementById('group-scope-source')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (btn) {
+        const src = btn.dataset.val || 'OUT';
+        this.setScopeSource(src);
       }
     });
 
@@ -1177,24 +1214,6 @@ class BraunMr16App {
       if (document.activeElement && typeof document.activeElement.blur === 'function') {
         document.activeElement.blur();
       }
-    });
-
-    this.dom.selectPreset?.addEventListener('pointerup', () => {
-      setTimeout(() => {
-        if (this.dom.selectPreset) this.dom.selectPreset.blur();
-        if (document.activeElement && typeof document.activeElement.blur === 'function') {
-          document.activeElement.blur();
-        }
-      }, 0);
-    });
-
-    this.dom.selectPreset?.addEventListener('click', () => {
-      setTimeout(() => {
-        if (this.dom.selectPreset) this.dom.selectPreset.blur();
-        if (document.activeElement && typeof document.activeElement.blur === 'function') {
-          document.activeElement.blur();
-        }
-      }, 0);
     });
 
     this.dom.selectPreset?.addEventListener('blur', () => {
@@ -1342,6 +1361,52 @@ class BraunMr16App {
     }
     if (document.activeElement && (document.activeElement.tagName === 'BUTTON' || document.activeElement.classList?.contains('braun-btn'))) {
       document.activeElement.blur();
+    }
+  }
+
+  _updateExciterControls(mode) {
+    const strikeVel = document.getElementById('knob-exciter-velocity');
+    const strikeHard = document.getElementById('knob-exciter-hardness');
+    const frictVel = document.getElementById('knob-friction-velocity');
+    const frictForce = document.getElementById('knob-friction-force');
+    const extGain = document.getElementById('knob-ext-input-gain');
+
+    const setControlState = (el, active) => {
+      if (!el) return;
+      el.style.opacity = active ? '1.0' : '0.4';
+      el.style.pointerEvents = active ? 'auto' : 'none';
+      el.classList.toggle('is-dimmed', !active);
+    };
+
+    const modeNum = Number(mode);
+    if (modeNum === 3) {
+      // EXT IN: dim strike and friction controls, highlight ext input gain
+      setControlState(strikeVel, false);
+      setControlState(strikeHard, false);
+      setControlState(frictVel, false);
+      setControlState(frictForce, false);
+      setControlState(extGain, true);
+    } else if (modeNum === 1) {
+      // Friction mode: friction controls active, strike and ext gain inactive
+      setControlState(strikeVel, false);
+      setControlState(strikeHard, false);
+      setControlState(frictVel, true);
+      setControlState(frictForce, true);
+      setControlState(extGain, false);
+    } else if (modeNum === 0) {
+      // Strike mode: strike controls active, friction and ext gain inactive
+      setControlState(strikeVel, true);
+      setControlState(strikeHard, true);
+      setControlState(frictVel, false);
+      setControlState(frictForce, false);
+      setControlState(extGain, false);
+    } else {
+      // Vactrol mode (mode 2) or default: restore strike controls, friction & ext gain inactive
+      setControlState(strikeVel, true);
+      setControlState(strikeHard, true);
+      setControlState(frictVel, false);
+      setControlState(frictForce, false);
+      setControlState(extGain, false);
     }
   }
 
@@ -1605,6 +1670,15 @@ class BraunMr16App {
     }
   }
 
+  setScopeSource(src) {
+    this.scopeSource = (src === 'IN' ? 'IN' : 'OUT');
+    const group = document.getElementById('group-scope-source');
+    const btn = group?.querySelector(`button[data-val="${this.scopeSource}"]`);
+    if (btn) this._updateSegmentActive('group-scope-source', btn);
+    if (this.crt) this.crt.setScopeSource(this.scopeSource);
+    this._emitJuceParam('scope_source', this.scopeSource === 'IN' ? 1.0 : 0.0);
+  }
+
   applyParamTree(params) {
     for (const id in params) {
       const val = params[id];
@@ -1614,6 +1688,8 @@ class BraunMr16App {
       if (id === 'modal_coupling' && val <= 1.0) {
         knobVal = val * 100;
       } else if (id === 'chorus_dimension' && val <= 1.0) {
+        knobVal = val * 100;
+      } else if (['chorus_mix', 'golden_pan_spread', 'drive_saturation', 'lorenz_freq_mod', 'lorenz_q_mod', 'dry_wet_mix'].includes(id) && val <= 1.0) {
         knobVal = val * 100;
       }
       if (this.knobs[id]) {
@@ -1626,6 +1702,10 @@ class BraunMr16App {
       const group = document.getElementById('group-exciter-mode');
       const btn = group?.querySelector(`button[data-val="${params.exciter_type}"]`);
       if (btn) this._updateSegmentActive('group-exciter-mode', btn);
+      this._updateExciterControls(params.exciter_type);
+      if (Number(params.exciter_type) === 3) {
+        this.setScopeSource('IN');
+      }
     }
     if (params.manifold_type !== undefined) {
       const group = document.getElementById('group-manifold');
