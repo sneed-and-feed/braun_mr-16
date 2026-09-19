@@ -190,7 +190,7 @@ jobs:
   # ==============================================================================
   build-windows:
     name: Windows x64 (VST3, CLAP, Standalone)
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -219,7 +219,13 @@ jobs:
       - name: Run Headless DSP Verification Tests
         shell: pwsh
         run: |
-          .\build\Release\mr16_headless_dsp_tests.exe
+          if (Test-Path "build\source\tests\Release\mr16_headless_dsp_tests.exe") {
+            .\build\source\tests\Release\mr16_headless_dsp_tests.exe
+          } elseif (Test-Path "build\Release\mr16_headless_dsp_tests.exe") {
+            .\build\Release\mr16_headless_dsp_tests.exe
+          } else {
+            ctest --test-dir build -C Release --output-on-failure
+          }
 
       - name: Execute Local Packaging Pipeline
         shell: pwsh
