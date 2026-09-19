@@ -85,6 +85,17 @@ describe('BRAUN MR-16 Preset Focus & Hotkey Interaction Suite', () => {
       );
     });
 
+    it('verifies global keydown listener allows BUTTON elements to trigger hotkeys', () => {
+      assert.ok(
+        appJs.includes("else if (e.target.tagName === 'BUTTON')"),
+        'Global keydown listener must inspect BUTTON elements'
+      );
+      assert.ok(
+        appJs.includes('clearButtonFocus'),
+        'Must register auto-blur handlers for buttons and toggles'
+      );
+    });
+
     it('verifies selectScale, selectRoot, and selectTheme blur on change', () => {
       assert.ok(
         appJs.includes('this.dom.selectScale.blur()'),
@@ -354,6 +365,84 @@ describe('BRAUN MR-16 Preset Focus & Hotkey Interaction Suite', () => {
         assert.strictEqual(otherSelectsBlurResult.scaleBlurred, true, 'select-scale must blur on change');
         assert.strictEqual(otherSelectsBlurResult.rootBlurred, true, 'select-root must blur on change');
         assert.strictEqual(otherSelectsBlurResult.themeBlurred, true, 'select-theme must blur on change');
+
+        // Test 6: Verify clicking chorus toggle blurs it and subsequent hotkey 'd' plays note immediately without window click
+        const chorusToggleResult = await evaluate(`
+          (() => {
+            const chorusBtn = document.getElementById('btn-chorus-enable');
+            chorusBtn.click();
+            const blurredAfterClick = (document.activeElement !== chorusBtn);
+
+            // Now dispatch hotkey 'd' (keyIndex 2)
+            const event = new KeyboardEvent('keydown', {
+              key: 'd',
+              code: 'KeyD',
+              bubbles: true,
+              cancelable: true
+            });
+            window.dispatchEvent(event);
+
+            return {
+              blurredAfterClick,
+              lastChimeKey: window.__test_chime_calls[window.__test_chime_calls.length - 1],
+              totalChimes: window.__test_chime_calls.length
+            };
+          })()
+        `);
+        assert.strictEqual(chorusToggleResult.blurredAfterClick, true, 'Chorus toggle button must blur immediately after click');
+        assert.strictEqual(chorusToggleResult.lastChimeKey.keyIndex, 2, 'Hotkey "d" corresponds to keyIndex 2');
+
+        // Test 7: Verify that if a button is explicitly focused, pressing chime hotkey 'f' triggers note and blurs
+        const focusedButtonResult = await evaluate(`
+          (() => {
+            const limiterBtn = document.getElementById('btn-soft-limit');
+            limiterBtn.focus();
+            const initialFocus = (document.activeElement === limiterBtn);
+
+            const event = new KeyboardEvent('keydown', {
+              key: 'f',
+              code: 'KeyF',
+              bubbles: true,
+              cancelable: true
+            });
+            limiterBtn.dispatchEvent(event);
+
+            return {
+              initialFocus,
+              blurredAfterKey: (document.activeElement !== limiterBtn),
+              lastChimeKey: window.__test_chime_calls[window.__test_chime_calls.length - 1]
+            };
+          })()
+        `);
+        assert.strictEqual(focusedButtonResult.initialFocus, true, 'Limiter button was successfully focused');
+        assert.strictEqual(focusedButtonResult.blurredAfterKey, true, 'Limiter button must blur when hotkey is pressed');
+        assert.strictEqual(focusedButtonResult.lastChimeKey.keyIndex, 3, 'Hotkey "f" corresponds to keyIndex 3');
+
+        // Test 8: Verify that if a button is explicitly focused, pressing Spacebar triggers Dirac and blurs
+        const focusedButtonSpaceResult = await evaluate(`
+          (() => {
+            const powerBtn = document.getElementById('btn-power');
+            powerBtn.focus();
+            const initialFocus = (document.activeElement === powerBtn);
+
+            const event = new KeyboardEvent('keydown', {
+              key: ' ',
+              code: 'Space',
+              bubbles: true,
+              cancelable: true
+            });
+            powerBtn.dispatchEvent(event);
+
+            return {
+              initialFocus,
+              blurredAfterKey: (document.activeElement !== powerBtn),
+              diracCalls: window.__test_dirac_calls
+            };
+          })()
+        `);
+        assert.strictEqual(focusedButtonSpaceResult.initialFocus, true, 'Power button was successfully focused');
+        assert.strictEqual(focusedButtonSpaceResult.blurredAfterKey, true, 'Power button must blur when Spacebar is pressed');
+        assert.strictEqual(focusedButtonSpaceResult.diracCalls >= 2, true, 'Dirac impulse must be called on Spacebar');
 
       } finally {
         if (ws) {
