@@ -891,6 +891,18 @@ class BraunMr16App {
           } else {
             return;
           }
+        } else if (e.target.tagName === 'BUTTON') {
+          const keyLower = e.key ? e.key.toLowerCase() : '';
+          if (e.code === 'Space' || CHIME_HOTKEYS.includes(keyLower)) {
+            e.preventDefault();
+            if (typeof e.target.blur === 'function') e.target.blur();
+            if (document.activeElement && typeof document.activeElement.blur === 'function') {
+              document.activeElement.blur();
+            }
+            // Proceed directly to execute Space or chime key trigger
+          } else {
+            return;
+          }
         } else {
           return;
         }
@@ -923,6 +935,19 @@ class BraunMr16App {
         this.triggerChimeKey(keyIndex, 0.85);
       }
     });
+
+    // Ensure clicking any button or toggle immediately clears focus to keep keyboard note triggers active
+    const clearButtonFocus = (e) => {
+      const btn = e.target?.closest?.('button, .braun-btn, .braun-toggle, .braun-segment-btn, .braun-strike-btn, .braun-audition-btn');
+      if (btn && typeof btn.blur === 'function') {
+        btn.blur();
+      }
+      if (document.activeElement && (document.activeElement.tagName === 'BUTTON' || document.activeElement.classList?.contains('braun-btn'))) {
+        document.activeElement.blur();
+      }
+    };
+    document.addEventListener('pointerup', clearButtonFocus);
+    document.addEventListener('click', clearButtonFocus);
 
     // --- Tactile Strike Buttons ---
     const btnStrikeDirac = document.getElementById('btn-strike-dirac');
@@ -998,6 +1023,9 @@ class BraunMr16App {
       if (led) {
         led.classList.toggle('is-active-orange', active);
       }
+      if (typeof this.dom.btnChorusEnable.blur === 'function') {
+        this.dom.btnChorusEnable.blur();
+      }
     });
 
     document.getElementById('group-dimension-mode')?.addEventListener('click', (e) => {
@@ -1023,6 +1051,9 @@ class BraunMr16App {
       const led = this.dom.btnSoftLimit.querySelector('.braun-led');
       if (led) {
         led.classList.toggle('is-active-green', active);
+      }
+      if (typeof this.dom.btnSoftLimit.blur === 'function') {
+        this.dom.btnSoftLimit.blur();
       }
     });
 
@@ -1298,6 +1329,12 @@ class BraunMr16App {
     const btns = group.querySelectorAll('.braun-segment-btn');
     btns.forEach(b => b.classList.remove('is-selected'));
     targetBtn.classList.add('is-selected');
+    if (typeof targetBtn?.blur === 'function') {
+      targetBtn.blur();
+    }
+    if (document.activeElement && (document.activeElement.tagName === 'BUTTON' || document.activeElement.classList?.contains('braun-btn'))) {
+      document.activeElement.blur();
+    }
   }
 
   _initTheme() {
