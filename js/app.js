@@ -927,19 +927,15 @@ class BraunMr16App {
     // --- Tactile Strike Buttons ---
     const btnStrikeDirac = document.getElementById('btn-strike-dirac');
     btnStrikeDirac?.addEventListener('click', () => this.triggerDirac());
-    btnStrikeDirac?.addEventListener('mousedown', () => this._emitJuceExciter({ type: 'pad', index: 0, vel: 1.0 }));
 
     const btnStrikeHammer = document.getElementById('btn-strike-hammer');
     btnStrikeHammer?.addEventListener('click', () => this.triggerFeltHammer());
-    btnStrikeHammer?.addEventListener('mousedown', () => this._emitJuceExciter({ type: 'pad', index: 1, vel: 1.0 }));
 
     const btnStrikeFriction = document.getElementById('btn-strike-friction');
     btnStrikeFriction?.addEventListener('click', () => this.triggerStickSlip(0.6, 0.5));
-    btnStrikeFriction?.addEventListener('mousedown', () => this._emitJuceExciter({ type: 'pad', index: 2, vel: 1.0 }));
 
     const btnStrikeAir = document.getElementById('btn-strike-air');
     btnStrikeAir?.addEventListener('click', () => this.triggerAirJet(0.8));
-    btnStrikeAir?.addEventListener('mousedown', () => this._emitJuceExciter({ type: 'pad', index: 3, vel: 1.0 }));
 
     // --- Performance Scale & Root Selectors ---
     this.dom.selectScale?.addEventListener('change', (e) => {
