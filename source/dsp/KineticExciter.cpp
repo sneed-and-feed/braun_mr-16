@@ -22,10 +22,8 @@ void KineticExciter::prepare(double sampleRate) noexcept {
     mExtGainSmoother.setSampleRate(mSampleRate);
     mExtGainSmoother.setTimeConstant(0.010f);
 
-    // Sample-rate invariant DC blocking (15 Hz) and envelope follower filter coefficients
+    // Sample-rate invariant DC blocking (15 Hz) filter coefficient
     mDcR = 1.0f - (kTwoPi * 15.0f / mSampleRate);
-    mAlphaFast = 1.0f - std::exp(-1.0f / (mSampleRate * 0.0015f));
-    mAlphaSlow = 1.0f - std::exp(-1.0f / (mSampleRate * 0.0400f));
 
     reset();
 }
@@ -46,9 +44,6 @@ void KineticExciter::reset() noexcept {
     mExtGainSmoother.reset(mExtEnable ? 1.0f : 0.0f);
     mDcStateX = 0.0f;
     mDcStateY = 0.0f;
-    mEnvFast = 0.0f;
-    mEnvSlow = 0.0f;
-    mEnvPrevFast = 0.0f;
 
     mPoissonCountdown = 1000;
     mEuclideanClockCounter = 1000;
@@ -335,7 +330,7 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
     exciterSum += frictionOut;
 
     // ------------------------------------------------------------------------
-    // 5. External Audio Input & Transient Punch Follower
+    // 5. External Audio Direct Resonator Injection
     // ------------------------------------------------------------------------
     // Continuous 15 Hz DC blocking filter maintains primed state to prevent step jumps
     const float cleanIn = flushDenormal(externalAudioIn);
@@ -344,35 +339,8 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
     mDcStateY = flushDenormal(dcY);
 
     const float currentExtGain = mExtGainSmoother.next();
-
     if (currentExtGain > 1.0e-5f) {
-        const float absIn = std::abs(dcY);
-
-        // Fast envelope follower (tau = 1.5 ms, sample-rate scaled)
-        mEnvFast += mAlphaFast * (absIn - mEnvFast);
-        mEnvFast = flushDenormal(mEnvFast);
-
-        // Slow envelope follower (tau = 40 ms, sample-rate scaled)
-        mEnvSlow += mAlphaSlow * (absIn - mEnvSlow);
-        mEnvSlow = flushDenormal(mEnvSlow);
-
-        // Transient punch ratio
-        const float tr = mEnvFast / (mEnvSlow + 1.0e-5f);
-        const float deltaE = mEnvFast - mEnvPrevFast;
-        mEnvPrevFast = mEnvFast;
-
-        // Dynamic transient onset strike trigger scaled by active gain
-        if (tr > 1.80f && deltaE > 0.008f && currentExtGain > 0.5f) {
-            const float trigVel = std::clamp(deltaE * 8.0f * mExtSensitivity, 0.10f, 1.0f);
-            triggerStrike(trigVel, 0.70f);
-        }
-
-        // Direct audio feedthrough into the resonator matrix with smooth crossfading
-        exciterSum += dcY * (mExtDirectMix * currentExtGain);
-    } else {
-        mEnvFast = 0.0f;
-        mEnvSlow = 0.0f;
-        mEnvPrevFast = 0.0f;
+        exciterSum += dcY * (mExtSensitivity * mExtDirectMix * currentExtGain);
     }
 
     exciterSum = flushDenormal(exciterSum);

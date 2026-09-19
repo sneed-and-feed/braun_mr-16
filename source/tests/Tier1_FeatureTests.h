@@ -197,6 +197,51 @@ inline void registerTier1Tests() {
         return test::gCurrentTestAssertFailures == 0;
     });
 
+    registerTest("Tier 1", "T1_EXC_09", "Kinetic Exciter - External Input Clean Feedthrough Zero Phantom Mallet Strike", []() {
+        mr16::KineticExciter exciter;
+        exciter.prepare(48000.0);
+        exciter.setExternalInput(true, 1.0f, 0.5f);
+
+        // Feed transient audio pulses (sharp step functions and Dirac-like bursts)
+        // that previously triggered the phantom mallet collision engine
+        const size_t n = 4800; // 100 ms at 48 kHz
+        std::vector<float> inSig(n, 0.0f);
+
+        // Pre-roll to allow mExtGainSmoother (10 ms time constant) to settle near unity
+        const size_t settleSamples = 1000;
+
+        // Multiple sharp transient step bursts with steep onset edges
+        for (size_t t = 0; t < 4; ++t) {
+            size_t start = settleSamples + t * 800;
+            for (size_t k = 0; k < 40; ++k) {
+                inSig[start + k] = 0.95f;
+            }
+        }
+
+        std::vector<float> outSig(n, 0.0f);
+        bool phantomStrikeOccurred = false;
+
+        for (size_t i = 0; i < n; ++i) {
+            outSig[i] = exciter.processSample(inSig[i]);
+            if (exciter.isMalletInContact()) {
+                phantomStrikeOccurred = true;
+            }
+        }
+
+        TEST_ASSERT(!phantomStrikeOccurred, "External audio transient pulses must strictly NOT trigger synthetic mallet contact strikes");
+        TEST_ASSERT(!exciter.isMalletInContact(), "Mallet contact state must remain strictly false throughout external input excitation");
+
+        // Verify that output contains the properly scaled external audio excitation
+        // With input = 0.95f, sensitivity = 1.0f, directMix = 0.5f, gain ~ 1.0, steady portion of step is ~ 0.475f
+        float maxExcitation = 0.0f;
+        for (size_t i = settleSamples; i < n; ++i) {
+            maxExcitation = std::max(maxExcitation, std::abs(outSig[i]));
+        }
+
+        TEST_ASSERT(maxExcitation > 0.20f && maxExcitation < 1.0f, "Output must contain properly scaled external audio excitation");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
     // ========================================================================
     // T1_MOD: 16-Pole Modal Resonator Matrix Subsystem Tests
     // ========================================================================

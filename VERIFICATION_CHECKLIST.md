@@ -61,7 +61,8 @@ cmake --build build --config Release --target mr16_headless_dsp_tests
 - [x] **Mallet Hardness Modulation**: Spectral centroid increases monotonically with hardness, validated in `T1_EXC_02`.
 - [x] **Karnopp Stick-Slip Friction Bow**: Stribeck velocity friction maintains sustained acoustic energy, validated in `T1_EXC_03`.
 - [x] **Buchla 292 Optical Vactrol Sag**: Fast attack ($2\text{ ms}$) and multi-exponential decay release, validated in `T1_EXC_04`.
-- [x] **External Audio Input**: $15\text{ Hz}$ DC blocking filter and transient follower, validated in `T1_EXC_05`.
+- [x] **External Audio Input**: $15\text{ Hz}$ DC blocking filter and direct clean excitation feedthrough, validated in `T1_EXC_05`.
+- [x] **Zero Phantom Mallet Strikes**: External audio transients excite resonator matrix without triggering synthetic mallet collisions, validated in `T1_EXC_09`.
 - [x] **Poisson Rain Stochastic Clock**: Exponential interval distribution ($\Delta t = -\ln(1-U)/\lambda$), validated in `T1_EXC_06`.
 - [x] **Euclidean Polyrhythm Ring**: Clock pulses $E(k, n)$ distribute evenly via Bjorklund's algorithm, validated in `T1_EXC_07`.
 - [x] **16-Key Microtonal Chime Strip**: 8 tuning scales (12-TET, Just, Pythagorean, Slendro, Pelog, Carlos, Bohlen-Pierce, Harmonic), validated in `T1_EXC_08`.

@@ -27,7 +27,7 @@ enum class MicrotonalScale : int {
  * 1. Hunt-Crossley non-linear viscoelastic mass-spring collision strike.
  * 2. Karnopp stick-slip friction model with Stribeck velocity curves for bowed glass/metal.
  * 3. Buchla 292 optical vactrol dynamic pluck shaping.
- * 4. External audio input with 15 Hz DC blocker and dual-time-constant transient detector.
+ * 4. External audio input with 15 Hz DC blocker and direct resonator matrix injection.
  * 5. Autonomous Poisson rain stochastic trigger generator (Delta t = -ln(1-U)/lambda).
  * 6. Euclidean polyrhythm generator E(k, n) via Bjorklund's algorithm.
  * 7. 16-key microtonal chime synthesizer with AS-42 scale snap and tactile strike buttons.
@@ -97,7 +97,7 @@ private:
     // 3. Buchla 292 Optical Vactrol Dynamic Pluck
     VactrolGate mVactrolPluck;
 
-    // 4. External Audio Input & Transient Punch Follower
+    // 4. External Audio Input Direct Resonator Injection
     bool  mExtEnable { false };
     float mExtSensitivity { 1.0f };
     float mExtDirectMix { 0.35f };
@@ -105,11 +105,6 @@ private:
     float mDcStateX { 0.0f };
     float mDcStateY { 0.0f };
     float mDcR { 0.998f };
-    float mEnvFast { 0.0f };
-    float mEnvSlow { 0.0f };
-    float mAlphaFast { 0.015f };
-    float mAlphaSlow { 0.0006f };
-    float mEnvPrevFast { 0.0f };
 
     // 5. Poisson Rain Stochastic Generator
     bool  mPoissonEnable { false };
