@@ -1079,6 +1079,60 @@ inline void registerTier1Tests() {
         return test::gCurrentTestAssertFailures == 0;
     });
 
+    registerTest("Tier 1", "T1_DYN_11", "Mr16Engine - Poisson Particle Gating on External Audio Produces Balanced Dynamics Without Limiter Spike Blowout", []() {
+        mr16::Mr16Engine engine;
+        engine.prepare(48000.0, 256);
+        engine.reset();
+
+        mr16::Mr16Parameters p;
+        p.externalAudioEnable = true;
+        p.externalSensitivity = 1.0f;
+        p.externalDirectMix = 0.35f;
+        p.poissonEnable = true;
+        p.poissonEpm = 180.0f; // 3 Hz dynamic particle rain
+        p.poissonHumanize = 0.50f;
+        p.vactrolSagEnable = true;
+        p.vactrolLpgCutoff = 12000.0f;
+        p.dryWetMix = 1.0f; // 100% wet (identical to user test scenario)
+        p.fundamentalHz = 110.0f;
+        p.manifold = mr16::ManifoldType::StiffBeam;
+        p.material = mr16::MaterialType::Steel;
+        p.couplingDepth = 0.25f;
+        p.decayScale = 1.80f;
+        engine.setParameters(p);
+
+        // Feed continuous synth audio (2 seconds)
+        constexpr int blockSize = 256;
+        constexpr int numBlocks = (48000 * 2) / blockSize;
+        const auto inSig = test_utils::generateSine(blockSize * numBlocks, 220.0, 48000.0, 0.8f);
+        std::vector<float> outL(blockSize, 0.0f), outR(blockSize, 0.0f);
+
+        float maxPeak = 0.0f;
+        double totalEnergy = 0.0;
+        int clippedSamples = 0;
+
+        for (int b = 0; b < numBlocks; ++b) {
+            const float* inPtr = inSig.data() + b * blockSize;
+            engine.processBlock(inPtr, inPtr, outL.data(), outR.data(), blockSize);
+            for (int s = 0; s < blockSize; ++s) {
+                float magL = std::abs(outL[s]);
+                float magR = std::abs(outR[s]);
+                maxPeak = std::max(maxPeak, std::max(magL, magR));
+                totalEnergy += magL * magL + magR * magR;
+                if (magL >= 1.049f || magR >= 1.049f) {
+                    ++clippedSamples;
+                }
+            }
+        }
+
+        const double avgRms = std::sqrt(totalEnergy / (numBlocks * blockSize * 2));
+
+        TEST_ASSERT(clippedSamples == 0, "Poisson particle gating on external audio must produce ZERO clipped samples");
+        TEST_ASSERT(maxPeak > 0.10f && maxPeak <= 1.0f, "Peak amplitude must sit safely in nominal zone (< 1.0 peak) without limiter blowout");
+        TEST_ASSERT(avgRms > 0.02, "Continuous audio with Poisson must maintain healthy audible RMS level");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
 }
 
 } // namespace test

@@ -240,8 +240,12 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
             const float jitter = 1.0f + (mPrng.nextFloat() - 0.5f) * mPoissonHumanize;
             const float strikeVel = std::clamp(dropletMass * jitter, 0.05f, 1.0f);
             const float strikeHard = 0.55f + 0.30f * mPrng.nextFloat();
-            triggerStrike(strikeVel, strikeHard);
-            mExtPulseEnv = 1.0f;
+            if (mExtEnable) {
+                // In external audio mode: Poisson acts as a stochastic dynamic particle gate / granular chopper
+                mExtPulseEnv = 1.0f;
+            } else {
+                triggerStrike(strikeVel, strikeHard);
+            }
         }
     }
 
@@ -254,9 +258,12 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
 
             // Bjorklund pulse condition: (step * k) % n < k
             if ((step * mEuclideanPulses) % steps < mEuclideanPulses) {
-                const int key = step % static_cast<int>(kNumChimeKeys);
-                triggerChimeKey(key, 0.75f);
-                mExtPulseEnv = 1.0f;
+                if (mExtEnable) {
+                    mExtPulseEnv = 1.0f;
+                } else {
+                    const int key = step % static_cast<int>(kNumChimeKeys);
+                    triggerChimeKey(key, 0.75f);
+                }
             }
         }
     }
@@ -345,9 +352,9 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
     mExtPulseEnv = flushDenormal(mExtPulseEnv * mExtPulseDecayCoeff);
     const float currentExtGain = mExtGainSmoother.next();
     if (currentExtGain > 1.0e-5f) {
-        constexpr float kExtHeadroomCompensation = 0.08f;
-        const float continuousExt = dcY * (mExtSensitivity * mExtDirectMix * kExtHeadroomCompensation * currentExtGain);
-        const float pulseExt = dcY * (mExtPulseEnv * mExtSensitivity * 0.35f * currentExtGain);
+        const float extScale = mExtSensitivity * currentExtGain;
+        const float continuousExt = dcY * (extScale * mExtDirectMix);
+        const float pulseExt = dcY * (mExtPulseEnv * extScale * 0.20f);
         exciterSum += continuousExt + pulseExt;
     }
 
