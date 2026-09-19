@@ -110,6 +110,14 @@ describe('BRAUN MR-16 Preset Focus & Hotkey Interaction Suite', () => {
         'selectTheme must blur on change'
       );
     });
+
+    it('verifies repeat keydown events are ignored in global and selectPreset listeners', () => {
+      const globalKeydownMatch = appJs.match(/window\.addEventListener\('keydown',\s*\(e\)\s*=>\s*\{\s*if\s*\(e\.repeat\)\s*return;/);
+      assert.ok(globalKeydownMatch, 'Global keydown listener must immediately return on repeat events');
+
+      const selectKeydownMatch = appJs.match(/this\.dom\.selectPreset\?\.addEventListener\('keydown',\s*\(e\)\s*=>\s*\{\s*if\s*\(e\.repeat\)\s*return;/);
+      assert.ok(selectKeydownMatch, 'selectPreset keydown listener must immediately return on repeat events');
+    });
   });
 
   //----------------------------------------------------------------------------
@@ -443,6 +451,110 @@ describe('BRAUN MR-16 Preset Focus & Hotkey Interaction Suite', () => {
         assert.strictEqual(focusedButtonSpaceResult.initialFocus, true, 'Power button was successfully focused');
         assert.strictEqual(focusedButtonSpaceResult.blurredAfterKey, true, 'Power button must blur when Spacebar is pressed');
         assert.strictEqual(focusedButtonSpaceResult.diracCalls >= 2, true, 'Dirac impulse must be called on Spacebar');
+
+        // Test 9: Verify repeat keydown events on window are ignored and do not re-trigger strikes
+        const repeatEventsResult = await evaluate(`
+          (() => {
+            const initialDiracCalls = window.__test_dirac_calls;
+            const initialChimeCalls = window.__test_chime_calls.length;
+
+            // Dispatch repeat Space keydown
+            const repeatSpaceEvent = new KeyboardEvent('keydown', {
+              code: 'Space',
+              repeat: true,
+              bubbles: true,
+              cancelable: true
+            });
+            window.dispatchEvent(repeatSpaceEvent);
+
+            // Dispatch repeat '1' keydown
+            const repeatOneEvent = new KeyboardEvent('keydown', {
+              key: '1',
+              repeat: true,
+              bubbles: true,
+              cancelable: true
+            });
+            window.dispatchEvent(repeatOneEvent);
+
+            // Dispatch repeat chime hotkey 'a' keydown
+            const repeatAEvent = new KeyboardEvent('keydown', {
+              key: 'a',
+              repeat: true,
+              bubbles: true,
+              cancelable: true
+            });
+            window.dispatchEvent(repeatAEvent);
+
+            return {
+              diracCallsAfter: window.__test_dirac_calls,
+              chimeCallsAfter: window.__test_chime_calls.length,
+              initialDiracCalls,
+              initialChimeCalls
+            };
+          })()
+        `);
+        assert.strictEqual(
+          repeatEventsResult.diracCallsAfter,
+          repeatEventsResult.initialDiracCalls,
+          'Dirac impulse must not re-trigger on repeat Space keydown'
+        );
+        assert.strictEqual(
+          repeatEventsResult.chimeCallsAfter,
+          repeatEventsResult.initialChimeCalls,
+          'Chime strikes must not re-trigger on repeat keydown events'
+        );
+
+        // Test 10: Verify repeat keydown events when selectPreset is focused are also ignored
+        const repeatPresetEventsResult = await evaluate(`
+          (() => {
+            const sel = document.getElementById('select-preset');
+            sel.focus();
+
+            const initialDiracCalls = window.__test_dirac_calls;
+            const initialChimeCalls = window.__test_chime_calls.length;
+
+            const repeatSpaceOnSelect = new KeyboardEvent('keydown', {
+              code: 'Space',
+              repeat: true,
+              bubbles: true,
+              cancelable: true
+            });
+            sel.dispatchEvent(repeatSpaceOnSelect);
+
+            const repeatOneOnSelect = new KeyboardEvent('keydown', {
+              key: '1',
+              repeat: true,
+              bubbles: true,
+              cancelable: true
+            });
+            sel.dispatchEvent(repeatOneOnSelect);
+
+            const repeatAOnSelect = new KeyboardEvent('keydown', {
+              key: 'a',
+              repeat: true,
+              bubbles: true,
+              cancelable: true
+            });
+            sel.dispatchEvent(repeatAOnSelect);
+
+            return {
+              diracCallsAfter: window.__test_dirac_calls,
+              chimeCallsAfter: window.__test_chime_calls.length,
+              initialDiracCalls,
+              initialChimeCalls
+            };
+          })()
+        `);
+        assert.strictEqual(
+          repeatPresetEventsResult.diracCallsAfter,
+          repeatPresetEventsResult.initialDiracCalls,
+          'Dirac impulse must not trigger on repeat Space keydown when preset select is focused'
+        );
+        assert.strictEqual(
+          repeatPresetEventsResult.chimeCallsAfter,
+          repeatPresetEventsResult.initialChimeCalls,
+          'Chime strikes must not trigger on repeat keydown when preset select is focused'
+        );
 
       } finally {
         if (ws) {

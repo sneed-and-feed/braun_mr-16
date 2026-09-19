@@ -869,6 +869,7 @@ class BraunMr16App {
 
     // Spacebar triggers Dirac Impulse, Escape cancels inputs and overlays
     window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
       if (e.target && (
         e.target.tagName === 'INPUT' ||
         e.target.tagName === 'SELECT' ||
@@ -1197,6 +1198,7 @@ class BraunMr16App {
     });
 
     this.dom.selectPreset?.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
       const keyLower = e.key ? e.key.toLowerCase() : '';
       if (e.code === 'Space' || CHIME_HOTKEYS.includes(keyLower)) {
         e.preventDefault();
