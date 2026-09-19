@@ -115,7 +115,16 @@ jobs:
 
       - name: Run Headless DSP Verification Tests
         run: |
-          ./build/mr16_headless_dsp_tests
+          TEST_BIN=$(find build -type f -name "mr16_headless_dsp_tests" ! -name "*.o" ! -name "*.d" | head -n 1)
+          if [ -n "${TEST_BIN}" ] && [ -f "${TEST_BIN}" ]; then
+            chmod +x "${TEST_BIN}"
+            "${TEST_BIN}"
+          elif [ -f "./build/source/tests/mr16_headless_dsp_tests" ]; then
+            chmod +x ./build/source/tests/mr16_headless_dsp_tests
+            ./build/source/tests/mr16_headless_dsp_tests
+          else
+            ctest --test-dir build --output-on-failure
+          fi
 
       - name: Stage & Package macOS Universal Distribution
         run: |
@@ -224,7 +233,12 @@ jobs:
           } elseif (Test-Path "build\Release\mr16_headless_dsp_tests.exe") {
             .\build\Release\mr16_headless_dsp_tests.exe
           } else {
-            ctest --test-dir build -C Release --output-on-failure
+            $found = Get-ChildItem -Path build -Filter "mr16_headless_dsp_tests.exe" -Recurse | Select-Object -First 1
+            if ($found) {
+              & $found.FullName
+            } else {
+              ctest --test-dir build -C Release --output-on-failure
+            }
           }
 
       - name: Execute Local Packaging Pipeline
@@ -285,7 +299,16 @@ jobs:
 
       - name: Run Headless DSP Verification Tests
         run: |
-          ./build/mr16_headless_dsp_tests
+          TEST_BIN=$(find build -type f -name "mr16_headless_dsp_tests" ! -name "*.o" ! -name "*.d" | head -n 1)
+          if [ -n "${TEST_BIN}" ] && [ -f "${TEST_BIN}" ]; then
+            chmod +x "${TEST_BIN}"
+            "${TEST_BIN}"
+          elif [ -f "./build/source/tests/mr16_headless_dsp_tests" ]; then
+            chmod +x ./build/source/tests/mr16_headless_dsp_tests
+            ./build/source/tests/mr16_headless_dsp_tests
+          else
+            ctest --test-dir build --output-on-failure
+          fi
 
       - name: Stage & Package Linux x64 Distribution
         run: |
