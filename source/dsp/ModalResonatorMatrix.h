@@ -143,8 +143,15 @@ private:
     std::array<float, kNumModes> mK { 0.0f };
     std::array<float, kNumModes> mA1 { 0.0f };
 
-    // Feedback coupling states
-    std::array<float, kNumModes> mFeedbackModes { 0.0f };
+    // Acyclic diffuse body resonance states (Householder scattering tail)
+    static constexpr size_t kDiffuserBufferSize = 8192;
+    static constexpr size_t kDiffuserBufferMask = kDiffuserBufferSize - 1;
+    std::array<float, kDiffuserBufferSize> mDiffuserBuffer { 0.0f };
+    size_t mDiffuserWritePos { 0 };
+    int mDelaySamples1 { 658 }; // 13.7 ms at 48 kHz
+    int mDelaySamples2 { 926 }; // 19.3 ms at 48 kHz
+    float mTailFilterCoeff { 0.37f }; // ~3600 Hz lowpass
+    float mTailFilterState { 0.0f };
 
     // Frequencies & Qs
     std::array<float, kNumModes> mBaseRatios { 1.0f };

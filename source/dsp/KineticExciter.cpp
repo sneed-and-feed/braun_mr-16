@@ -340,7 +340,18 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
 
     const float currentExtGain = mExtGainSmoother.next();
     if (currentExtGain > 1.0e-5f) {
-        exciterSum += dcY * (mExtSensitivity * mExtDirectMix * currentExtGain);
+        constexpr float kExtHeadroomCompensation = 0.035f;
+        exciterSum += dcY * (mExtSensitivity * mExtDirectMix * kExtHeadroomCompensation * currentExtGain);
+    }
+
+    // Soft limiter / ceiling on exciter bus output to prevent extreme velocity strikes
+    // from injecting numerical overload into the modal matrix
+    constexpr float kExciterLinearCeiling = 0.75f;
+    const float absSum = std::abs(exciterSum);
+    if (absSum > kExciterLinearCeiling) {
+        const float sign = (exciterSum > 0.0f) ? 1.0f : -1.0f;
+        const float excess = absSum - kExciterLinearCeiling;
+        exciterSum = sign * (kExciterLinearCeiling + 0.25f * (excess / (1.0f + excess)));
     }
 
     exciterSum = flushDenormal(exciterSum);

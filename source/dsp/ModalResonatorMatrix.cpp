@@ -4,13 +4,19 @@ namespace braun::mr16 {
 
 void ModalResonatorMatrix::prepare(double sampleRate) noexcept {
     mSampleRate = (sampleRate > 100.0) ? static_cast<float>(sampleRate) : 48000.0f;
+    const float fc = 3600.0f;
+    mTailFilterCoeff = 1.0f - std::exp(-kTwoPi * fc / mSampleRate);
+    mDelaySamples1 = std::clamp(static_cast<int>(0.0137f * mSampleRate), 1, static_cast<int>(kDiffuserBufferSize - 1));
+    mDelaySamples2 = std::clamp(static_cast<int>(0.0193f * mSampleRate), 1, static_cast<int>(kDiffuserBufferSize - 1));
     reset();
 }
 
 void ModalResonatorMatrix::reset() noexcept {
     mS1.fill(0.0f);
     mS2.fill(0.0f);
-    mFeedbackModes.fill(0.0f);
+    mDiffuserBuffer.fill(0.0f);
+    mDiffuserWritePos = 0;
+    mTailFilterState = 0.0f;
     mModalEnergies.fill(0.0f);
     mModFreqMultipliers.fill(1.0f);
     mModQSpread = 1.0f;
@@ -250,11 +256,9 @@ void ModalResonatorMatrix::processSample(float exciterInput, float& outL, float&
     exciterInput = flushDenormal(exciterInput);
     std::array<float, kNumModes> modeOutputs;
 
-    // 1. Parallel TPT SVF integration with inter-modal feedback
+    // 1. Parallel TPT SVF integration (strictly contractive, acyclic)
+    const float x = exciterInput;
     for (size_t i = 0; i < kNumModes; ++i) {
-        // Excite each mode with injected excitation + scattered modal feedback
-        const float x = exciterInput + mFeedbackModes[i] * (0.28f * mCouplingDepth);
-
         // TPT SVF Bandpass Step (Zero-Delay Instantaneous Resolvent)
         const float vHp = mA1[i] * (x - (mK[i] + mG[i]) * mS1[i] - mS2[i]);
         const float vBp = mG[i] * vHp + mS1[i];
@@ -265,37 +269,45 @@ void ModalResonatorMatrix::processSample(float exciterInput, float& outL, float&
         mS2[i] = flushDenormal(2.0f * vLp - mS2[i]);
 
         modeOutputs[i] = flushDenormal(vBp * mModeWeights[i]);
-    }
-
-    // 2. Orthogonal Householder Scattering Matrix: H = I - (2/N) 1 1^T
-    // Evaluated in O(N) operations (<10 ns)
-    float sumModes = 0.0f;
-    for (size_t i = 0; i < kNumModes; ++i) {
-        sumModes += modeOutputs[i] * mK[i];
-    }
-    const float householderFactor = (mCouplingDepth * (2.0f / 16.0f)) * sumModes;
-
-    std::array<float, kNumModes> scattered;
-    for (size_t i = 0; i < kNumModes; ++i) {
-        scattered[i] = flushDenormal((modeOutputs[i] * mK[i]) - householderFactor);
-        // Store scattered state for next-sample inter-modal energy exchange
-        mFeedbackModes[i] = scattered[i];
 
         // Real-time modal energy envelope tracking for Phosphor CRT Scope
         const float absVal = std::abs(modeOutputs[i]);
         mModalEnergies[i] = flushDenormal(0.992f * mModalEnergies[i] + 0.008f * absVal);
     }
 
-    // 3. Golden-Ratio Angular Stereo Summation
-    float sumL = 0.0f;
-    float sumR = 0.0f;
+    // 2. Acyclic Diffuse Body Resonance (Householder Scattering Tail)
+    // Decoupled from SVF inputs to eliminate cyclic feedback runaway (loop gain identically 0)
+    float sumModes = 0.0f;
+    for (size_t i = 0; i < kNumModes; ++i) {
+        sumModes += modeOutputs[i];
+    }
+    const float diffuseInput = sumModes * (-0.125f * mCouplingDepth);
+
+    // 3600 Hz lowpass tone filter for acoustic body reflection damping
+    mTailFilterState += mTailFilterCoeff * (diffuseInput - mTailFilterState);
+    mTailFilterState = flushDenormal(mTailFilterState);
+
+    // Read stereo diffuse body tail from prime-spaced delay lines (13.7 ms and 19.3 ms)
+    const size_t r1 = (mDiffuserWritePos + kDiffuserBufferSize - static_cast<size_t>(mDelaySamples1)) & kDiffuserBufferMask;
+    const size_t r2 = (mDiffuserWritePos + kDiffuserBufferSize - static_cast<size_t>(mDelaySamples2)) & kDiffuserBufferMask;
+    const float diffuserL = mDiffuserBuffer[r1];
+    const float diffuserR = mDiffuserBuffer[r2];
+
+    mDiffuserBuffer[mDiffuserWritePos] = mTailFilterState;
+    mDiffuserWritePos = (mDiffuserWritePos + 1) & kDiffuserBufferMask;
+
+    // 3. Golden-Ratio Angular Stereo Summation with Modal Headroom Normalization
+    float sumL = diffuserL;
+    float sumR = diffuserR;
     for (size_t i = 0; i < kNumModes; ++i) {
         sumL += modeOutputs[i] * mPanL[i];
         sumR += modeOutputs[i] * mPanR[i];
     }
 
-    outL = flushDenormal(sumL);
-    outR = flushDenormal(sumR);
+    // Calibrated 16-mode normalization to maintain linear headroom in [0.50, 0.75]
+    constexpr float kModalNormalization = 0.17f;
+    outL = flushDenormal(sumL * kModalNormalization);
+    outR = flushDenormal(sumR * kModalNormalization);
 }
 
 void ModalResonatorMatrix::processBlock(const float* exciterBuffer, float* outL, float* outR, int numSamples) noexcept {

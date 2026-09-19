@@ -364,6 +364,9 @@ void Mr16Engine::prepare(double sampleRate, int maxBlockSize) noexcept {
     mLorenz.prepare(sampleRate);
     mChorus.prepare(sampleRate);
     mVactrolGate.prepare(sampleRate);
+    mVactrolGate.setMode(VactrolMode::FilterOnly);
+    mVactrolGate.setCutoffRange(120.0f, 18000.0f);
+    mVactrolGate.setControlVoltage(0.40f);
 
     mVolumeSmoother.setSampleRate(mSampleRate);
     mVolumeSmoother.setTimeConstant(0.020f); // 20 ms click-free volume slewing
@@ -378,6 +381,8 @@ void Mr16Engine::reset() noexcept {
     mLorenz.reset();
     mChorus.reset();
     mVactrolGate.reset();
+    mVactrolGate.setMode(VactrolMode::FilterOnly);
+    mVactrolGate.setControlVoltage(0.40f);
 
     const float targetGain = mParams.outputMute ? 0.0f : dbToGain(mParams.masterVolumeDb);
     mVolumeSmoother.reset(targetGain);
@@ -431,7 +436,8 @@ void Mr16Engine::applyParametersToDsp() noexcept {
     }
     mChorus.setDimensionSpread(mParams.chorusDimension);
 
-    // Deck 05: Dynamics & LPG
+    // Deck 05: Dynamics & LPG (Tone shaper only, avoiding amplitude choke gating)
+    mVactrolGate.setMode(VactrolMode::FilterOnly);
     mVactrolGate.setDynamicSag(mParams.vactrolSagAmount);
     mVactrolGate.setDecayTime(mParams.vactrolDecaySec);
     mSaturator.setKneeAndCeiling(mParams.saturatorKnee, mParams.saturatorCeiling);
@@ -588,7 +594,7 @@ void Mr16Engine::processBlock(const float* inL, const float* inR,
         // Step 5: Master Volume Slewing & Bounded C1 Hermite Soft Saturator (Deck 05/07)
         // --------------------------------------------------------------------
         const float currentGain = mVolumeSmoother.next();
-        const float driveGain = 1.0f + mParams.driveSaturation * 2.5f;
+        const float driveGain = 1.0f + mParams.driveSaturation * 0.8f;
         const float scaledL = lpgL * currentGain * driveGain;
         const float scaledR = lpgR * currentGain * driveGain;
 

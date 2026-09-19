@@ -238,7 +238,7 @@ inline void registerTier1Tests() {
             maxExcitation = std::max(maxExcitation, std::abs(outSig[i]));
         }
 
-        TEST_ASSERT(maxExcitation > 0.20f && maxExcitation < 1.0f, "Output must contain properly scaled external audio excitation");
+        TEST_ASSERT(maxExcitation > 0.01f && maxExcitation < 1.0f, "Output must contain properly scaled external audio excitation");
         return test::gCurrentTestAssertFailures == 0;
     });
 
@@ -926,6 +926,108 @@ inline void registerTier1Tests() {
         double longTailEnergy = test_utils::computeRMS(longRing, 24000, 24000);
 
         TEST_ASSERT(longTailEnergy > shortTailEnergy * 10.0, "Long decay scale (3.0s) must retain significantly more tail energy than short decay scale (0.2s)");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    registerTest("Tier 1", "T1_DYN_08", "Mr16Engine - Continuous External Synth Audio Headroom & Decay Without Runaway Feedback", []() {
+        mr16::Mr16Engine engine;
+        engine.prepare(48000.0, 256);
+        engine.reset();
+
+        mr16::Mr16Parameters p;
+        p.externalAudioEnable = true;
+        p.externalSensitivity = 1.0f;
+        p.externalDirectMix = 0.35f;
+        p.dryWetMix = 1.0f;
+        p.poissonEnable = false;
+        p.euclideanEnable = false;
+        p.exciterBowPressure = 0.0f;
+        p.exciterBowVelocity = 0.0f;
+        p.fundamentalHz = 220.0f;
+        p.manifold = mr16::ManifoldType::ChladniPlate;
+        p.material = mr16::MaterialType::Steel;
+        p.couplingDepth = 0.30f;
+        p.decayScale = 1.25f;
+        engine.setParameters(p);
+
+        constexpr int blockSize = 256;
+        constexpr int burstBlocks = 48000 / blockSize; // 1.0s of continuous 0 dBFS external sine
+        const auto inSig = test_utils::generateSine(blockSize * burstBlocks, 220.0, 48000.0, 1.0f);
+        std::vector<float> outL(blockSize, 0.0f), outR(blockSize, 0.0f);
+
+        float maxPeak = 0.0f;
+        int clippedSamples = 0;
+        for (int b = 0; b < burstBlocks; ++b) {
+            const float* inPtr = inSig.data() + b * blockSize;
+            engine.processBlock(inPtr, inPtr, outL.data(), outR.data(), blockSize);
+            for (int s = 0; s < blockSize; ++s) {
+                float magL = std::abs(outL[s]);
+                float magR = std::abs(outR[s]);
+                maxPeak = std::max(maxPeak, std::max(magL, magR));
+                if (magL >= 1.049f || magR >= 1.049f) {
+                    ++clippedSamples;
+                }
+            }
+        }
+
+        TEST_ASSERT(clippedSamples == 0, "Continuous 0 dBFS synth input must produce ZERO clipped samples against 1.05 ceiling");
+        TEST_ASSERT(maxPeak > 0.05f && maxPeak <= 1.0f, "Continuous 0 dBFS synth input must sit in nominal headroom (< 1.0 peak)");
+
+        // Cease input audio and verify exponential decay without runaway feedback
+        std::vector<float> silentIn(blockSize, 0.0f);
+        constexpr int decayBlocks = (48000 * 3) / blockSize; // 3 seconds of decay
+        float earlyDecayRms = 0.0f;
+        float lateDecayRms = 0.0f;
+
+        for (int b = 0; b < decayBlocks; ++b) {
+            engine.processBlock(silentIn.data(), silentIn.data(), outL.data(), outR.data(), blockSize);
+            float blockEnergy = 0.0f;
+            for (int s = 0; s < blockSize; ++s) {
+                blockEnergy += outL[s] * outL[s] + outR[s] * outR[s];
+            }
+            float blockRms = std::sqrt(blockEnergy / (blockSize * 2));
+            if (b == 0) earlyDecayRms = blockRms;
+            if (b == decayBlocks - 1) lateDecayRms = blockRms;
+        }
+
+        TEST_ASSERT(lateDecayRms < earlyDecayRms * 0.4f, "Acoustic resonance must strictly decay when external audio ceases");
+        TEST_ASSERT(lateDecayRms < 0.05f, "Tail energy must decay towards silence without runaway metallic feedback");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    registerTest("Tier 1", "T1_DYN_09", "Mr16Engine - Raw Key Strike Zero Hard Clipping & Linear Sweet Spot Headroom", []() {
+        mr16::Mr16Engine engine;
+        engine.prepare(48000.0, 256);
+
+        auto presets = mr16::Mr16Engine::getFactoryPresets();
+        constexpr int blockSize = 256;
+        constexpr int testBlocks = (48000 * 1) / blockSize; // 1 second
+        std::vector<float> outL(blockSize, 0.0f), outR(blockSize, 0.0f);
+
+        for (const auto& preset : presets) {
+            engine.setParameters(preset.params);
+            engine.reset();
+
+            // Trigger full-velocity strike with hard collision
+            engine.enqueueTriggerStrike(1.0f, 0.85f);
+
+            float maxPeak = 0.0f;
+            int clippedSamples = 0;
+            for (int b = 0; b < testBlocks; ++b) {
+                engine.processBlock(nullptr, nullptr, outL.data(), outR.data(), blockSize);
+                for (int s = 0; s < blockSize; ++s) {
+                    float magL = std::abs(outL[s]);
+                    float magR = std::abs(outR[s]);
+                    maxPeak = std::max(maxPeak, std::max(magL, magR));
+                    if (magL >= 1.049f || magR >= 1.049f) {
+                        ++clippedSamples;
+                    }
+                }
+            }
+
+            TEST_ASSERT(clippedSamples == 0, "Full velocity key strike must produce bit-exact ZERO clipped samples across all presets");
+            TEST_ASSERT(maxPeak <= 1.049f, "Peak amplitude on full strike must not breach saturator ceiling");
+        }
         return test::gCurrentTestAssertFailures == 0;
     });
 

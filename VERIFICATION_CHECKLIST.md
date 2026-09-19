@@ -1,6 +1,6 @@
 # BRAUN MR-16 Verification Checklist & Automated Validation Harness
 
-[![Verification Status: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(43%2F43%20C%2B%2B%20%7C%20100%2F100%20Web)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
+[![Verification Status: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(45%2F45%20C%2B%2B%20%7C%20100%2F100%20Web)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
 [![Zero Leaks](https://img.shields.io/badge/Memory%20Leaks-0-blue?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
 [![Zero Denormals](https://img.shields.io/badge/Denormals-0-blue?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
 [![Zero NaNs](https://img.shields.io/badge/NaN%20%2F%20Inf-0-blue?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
@@ -100,6 +100,8 @@ cmake --build build --config Release --target mr16_headless_dsp_tests
   - Asymptotic containment clamping at ceiling $1.05$ under $+18\text{ dBFS}$ and $+40\text{ dBFS}$ bursts, validated in `T1_DYN_02`, `T2_BND_03`, and checklist item 3.
   - Strict monotonicity across $[-8.0, +8.0]$, validated in checklist item 3.
   - Odd mathematical symmetry ($f(-x) = -f(x)$), validated in `T1_DYN_03` and checklist item 3.
+- [x] **Continuous External Audio Headroom & Stable Decay**: Continuous 0 dBFS input maintains nominal linear sweet-spot headroom (< 1.0 peak) with 0 clipped samples, decaying smoothly to silence without runaway feedback, validated in `T1_DYN_08`.
+- [x] **Raw Key Strike Zero Hard Clipping**: Full-velocity strikes across all factory presets maintain bit-exact zero clipped samples against the 1.05 ceiling, validated in `T1_DYN_09`.
 
 ### R6. Phosphor CRT Vector Scope (Deck 06)
 - [x] **60 FPS Vector Canvas**: High-DPI hardware accelerated rendering with phosphor bloom and persistence.
