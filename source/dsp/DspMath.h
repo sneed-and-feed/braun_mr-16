@@ -6,6 +6,8 @@
 #include <array>
 #include <limits>
 #include <cstddef>
+#include <cstring>
+#include <type_traits>
 
 // Hardware denormal control includes
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
@@ -71,17 +73,34 @@ private:
 
 // ============================================================================
 // Branchless Software Denormal / NaN Flushing
+// Bitwise IEEE 754 inspection ensures 100% immunity to compiler -ffast-math
+// optimization which would otherwise optimize away std::isfinite().
 // ============================================================================
 [[nodiscard]] inline float flushDenormal(float val) noexcept {
-    if (!std::isfinite(val)) [[unlikely]] {
+    uint32_t bits;
+    std::memcpy(&bits, &val, sizeof(float));
+    const uint32_t exp = (bits >> 23) & 0xFF;
+    // Exponent 0xFF (255): NaN or Infinity (positive or negative)
+    // Exponent < 75: absolute value < ~2.2e-16 (denormals, subnormals, and +/-0.0)
+    if (exp == 0xFF || exp < 75) [[unlikely]] {
         return 0.0f;
     }
-    return (std::abs(val) < 1.0e-15f) ? 0.0f : val;
+    return val;
 }
 
 template <typename T>
-[[nodiscard]] constexpr T safeClamp(T val, T lo, T hi, T fallback = T{}) noexcept {
-    if (!std::isfinite(val)) [[unlikely]] return fallback;
+[[nodiscard]] inline T safeClamp(T val, T lo, T hi, T fallback = T{}) noexcept {
+    if constexpr (std::is_same_v<T, float>) {
+        uint32_t bits;
+        std::memcpy(&bits, &val, sizeof(float));
+        if (((bits >> 23) & 0xFF) == 0xFF) [[unlikely]] return fallback;
+    } else if constexpr (std::is_same_v<T, double>) {
+        uint64_t bits;
+        std::memcpy(&bits, &val, sizeof(double));
+        if (((bits >> 52) & 0x7FF) == 0x7FF) [[unlikely]] return fallback;
+    } else {
+        if (!std::isfinite(val)) [[unlikely]] return fallback;
+    }
     return std::clamp(val, lo, hi);
 }
 

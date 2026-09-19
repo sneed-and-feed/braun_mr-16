@@ -34,7 +34,7 @@ if(MSVC)
         add_compile_options(/arch:AVX2)
     endif()
 else()
-    add_compile_options(-Wall -Wextra -Wpedantic -O3 -ffast-math)
+    add_compile_options(-Wall -Wextra -Wpedantic -O3 -ffast-math -fno-finite-math-only)
 endif()
 
 # ==============================================================================
