@@ -40,14 +40,16 @@ describe('BRAUN MR-16 Preset Focus & Hotkey Interaction Suite', () => {
       );
     });
 
-    it('verifies selectPreset has pointerup, click, blur, and keydown listeners', () => {
-      assert.ok(
+    it('verifies selectPreset does not close prematurely on pointerup or click, but retains blur and keydown listeners', () => {
+      assert.strictEqual(
         appJs.includes("this.dom.selectPreset?.addEventListener('pointerup'"),
-        'Must register pointerup listener on selectPreset'
+        false,
+        'Must NOT register premature pointerup blur listener on selectPreset'
       );
-      assert.ok(
+      assert.strictEqual(
         appJs.includes("this.dom.selectPreset?.addEventListener('click'"),
-        'Must register click listener on selectPreset'
+        false,
+        'Must NOT register premature click blur listener on selectPreset'
       );
       assert.ok(
         appJs.includes("this.dom.selectPreset?.addEventListener('blur'"),

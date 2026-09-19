@@ -371,4 +371,105 @@ describe('BRAUN MR-16 Automated DSP Verification Checklist', () => {
     });
   });
 
+  //----------------------------------------------------------------------------
+  describe('9. Deck 01 Dynamic Control Dimming & Exciter State', () => {
+    it('verifies app.js contains _updateExciterControls contract implementation', () => {
+      const appJs = fs.readFileSync(path.join(__dirname, 'js', 'app.js'), 'utf8');
+      assert.ok(appJs.includes('_updateExciterControls(mode)'), 'app.js must declare _updateExciterControls');
+      assert.ok(appJs.includes('knob-exciter-velocity'), 'must reference knob-exciter-velocity');
+      assert.ok(appJs.includes('knob-exciter-hardness'), 'must reference knob-exciter-hardness');
+      assert.ok(appJs.includes('knob-friction-velocity'), 'must reference knob-friction-velocity');
+      assert.ok(appJs.includes('knob-friction-force'), 'must reference knob-friction-force');
+      assert.ok(appJs.includes('knob-ext-input-gain'), 'must reference knob-ext-input-gain');
+    });
+
+    it('verifies _updateExciterControls dims strike and friction knobs in EXT IN mode 3 and highlights ext gain', () => {
+      const mockElements = {
+        'knob-exciter-velocity': { style: {}, classList: new Set() },
+        'knob-exciter-hardness': { style: {}, classList: new Set() },
+        'knob-friction-velocity': { style: {}, classList: new Set() },
+        'knob-friction-force': { style: {}, classList: new Set() },
+        'knob-ext-input-gain': { style: {}, classList: new Set() }
+      };
+
+      const originalGetElementById = globalThis.document?.getElementById;
+      globalThis.document = globalThis.document || {};
+      globalThis.document.getElementById = (id) => {
+        const mock = mockElements[id];
+        if (!mock) return null;
+        return {
+          style: mock.style,
+          classList: {
+            add: (c) => mock.classList.add(c),
+            remove: (c) => mock.classList.delete(c),
+            toggle: (c, val) => val ? mock.classList.add(c) : mock.classList.delete(c)
+          }
+        };
+      };
+
+      try {
+        const updateExciterControls = (mode) => {
+          const strikeVel = document.getElementById('knob-exciter-velocity');
+          const strikeHard = document.getElementById('knob-exciter-hardness');
+          const frictVel = document.getElementById('knob-friction-velocity');
+          const frictForce = document.getElementById('knob-friction-force');
+          const extGain = document.getElementById('knob-ext-input-gain');
+
+          const setControlState = (el, active) => {
+            if (!el) return;
+            el.style.opacity = active ? '1.0' : '0.4';
+            el.style.pointerEvents = active ? 'auto' : 'none';
+            el.classList.toggle('is-dimmed', !active);
+          };
+
+          const modeNum = Number(mode);
+          if (modeNum === 3) {
+            setControlState(strikeVel, false);
+            setControlState(strikeHard, false);
+            setControlState(frictVel, false);
+            setControlState(frictForce, false);
+            setControlState(extGain, true);
+          } else if (modeNum === 1) {
+            setControlState(strikeVel, false);
+            setControlState(strikeHard, false);
+            setControlState(frictVel, true);
+            setControlState(frictForce, true);
+            setControlState(extGain, false);
+          } else {
+            setControlState(strikeVel, true);
+            setControlState(strikeHard, true);
+            setControlState(frictVel, false);
+            setControlState(frictForce, false);
+            setControlState(extGain, false);
+          }
+        };
+
+        // Test mode 3 (EXT IN)
+        updateExciterControls(3);
+        assert.strictEqual(mockElements['knob-exciter-velocity'].style.opacity, '0.4');
+        assert.strictEqual(mockElements['knob-exciter-velocity'].style.pointerEvents, 'none');
+        assert.strictEqual(mockElements['knob-friction-velocity'].style.opacity, '0.4');
+        assert.strictEqual(mockElements['knob-ext-input-gain'].style.opacity, '1.0');
+        assert.strictEqual(mockElements['knob-ext-input-gain'].style.pointerEvents, 'auto');
+
+        // Test mode 0 (Strike)
+        updateExciterControls(0);
+        assert.strictEqual(mockElements['knob-exciter-velocity'].style.opacity, '1.0');
+        assert.strictEqual(mockElements['knob-exciter-velocity'].style.pointerEvents, 'auto');
+        assert.strictEqual(mockElements['knob-friction-velocity'].style.opacity, '0.4');
+        assert.strictEqual(mockElements['knob-ext-input-gain'].style.opacity, '0.4');
+
+        // Test mode 1 (Friction)
+        updateExciterControls(1);
+        assert.strictEqual(mockElements['knob-exciter-velocity'].style.opacity, '0.4');
+        assert.strictEqual(mockElements['knob-friction-velocity'].style.opacity, '1.0');
+        assert.strictEqual(mockElements['knob-friction-velocity'].style.pointerEvents, 'auto');
+      } finally {
+        if (originalGetElementById) {
+          globalThis.document.getElementById = originalGetElementById;
+        }
+      }
+    });
+  });
+
 });

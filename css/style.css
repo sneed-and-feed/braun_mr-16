@@ -784,3 +784,10 @@ body {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* --- Deck 01 Inactive Control Dimming --- */
+.is-dimmed {
+  opacity: 0.4 !important;
+  pointer-events: none !important;
+  transition: opacity 0.15s ease-out;
+}
