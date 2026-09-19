@@ -54,19 +54,59 @@ $StandaloneBin = Join-Path $ArtefactsDir "Standalone\BRAUN_MR16.exe"
 $Vst3Dir = Join-Path $ArtefactsDir "VST3\BRAUN_MR16.vst3"
 $ClapBin = Join-Path $ArtefactsDir "CLAP\BRAUN_MR16.clap"
 
-$NeedBuild = $ForceBuild -or (-not (Test-Path $StandaloneBin)) -or (-not (Test-Path $Vst3Dir)) -or (-not (Test-Path $ClapBin))
+# Inspect CMakeCache for stale WebView settings
+$CacheFile = Join-Path $BuildDir "CMakeCache.txt"
+$StaleCacheDetected = $false
+if (Test-Path $CacheFile) {
+    $CacheContent = Get-Content $CacheFile -Raw -ErrorAction SilentlyContinue
+    if ($CacheContent -match "MR16_USE_WEBVIEW:BOOL=OFF" -or $CacheContent -match "JUCE_WEBVIEW2_PACKAGE_LOCATION:BOOL=OFF") {
+        Write-Warning "Stale CMakeCache.txt detected with MR16_USE_WEBVIEW=OFF! Clearing stale cache to enforce WebView2 build."
+        Remove-Item -Path $CacheFile -Force
+        $StaleCacheDetected = $true
+    }
+}
+
+$NeedBuild = $ForceBuild -or $StaleCacheDetected -or (-not (Test-Path $StandaloneBin)) -or (-not (Test-Path $Vst3Dir)) -or (-not (Test-Path $ClapBin))
+
+# Resolve local WebView2 package repository if available
+$LocalWebview2Parent = $null
+$CandidateWebview2Dirs = @(
+    (Join-Path $RootDir "build\packages"),
+    (Join-Path $RootDir "..\braun_rb-26\build\packages"),
+    (Join-Path $RootDir "..\braun_as-42\build\packages"),
+    (Join-Path $RootDir "..\build\packages")
+)
+foreach ($Dir in $CandidateWebview2Dirs) {
+    if (Test-Path $Dir) {
+        $Resolved = (Resolve-Path $Dir).Path
+        if (Get-ChildItem -Path $Resolved -Filter "Microsoft.Web.WebView2.*" -Directory -ErrorAction SilentlyContinue) {
+            $LocalWebview2Parent = $Resolved
+            Write-Host "[INFO] Detected local WebView2 package repository: $LocalWebview2Parent"
+            break
+        }
+    }
+}
 
 if ($NeedBuild) {
-    Write-Host "[INFO] Compiling Release binaries via CMake..."
-    $CmakeArgs = @("-B", "build", "-DCMAKE_BUILD_TYPE=Release")
-    Write-Host "[EXEC] cmake $CmakeArgs"
+    Write-Host "[INFO] Compiling Release binaries via CMake (MR16_USE_WEBVIEW=ON)..."
+    $CmakeArgs = @(
+        "-B", "build",
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DMR16_USE_WEBVIEW=ON",
+        "-DMR16_BUILD_TESTS=ON"
+    )
+    if ($LocalWebview2Parent) {
+        $CmakeArgs += "-DJUCE_WEBVIEW2_PACKAGE_LOCATION=$LocalWebview2Parent"
+    }
+
+    Write-Host "[EXEC] cmake $($CmakeArgs -join ' ')"
     & cmake @CmakeArgs
     if ($LASTEXITCODE -ne 0) {
         throw "CMake configuration failed with exit code $LASTEXITCODE."
     }
 
     $BuildArgs = @("--build", "build", "--config", "Release", "--target", "BRAUN_MR16_All", "mr16_headless_dsp_tests")
-    Write-Host "[EXEC] cmake $BuildArgs"
+    Write-Host "[EXEC] cmake $($BuildArgs -join ' ')"
     & cmake @BuildArgs
     if ($LASTEXITCODE -ne 0) {
         throw "CMake compilation failed with exit code $LASTEXITCODE."
@@ -79,6 +119,7 @@ if ($NeedBuild) {
 if (-not $SkipTests) {
     Write-Host "[INFO] Executing headless DSP verification suite..."
     $CandidateTestPaths = @(
+        (Join-Path $BuildDir "source\tests\Release\mr16_headless_dsp_tests.exe"),
         (Join-Path $RootDir "build_tests\Release\mr16_headless_dsp_tests.exe"),
         (Join-Path $BuildDir "Release\mr16_headless_dsp_tests.exe"),
         (Join-Path $BuildDir "mr16_headless_dsp_tests.exe")

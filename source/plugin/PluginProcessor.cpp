@@ -9,6 +9,9 @@ BRAUN_MR16AudioProcessor::BRAUN_MR16AudioProcessor()
 {
     atomicPointers.initialize(apvts);
     recorderThread.startThread();
+#if MR16_HAS_DSP_ENGINE
+    mr16Engine.reset();
+#endif
 }
 
 BRAUN_MR16AudioProcessor::~BRAUN_MR16AudioProcessor()
@@ -322,7 +325,72 @@ void BRAUN_MR16AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     if (numSamples <= 0 || numChannels <= 0)
         return;
 
-    // Process incoming MIDI Note-On and Note-Off events
+    float* outChannels[2];
+    outChannels[0] = buffer.getWritePointer(0);
+    outChannels[1] = (numChannels > 1) ? buffer.getWritePointer(1) : outChannels[0];
+
+    // Synchronize APVTS powerState parameter changes from host automation or GUI
+    if (atomicPointers.powerState != nullptr)
+    {
+        const bool paramPower = (atomicPointers.powerState->load(std::memory_order_relaxed) > 0.5f);
+        const bool currentPower = isPoweredOn.load(std::memory_order_relaxed);
+        if (paramPower != currentPower)
+        {
+            isPoweredOn.store(paramPower, std::memory_order_relaxed);
+            mPendingEngineReset.store(true, std::memory_order_release);
+        }
+    }
+
+    // Process any explicitly queued engine resets (e.g. from setPower or power parameter changes)
+    if (mPendingEngineReset.exchange(false, std::memory_order_acq_rel))
+    {
+#if MR16_HAS_DSP_ENGINE
+        mr16Engine.reset();
+#endif
+    }
+
+    // Standby Power Gating: If powered down, output clean silence unless smoothly awakened by MIDI Note-On
+    if (!isPoweredOn.load(std::memory_order_relaxed))
+    {
+        bool hasNoteOn = false;
+        for (const auto metadata : midiMessages)
+        {
+            if (metadata.numBytes >= 3)
+            {
+                const auto* rawData = metadata.data;
+                if ((rawData[0] & 0xF0) == 0x90 && rawData[2] > 0)
+                {
+                    hasNoteOn = true;
+                    break;
+                }
+            }
+        }
+
+        if (hasNoteOn)
+        {
+            // Smoothly wake the synthesizer from standby
+            isPoweredOn.store(true, std::memory_order_relaxed);
+#if MR16_HAS_DSP_ENGINE
+            mr16Engine.reset();
+#endif
+            if (auto* p = apvts.getParameter(mr16::ParamIDs::powerState.getParamID()))
+                p->setValueNotifyingHost(1.0f);
+        }
+        else
+        {
+            // STANDBY state: ensure engine is idle/reset, buffer is completely cleared with silence,
+            // and no sound escapes.
+#if MR16_HAS_DSP_ENGINE
+            mr16Engine.reset();
+#endif
+            buffer.clear();
+            pushScopeSamples(outChannels[0], outChannels[1], numSamples);
+            midiMessages.clear();
+            return;
+        }
+    }
+
+    // Process incoming MIDI Note-On, Note-Off, and CC events for active engine
     for (const auto metadata : midiMessages)
     {
         if (metadata.numBytes >= 3)
@@ -350,62 +418,22 @@ void BRAUN_MR16AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         }
     }
 
-    float* outChannels[2];
-    outChannels[0] = buffer.getWritePointer(0);
-    outChannels[1] = (numChannels > 1) ? buffer.getWritePointer(1) : outChannels[0];
-
-    // Standby Power Gating: If powered down, output clean silence unless awakened by MIDI Note-On
-    if (!isPoweredOn.load(std::memory_order_relaxed))
-    {
-        bool hasNoteOn = false;
-        for (const auto metadata : midiMessages)
-        {
-            if (metadata.numBytes >= 3)
-            {
-                const auto* rawData = metadata.data;
-                if ((rawData[0] & 0xF0) == 0x90 && rawData[2] > 0)
-                {
-                    hasNoteOn = true;
-                    break;
-                }
-            }
-        }
-
-        if (hasNoteOn)
-        {
-            isPoweredOn.store(true, std::memory_order_relaxed);
-            if (auto* p = apvts.getParameter(mr16::ParamIDs::powerState.getParamID()))
-                p->setValueNotifyingHost(1.0f);
-        }
-        else
-        {
-            if (mPendingEngineReset.exchange(false, std::memory_order_acq_rel))
-            {
-#if MR16_HAS_DSP_ENGINE
-                mr16Engine.reset();
-#endif
-            }
-            buffer.clear();
-            pushScopeSamples(outChannels[0], outChannels[1], numSamples);
-            midiMessages.clear();
-            return;
-        }
-    }
-
     // Wait-free POD snapshot load with std::memory_order_relaxed (0 locks, 0 dynamic allocations)
     const auto snapshot = atomicPointers.loadSnapshot();
 
 #if MR16_HAS_DSP_ENGINE
     mr16Engine.setParameters(snapshot.toDspParams());
 
-    if (mPendingEngineReset.exchange(false, std::memory_order_acq_rel))
-    {
-        mr16Engine.reset();
-    }
+    // Clean audio input handling:
+    // Prevent mic bleed / feedback loops / blowout: external audio is strictly enabled only when
+    // mainInput bus is enabled and active, exciterType == ExtIn, and extInputGainDb > -23.0f.
+    const auto* mainInputBus = getBus(true, 0);
+    const bool isInputBusActive = (mainInputBus != nullptr && mainInputBus->isEnabled() && getTotalNumInputChannels() > 0);
+    const bool isExtInUsed = isInputBusActive && (snapshot.exciterType == mr16::ExciterType::ExtIn) && (snapshot.extInputGainDb > -23.0f);
 
     const float* inChannels[2];
-    inChannels[0] = (getTotalNumInputChannels() > 0) ? buffer.getReadPointer(0) : nullptr;
-    inChannels[1] = (getTotalNumInputChannels() > 1) ? buffer.getReadPointer(1) : inChannels[0];
+    inChannels[0] = isExtInUsed ? buffer.getReadPointer(0) : nullptr;
+    inChannels[1] = (isExtInUsed && getTotalNumInputChannels() > 1) ? buffer.getReadPointer(1) : inChannels[0];
 
     mr16Engine.processBlock(inChannels[0], inChannels[1], outChannels[0], outChannels[1], numSamples);
 

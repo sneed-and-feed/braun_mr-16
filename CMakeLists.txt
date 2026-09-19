@@ -80,12 +80,22 @@ if(WIN32 AND MR16_USE_WEBVIEW)
     set(WEBVIEW2_VERSION "1.0.2849.39")
     set(LOCAL_WEBVIEW2_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../build/packages/Microsoft.Web.WebView2.${WEBVIEW2_VERSION}")
     set(LOCAL_WEBVIEW2_DIR_RB26 "${CMAKE_CURRENT_SOURCE_DIR}/../braun_rb-26/build/packages/Microsoft.Web.WebView2.${WEBVIEW2_VERSION}")
+    set(LOCAL_WEBVIEW2_DIR_AS42 "${CMAKE_CURRENT_SOURCE_DIR}/../braun_as-42/build/packages/Microsoft.Web.WebView2.${WEBVIEW2_VERSION}")
+    set(LOCAL_WEBVIEW2_DIR_BUILD "${CMAKE_CURRENT_SOURCE_DIR}/build/packages/Microsoft.Web.WebView2.${WEBVIEW2_VERSION}")
     set(BINARY_WEBVIEW2_DIR "${CMAKE_BINARY_DIR}/packages/Microsoft.Web.WebView2.${WEBVIEW2_VERSION}")
 
-    if(EXISTS "${LOCAL_WEBVIEW2_DIR}/build/native/include/WebView2.h")
-        set(JUCE_WEBVIEW2_PACKAGE_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../build/packages" CACHE PATH "WebView2 location" FORCE)
+    if(DEFINED JUCE_WEBVIEW2_PACKAGE_LOCATION AND EXISTS "${JUCE_WEBVIEW2_PACKAGE_LOCATION}/Microsoft.Web.WebView2.${WEBVIEW2_VERSION}/build/native/include/WebView2.h")
+        set(JUCE_WEBVIEW2_PACKAGE_LOCATION "${JUCE_WEBVIEW2_PACKAGE_LOCATION}" CACHE PATH "WebView2 location" FORCE)
     elseif(EXISTS "${LOCAL_WEBVIEW2_DIR_RB26}/build/native/include/WebView2.h")
         set(JUCE_WEBVIEW2_PACKAGE_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../braun_rb-26/build/packages" CACHE PATH "WebView2 location" FORCE)
+    elseif(EXISTS "${LOCAL_WEBVIEW2_DIR_AS42}/build/native/include/WebView2.h")
+        set(JUCE_WEBVIEW2_PACKAGE_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../braun_as-42/build/packages" CACHE PATH "WebView2 location" FORCE)
+    elseif(EXISTS "${LOCAL_WEBVIEW2_DIR_BUILD}/build/native/include/WebView2.h")
+        set(JUCE_WEBVIEW2_PACKAGE_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/build/packages" CACHE PATH "WebView2 location" FORCE)
+    elseif(EXISTS "${LOCAL_WEBVIEW2_DIR}/build/native/include/WebView2.h")
+        set(JUCE_WEBVIEW2_PACKAGE_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../build/packages" CACHE PATH "WebView2 location" FORCE)
+    elseif(EXISTS "${BINARY_WEBVIEW2_DIR}/build/native/include/WebView2.h")
+        set(JUCE_WEBVIEW2_PACKAGE_LOCATION "${CMAKE_BINARY_DIR}/packages" CACHE PATH "WebView2 location" FORCE)
     else()
         if(NOT EXISTS "${BINARY_WEBVIEW2_DIR}/build/native/include/WebView2.h")
             message(STATUS "Downloading Microsoft.Web.WebView2 NuGet package (${WEBVIEW2_VERSION})...")
@@ -103,6 +113,7 @@ if(WIN32 AND MR16_USE_WEBVIEW)
         endif()
         set(JUCE_WEBVIEW2_PACKAGE_LOCATION "${CMAKE_BINARY_DIR}/packages" CACHE PATH "WebView2 location" FORCE)
     endif()
+    message(STATUS "JUCE_WEBVIEW2_PACKAGE_LOCATION set to: ${JUCE_WEBVIEW2_PACKAGE_LOCATION}")
 endif()
 
 # ==============================================================================
@@ -160,16 +171,16 @@ file(GLOB_RECURSE MR16_DSP_SOURCES CONFIGURE_DEPENDS
 if(NOT MR16_DSP_SOURCES)
     set(MR16_DSP_SOURCES
         source/dsp/DspMath.h
-        source/dsp/MaterialProfiles.h
-        source/dsp/ManifoldGeometry.h
-        source/dsp/KineticExciterEngine.cpp
-        source/dsp/KineticExciterEngine.h
+        source/dsp/KineticExciter.cpp
+        source/dsp/KineticExciter.h
+        source/dsp/LorenzAttractor.cpp
+        source/dsp/LorenzAttractor.h
         source/dsp/ModalResonatorMatrix.cpp
         source/dsp/ModalResonatorMatrix.h
-        source/dsp/ChaoticAttractor.cpp
-        source/dsp/ChaoticAttractor.h
-        source/dsp/TriPhaseBbdChorus.cpp
-        source/dsp/TriPhaseBbdChorus.h
+        source/dsp/SpatialChorus.cpp
+        source/dsp/SpatialChorus.h
+        source/dsp/VactrolGate.cpp
+        source/dsp/VactrolGate.h
         source/dsp/BoundedSaturator.cpp
         source/dsp/BoundedSaturator.h
         source/dsp/Mr16Engine.cpp
@@ -205,6 +216,13 @@ if(MR16_USE_WEBVIEW)
 
     if(MR16_WEB_DIR)
         set(MR16_WEB_ASSETS_ZIP "${CMAKE_CURRENT_BINARY_DIR}/web_assets_mr16.zip")
+        if(NOT EXISTS "${MR16_WEB_ASSETS_ZIP}")
+            message(STATUS "Packaging initial web assets archive: ${MR16_WEB_ASSETS_ZIP}")
+            execute_process(
+                COMMAND ${CMAKE_COMMAND} -E tar cf "${MR16_WEB_ASSETS_ZIP}" --format=zip .
+                WORKING_DIRECTORY "${MR16_WEB_DIR}"
+            )
+        endif()
         file(GLOB_RECURSE MR16_WEB_FILES "${MR16_WEB_DIR}/*")
         add_custom_command(
             OUTPUT "${MR16_WEB_ASSETS_ZIP}"
@@ -336,7 +354,9 @@ endif()
 if(MR16_BUILD_TESTS)
     enable_testing()
 
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/tests/mr16_headless_dsp_tests.cpp")
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/tests/CMakeLists.txt")
+        add_subdirectory(source/tests)
+    elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/tests/mr16_headless_dsp_tests.cpp")
         add_executable(mr16_headless_dsp_tests
             source/tests/mr16_headless_dsp_tests.cpp
         )
@@ -350,9 +370,5 @@ if(MR16_BUILD_TESTS)
         )
         set_target_properties(mr16_headless_dsp_tests PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
         add_test(NAME Mr16HeadlessDspTests COMMAND mr16_headless_dsp_tests)
-    endif()
-
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/tests/CMakeLists.txt")
-        add_subdirectory(source/tests)
     endif()
 endif()

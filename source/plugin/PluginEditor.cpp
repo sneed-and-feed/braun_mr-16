@@ -475,8 +475,11 @@ BRAUN_MR16AudioProcessorEditor::BRAUN_MR16AudioProcessorEditor(BRAUN_MR16AudioPr
       processorRef(p)
 {
     setLookAndFeel(&braunLookAndFeel);
+    setOpaque(true);
 
-    useNativeUI = loadPersistedNativeUIPreference();
+    setupNativeControls();
+
+    const bool defaultToNative = loadPersistedNativeUIPreference();
 
 #if JUCE_WEB_BROWSER
     for (size_t i = 0; i < kNumParams; ++i)
@@ -485,25 +488,24 @@ BRAUN_MR16AudioProcessorEditor::BRAUN_MR16AudioProcessorEditor(BRAUN_MR16AudioPr
         paramDirty[i].store(false, std::memory_order_relaxed);
     }
 
-    if (!useNativeUI)
-    {
-        auto options = createWebOptions(*this);
-        webComponent = std::make_unique<juce::WebBrowserComponent>(options);
-        addAndMakeVisible(*webComponent);
-        webComponent->goToURL("https://juce.backend/index.html");
-    }
+    webComponent = std::make_unique<juce::WebBrowserComponent>(createWebOptions(*this));
+    webComponent->setOpaque(true);
+    addAndMakeVisible(*webComponent);
+    useNativeUI = defaultToNative;
+    webComponent->goToURL(juce::WebBrowserComponent::getResourceProviderRoot());
 #else
+    juce::ignoreUnused(defaultToNative);
     useNativeUI = true;
 #endif
 
-    setupNativeControls();
-    updateNativeControlVisibility();
-
-    setSize(1180, 680);
-    setResizable(true, true);
-    setResizeLimits(960, 560, 1920, 1100);
-
+    setNativeMode(useNativeUI);
     registerParameterListeners();
+
+    // Set editor default size to 1360x780 (resizable with limits 960x600 to 2560x1440) matching the wide 19" 2U rack.
+    setSize(1360, 780);
+    setResizable(true, true);
+    setResizeLimits(960, 600, 2560, 1440);
+
     startTimerHz(60);
 }
 
@@ -551,84 +553,236 @@ void BRAUN_MR16AudioProcessorEditor::parameterChanged(const juce::String& parame
 #if JUCE_WEB_BROWSER
 juce::WebBrowserComponent::Options BRAUN_MR16AudioProcessorEditor::createWebOptions(BRAUN_MR16AudioProcessorEditor& editor)
 {
-    return juce::WebBrowserComponent::Options()
+#if JUCE_WINDOWS
+    // Configure WebView2 Chromium flags for host DAW embedding (low latency, no audio contention, UI stability):
+    // - Mute browser audio output (C++ DSP engine handles all audio synthesis)
+    // - Disable Web MIDI in Chromium (prevents WinMM device contention with DAW MIDI inputs)
+    // - Disable background Chromium features that create unneeded threads / network queries
+    // - Disable CalculateNativeWinOcclusion to eliminate global SetWinEventHook desktop dragging lag
+    // - Disable backgrounding and timer throttling for occluded windows to prevent dirty rect stalls
+    _wputenv_s(
+        L"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+        L"--mute-audio "
+        L"--disable-audio-output "
+        L"--disable-web-midi "
+        L"--disable-background-timer-throttling "
+        L"--disable-backgrounding-occluded-windows "
+        L"--disable-renderer-backgrounding "
+        L"--disable-features=Translate,OptimizationHints,MediaRouter,InterestFeedContentSuggestions,CalculateNativeWinOcclusion"
+    );
+#endif
+
+    auto options = juce::WebBrowserComponent::Options{}
+#if JUCE_WINDOWS
+        .withBackend(juce::WebBrowserComponent::Options::Backend::webview2)
+        .withWinWebView2Options(
+            juce::WebBrowserComponent::Options::WinWebView2{}
+                .withUserDataFolder(juce::File::getSpecialLocation(juce::File::SpecialLocationType::tempDirectory).getChildFile("BraunMR16_WebView2"))
+                .withBackgroundColour(juce::Colour(0xff141517)))
+#endif
+        .withUserScript("window.__IS_JUCE__ = true; window.addEventListener('contextmenu', function(e) { if (!e.defaultPrevented) e.preventDefault(); }, false);")
+        .withNativeIntegrationEnabled()
         .withResourceProvider([&editor](const juce::String& url) {
             return editor.getResource(url);
         })
-        .withNativeIntegrationEnabled()
         .withEventListener("paramChange", [&editor](const juce::var& data) {
             editor.handleParamChangeFromWeb(data);
         })
         .withEventListener("exciterTrigger", [&editor](const juce::var& data) {
             editor.handleExciterTriggerFromWeb(data);
         })
-        .withEventListener("startRecording", [&editor](const juce::var&) {
+        .withEventListener("startRecording", [&editor](const juce::var& /*data*/) {
             editor.handleStartRecordingFromWeb();
         })
-        .withEventListener("stopRecording", [&editor](const juce::var&) {
+        .withEventListener("stopRecording", [&editor](const juce::var& /*data*/) {
             editor.handleStopRecordingFromWeb();
+        })
+        .withEventListener("showContextMenu", [&editor](const juce::var& data) {
+            if (data.isObject())
+            {
+                const juce::String id = data.getProperty("id", "").toString();
+                const int x = static_cast<int>(data.getProperty("x", 0));
+                const int y = static_cast<int>(data.getProperty("y", 0));
+                if (auto* slot = editor.findKnob(id))
+                {
+                    editor.showKnobContextMenu(*slot, { x, y });
+                }
+            }
         });
+
+    return options;
 }
 
 std::optional<juce::WebBrowserComponent::Resource> BRAUN_MR16AudioProcessorEditor::getResource(const juce::String& url)
 {
-    juce::String cleanUrl = url;
-    if (cleanUrl.startsWith("https://juce.backend/"))
-        cleanUrl = cleanUrl.substring(21);
-    else if (cleanUrl.startsWith("/"))
-        cleanUrl = cleanUrl.substring(1);
+    juce::String path = url;
 
-    if (cleanUrl.isEmpty() || cleanUrl == "index.html")
+    // Strip virtual hostname (both with and without trailing slash, supporting https, http, and juce protocols)
+    if (path.startsWithIgnoreCase("https://juce.backend/"))
+        path = path.substring(21);
+    else if (path.startsWithIgnoreCase("http://juce.backend/"))
+        path = path.substring(20);
+    else if (path.startsWithIgnoreCase("juce://juce.backend/"))
+        path = path.substring(20);
+    else if (path.startsWithIgnoreCase("https://juce.backend"))
+        path = path.substring(20);
+    else if (path.startsWithIgnoreCase("http://juce.backend"))
+        path = path.substring(19);
+    else if (path.startsWithIgnoreCase("juce://juce.backend"))
+        path = path.substring(19);
+
+    const int queryIdx = path.indexOfChar('?');
+    if (queryIdx >= 0) path = path.substring(0, queryIdx);
+    const int hashIdx = path.indexOfChar('#');
+    if (hashIdx >= 0) path = path.substring(0, hashIdx);
+
+    while (path.startsWithChar('/') || path.startsWithChar('\\') || path.startsWith("./"))
     {
-#if MR16_HAS_BINARY_DATA
-        int size = 0;
-        if (const char* zipData = BinaryData::getNamedResource("web_assets_mr16_zip", size))
+        if (path.startsWithChar('/') || path.startsWithChar('\\'))
+            path = path.substring(1);
+        else if (path.startsWith("./"))
+            path = path.substring(2);
+    }
+
+    if (path.startsWithIgnoreCase("web/"))
+        path = path.substring(4);
+    else if (path.startsWithIgnoreCase("ui/"))
+        path = path.substring(3);
+
+    while (path.startsWithChar('/') || path.startsWithChar('\\'))
+        path = path.substring(1);
+
+    if (path.isEmpty())
+        path = "index.html";
+
+    juce::String mimeType = "application/octet-stream";
+    if (path.endsWithIgnoreCase(".html") || path.endsWithIgnoreCase(".htm")) mimeType = "text/html; charset=utf-8";
+    else if (path.endsWithIgnoreCase(".css")) mimeType = "text/css; charset=utf-8";
+    else if (path.endsWithIgnoreCase(".js") || path.endsWithIgnoreCase(".mjs")) mimeType = "text/javascript; charset=utf-8";
+    else if (path.endsWithIgnoreCase(".json")) mimeType = "application/json; charset=utf-8";
+    else if (path.endsWithIgnoreCase(".svg")) mimeType = "image/svg+xml";
+    else if (path.endsWithIgnoreCase(".png")) mimeType = "image/png";
+    else if (path.endsWithIgnoreCase(".jpg") || path.endsWithIgnoreCase(".jpeg")) mimeType = "image/jpeg";
+    else if (path.endsWithIgnoreCase(".woff2")) mimeType = "font/woff2";
+    else if (path.endsWithIgnoreCase(".woff")) mimeType = "font/woff";
+    else if (path.endsWithIgnoreCase(".ttf")) mimeType = "font/ttf";
+    else if (path.endsWithIgnoreCase(".wasm")) mimeType = "application/wasm";
+
+    // 1. Search local filesystem (for live dev iteration and standalone execution)
+    auto checkDiskFile = [&](const juce::File& file) -> std::optional<juce::WebBrowserComponent::Resource> {
+        if (file.existsAsFile())
         {
-            juce::MemoryInputStream zipStream(zipData, static_cast<size_t>(size), false);
-            juce::ZipFile zip(zipStream);
-            if (auto* entry = zip.getEntry("index.html"))
+            juce::MemoryBlock mb;
+            if (file.loadFileAsData(mb))
             {
-                if (auto stream = std::unique_ptr<juce::InputStream>(zip.createStreamForEntry(*entry)))
+                std::vector<std::byte> bytes(mb.getSize());
+                std::memcpy(bytes.data(), mb.getData(), mb.getSize());
+                return juce::WebBrowserComponent::Resource { std::move(bytes), mimeType };
+            }
+        }
+        return std::nullopt;
+    };
+
+    const juce::File cwd = juce::File::getCurrentWorkingDirectory();
+    if (auto res = checkDiskFile(cwd.getChildFile("web").getChildFile(path))) return res;
+    if (auto res = checkDiskFile(cwd.getChildFile("ui").getChildFile(path))) return res;
+    if (auto res = checkDiskFile(cwd.getChildFile("braun_mr-16/web").getChildFile(path))) return res;
+    if (auto res = checkDiskFile(cwd.getChildFile("mr-16/web").getChildFile(path))) return res;
+
+    // Search relative to executable
+    auto dir = juce::File::getSpecialLocation(juce::File::SpecialLocationType::currentExecutableFile).getParentDirectory();
+    for (int depth = 0; depth < 5; ++depth)
+    {
+        if (auto res = checkDiskFile(dir.getChildFile("web").getChildFile(path))) return res;
+        if (auto res = checkDiskFile(dir.getChildFile("ui").getChildFile(path))) return res;
+        if (auto res = checkDiskFile(dir.getChildFile("braun_mr-16/web").getChildFile(path))) return res;
+        if (auto res = checkDiskFile(dir.getChildFile("mr-16/web").getChildFile(path))) return res;
+        dir = dir.getParentDirectory();
+    }
+
+    // 2. Unpack from embedded binary zip archive (BraunMr16WebAssets)
+#if MR16_HAS_BINARY_DATA
+    int zipSize = 0;
+    const char* zipData = nullptr;
+    #if defined(BinaryData_web_assets_mr16_zip) || defined(BINARYDATA_H_INCLUDED)
+    if (BinaryData::web_assets_mr16_zipSize > 0 && BinaryData::web_assets_mr16_zip != nullptr)
+    {
+        zipData = BinaryData::web_assets_mr16_zip;
+        zipSize = BinaryData::web_assets_mr16_zipSize;
+    }
+    #endif
+    if (zipData == nullptr)
+    {
+        zipData = BinaryData::getNamedResource("web_assets_mr16_zip", zipSize);
+    }
+
+    if (zipData != nullptr && zipSize > 0)
+    {
+        juce::MemoryInputStream memStream(zipData, static_cast<size_t>(zipSize), false);
+        juce::ZipFile zip(memStream);
+
+        juce::String normalizedPath = path.replaceCharacter('\\', '/');
+        while (normalizedPath.startsWithChar('/') || normalizedPath.startsWith("./"))
+        {
+            if (normalizedPath.startsWithChar('/')) normalizedPath = normalizedPath.substring(1);
+            else if (normalizedPath.startsWith("./")) normalizedPath = normalizedPath.substring(2);
+        }
+        if (normalizedPath.startsWithIgnoreCase("web/")) normalizedPath = normalizedPath.substring(4);
+        else if (normalizedPath.startsWithIgnoreCase("ui/")) normalizedPath = normalizedPath.substring(3);
+
+        int entryIndex = zip.getIndexOfFileName(normalizedPath);
+        if (entryIndex < 0)
+        {
+            for (int i = 0; i < zip.getNumEntries(); ++i)
+            {
+                const auto* entry = zip.getEntry(i);
+                if (entry != nullptr)
                 {
-                    std::vector<std::byte> bytes(static_cast<size_t>(entry->uncompressedSize));
-                    stream->read(bytes.data(), bytes.size());
-                    return juce::WebBrowserComponent::Resource { std::move(bytes), "text/html" };
+                    juce::String name = entry->filename.replaceCharacter('\\', '/');
+                    while (name.startsWithChar('/') || name.startsWith("./"))
+                    {
+                        if (name.startsWithChar('/')) name = name.substring(1);
+                        else if (name.startsWith("./")) name = name.substring(2);
+                    }
+                    if (name.startsWithIgnoreCase("web/")) name = name.substring(4);
+                    else if (name.startsWithIgnoreCase("ui/")) name = name.substring(3);
+
+                    if (name.equalsIgnoreCase(normalizedPath))
+                    {
+                        entryIndex = i;
+                        break;
+                    }
                 }
             }
         }
-#endif
-        const size_t len = std::strlen(kEmbeddedBraunFallbackHtml);
-        std::vector<std::byte> bytes(len);
-        std::memcpy(bytes.data(), kEmbeddedBraunFallbackHtml, len);
-        return juce::WebBrowserComponent::Resource { std::move(bytes), "text/html" };
-    }
 
-#if MR16_HAS_BINARY_DATA
-    int size = 0;
-    if (const char* zipData = BinaryData::getNamedResource("web_assets_mr16_zip", size))
-    {
-        juce::MemoryInputStream zipStream(zipData, static_cast<size_t>(size), false);
-        juce::ZipFile zip(zipStream);
-        if (auto* entry = zip.getEntry(cleanUrl))
+        if (entryIndex >= 0)
         {
-            if (auto stream = std::unique_ptr<juce::InputStream>(zip.createStreamForEntry(*entry)))
+            const auto* entry = zip.getEntry(entryIndex);
+            if (entry != nullptr)
             {
-                std::vector<std::byte> bytes(static_cast<size_t>(entry->uncompressedSize));
-                stream->read(bytes.data(), bytes.size());
-
-                juce::String mime = "application/octet-stream";
-                if (cleanUrl.endsWith(".html")) mime = "text/html";
-                else if (cleanUrl.endsWith(".css")) mime = "text/css";
-                else if (cleanUrl.endsWith(".js") || cleanUrl.endsWith(".mjs")) mime = "application/javascript";
-                else if (cleanUrl.endsWith(".json")) mime = "application/json";
-                else if (cleanUrl.endsWith(".png")) mime = "image/png";
-                else if (cleanUrl.endsWith(".svg")) mime = "image/svg+xml";
-
-                return juce::WebBrowserComponent::Resource { std::move(bytes), mime };
+                std::unique_ptr<juce::InputStream> stream(zip.createStreamForEntry(*entry));
+                if (stream != nullptr)
+                {
+                    juce::MemoryBlock mb;
+                    stream->readIntoMemoryBlock(mb, -1);
+                    std::vector<std::byte> data(mb.getSize());
+                    std::memcpy(data.data(), mb.getData(), mb.getSize());
+                    return juce::WebBrowserComponent::Resource { std::move(data), mimeType };
+                }
             }
         }
     }
 #endif
+
+    // 3. Embedded fallback HTML (only if disk and binary assets both unavailable)
+    if (path.equalsIgnoreCase("index.html"))
+    {
+        const size_t len = std::strlen(kEmbeddedBraunFallbackHtml);
+        std::vector<std::byte> bytes(len);
+        std::memcpy(bytes.data(), kEmbeddedBraunFallbackHtml, len);
+        return juce::WebBrowserComponent::Resource { std::move(bytes), mimeType };
+    }
 
     return std::nullopt;
 }
@@ -640,6 +794,15 @@ void BRAUN_MR16AudioProcessorEditor::handleParamChangeFromWeb(const juce::var& d
     const float val = static_cast<float>(data.getProperty("value", 0.0));
 
     if (id.isEmpty()) return;
+
+    // Handle switching to native JUCE UI
+    if (id.equalsIgnoreCase("toggleNativeUI") ||
+        id.equalsIgnoreCase("nativeUI") ||
+        id.equalsIgnoreCase("switchUI"))
+    {
+        setNativeMode(true);
+        return;
+    }
 
     if (id == "power_state")
     {
@@ -766,31 +929,27 @@ void BRAUN_MR16AudioProcessorEditor::sendScopeDataToWeb()
 
 void BRAUN_MR16AudioProcessorEditor::setNativeMode(bool native)
 {
-    if (useNativeUI == native) return;
-
     useNativeUI = native;
     savePersistedNativeUIPreference(useNativeUI);
 
 #if JUCE_WEB_BROWSER
-    if (useNativeUI)
+    if (webComponent != nullptr)
     {
-        if (webComponent)
-            webComponent->setVisible(false);
-    }
-    else
-    {
-        if (!webComponent)
+        if (useNativeUI)
         {
-            auto options = createWebOptions(*this);
-            webComponent = std::make_unique<juce::WebBrowserComponent>(options);
-            addAndMakeVisible(*webComponent);
-            webComponent->goToURL("https://juce.backend/index.html");
+            webComponent->setVisible(false);
+            webComponent->setBounds(0, 0, 0, 0);
+            webComponent->toBack();
         }
         else
         {
             webComponent->setVisible(true);
+            webComponent->setBounds(getLocalBounds());
+            webComponent->toFront(false);
         }
     }
+    viewModeButton.setVisible(useNativeUI);
+    viewModeButton.setButtonText("SWITCH TO WEB UI");
 #endif
 
     updateNativeControlVisibility();
@@ -800,6 +959,17 @@ void BRAUN_MR16AudioProcessorEditor::setNativeMode(bool native)
 
 void BRAUN_MR16AudioProcessorEditor::timerCallback()
 {
+#if JUCE_WINDOWS
+    if (!useNativeUI)
+    {
+        if (!hwndStylesConfigured || ++hwndCheckCounter >= 25)
+        {
+            hwndCheckCounter = 0;
+            ensureHwndStyles();
+        }
+    }
+#endif
+
     if (processorRef.popVisualizerFrame(latestTelemetryFrame))
     {
 #if JUCE_WEB_BROWSER
@@ -812,7 +982,7 @@ void BRAUN_MR16AudioProcessorEditor::timerCallback()
     }
 
 #if JUCE_WEB_BROWSER
-    if (!useNativeUI)
+    if (!useNativeUI && webComponent != nullptr && webComponent->isVisible())
     {
         if (!initialSyncDone)
         {
@@ -839,7 +1009,22 @@ void BRAUN_MR16AudioProcessorEditor::timerCallback()
 
     if (useNativeUI)
     {
-        repaint();
+        powerButton.setButtonText(processorRef.isPower() ? "POWER ON" : "STANDBY");
+        powerButton.setToggleState(processorRef.isPower(), juce::dontSendNotification);
+
+        recordButton.setButtonText(processorRef.isRecording() ? "STOP REC" : "REC WAV");
+        recordButton.setColour(juce::TextButton::buttonColourId,
+                               processorRef.isRecording() ? findColour(mr16::BraunColours::braunOrangeColourId)
+                                                          : findColour(mr16::BraunColours::bgPanelInsetColourId));
+
+        const int currentProg = processorRef.getCurrentProgram();
+        if (presetComboBox.getSelectedId() != currentProg + 1)
+        {
+            presetComboBox.setSelectedId(currentProg + 1, juce::dontSendNotification);
+        }
+
+        auto crtArea = getLocalBounds().withTrimmedTop(54).removeFromTop(130).reduced(16, 4);
+        repaint(crtArea);
     }
 }
 
@@ -848,6 +1033,8 @@ void BRAUN_MR16AudioProcessorEditor::timerCallback()
 //==============================================================================
 void BRAUN_MR16AudioProcessorEditor::setupNativeControls()
 {
+    addMouseListener(this, true);
+
     // Header controls
     powerButton.setButtonText(processorRef.isPower() ? "POWER ON" : "STANDBY");
     powerButton.setClickingTogglesState(true);
@@ -857,14 +1044,14 @@ void BRAUN_MR16AudioProcessorEditor::setupNativeControls()
         processorRef.setPower(p);
         powerButton.setButtonText(p ? "POWER ON" : "STANDBY");
     };
-    addAndMakeVisible(powerButton);
+    addChildComponent(powerButton);
 
     themeButton.setButtonText("THEME");
     themeButton.onClick = [this] {
         braunLookAndFeel.setDarkTheme(!braunLookAndFeel.isDarkTheme());
         repaint();
     };
-    addAndMakeVisible(themeButton);
+    addChildComponent(themeButton);
 
     recordButton.setButtonText(processorRef.isRecording() ? "STOP REC" : "REC WAV");
     recordButton.onClick = [this] {
@@ -881,21 +1068,21 @@ void BRAUN_MR16AudioProcessorEditor::setupNativeControls()
             recordButton.setColour(juce::TextButton::buttonColourId, findColour(mr16::BraunColours::bgPanelInsetColourId));
         }
     };
-    addAndMakeVisible(recordButton);
+    addChildComponent(recordButton);
 
 #if JUCE_WEB_BROWSER
-    viewModeButton.setButtonText(useNativeUI ? "WEB UI" : "NATIVE UI");
+    viewModeButton.setButtonText("SWITCH TO WEB UI");
     viewModeButton.onClick = [this] {
-        setNativeMode(!useNativeUI);
-        viewModeButton.setButtonText(useNativeUI ? "WEB UI" : "NATIVE UI");
+        setNativeMode(false);
     };
-    addAndMakeVisible(viewModeButton);
+    addChildComponent(viewModeButton);
 #endif
 
     // Presets
-    presetLabel.setText("PRESET", juce::dontSendNotification);
+    presetLabel.setText("PRESET:", juce::dontSendNotification);
     presetLabel.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
-    addAndMakeVisible(presetLabel);
+    presetLabel.setJustificationType(juce::Justification::centredRight);
+    addChildComponent(presetLabel);
 
     for (int i = 0; i < processorRef.getNumPrograms(); ++i)
         presetComboBox.addItem(processorRef.getProgramName(i), i + 1);
@@ -903,46 +1090,46 @@ void BRAUN_MR16AudioProcessorEditor::setupNativeControls()
     presetComboBox.onChange = [this] {
         processorRef.setCurrentProgram(presetComboBox.getSelectedId() - 1);
     };
-    addAndMakeVisible(presetComboBox);
+    addChildComponent(presetComboBox);
 
     prevPresetBtn.setButtonText("<");
     prevPresetBtn.onClick = [this] {
         int cur = presetComboBox.getSelectedId() - 1;
         if (cur > 0) presetComboBox.setSelectedId(cur);
     };
-    addAndMakeVisible(prevPresetBtn);
+    addChildComponent(prevPresetBtn);
 
     nextPresetBtn.setButtonText(">");
     nextPresetBtn.onClick = [this] {
         int cur = presetComboBox.getSelectedId() + 1;
         if (cur <= processorRef.getNumPrograms()) presetComboBox.setSelectedId(cur);
     };
-    addAndMakeVisible(nextPresetBtn);
+    addChildComponent(nextPresetBtn);
 
     // Audition buttons
     strikeTriggerBtn.setButtonText("STRIKE");
     strikeTriggerBtn.onClick = [this] { processorRef.triggerStrike(0.85f, 0.65f); };
-    addAndMakeVisible(strikeTriggerBtn);
+    addChildComponent(strikeTriggerBtn);
 
     frictionTriggerBtn.setButtonText("BOW");
     frictionTriggerBtn.onClick = [this] { processorRef.triggerStrike(0.60f, 0.40f); };
-    addAndMakeVisible(frictionTriggerBtn);
+    addChildComponent(frictionTriggerBtn);
 
     vactrolTriggerBtn.setButtonText("PLUCK");
     vactrolTriggerBtn.onClick = [this] { processorRef.triggerStrike(0.90f, 0.85f); };
-    addAndMakeVisible(vactrolTriggerBtn);
+    addChildComponent(vactrolTriggerBtn);
 
-    poissonTriggerBtn.setButtonText("POISSON");
+    poissonTriggerBtn.setButtonText("POISSON RAIN");
     poissonTriggerBtn.setClickingTogglesState(true);
     poissonTriggerBtn.onClick = [this] {
         if (auto* p = processorRef.getAPVTS().getParameter(mr16::ParamIDs::poissonDensity.getParamID()))
             p->setValueNotifyingHost(poissonTriggerBtn.getToggleState() ? 0.35f : 0.0f);
     };
-    addAndMakeVisible(poissonTriggerBtn);
+    addChildComponent(poissonTriggerBtn);
 
     diracTriggerBtn.setButtonText("DIRAC");
     diracTriggerBtn.onClick = [this] { processorRef.triggerStrike(1.0f, 1.0f); };
-    addAndMakeVisible(diracTriggerBtn);
+    addChildComponent(diracTriggerBtn);
 
     // Build all 32 APVTS controls
     auto& apvts = processorRef.getAPVTS();
@@ -979,8 +1166,8 @@ void BRAUN_MR16AudioProcessorEditor::setupNativeControls()
             }
 
             slot->attachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, meta.apvtsId, slot->comboBox);
-            addAndMakeVisible(slot->label);
-            addAndMakeVisible(slot->comboBox);
+            addChildComponent(slot->label);
+            addChildComponent(slot->comboBox);
             comboSlots.push_back(std::move(slot));
         }
         else if (meta.isBool)
@@ -989,7 +1176,7 @@ void BRAUN_MR16AudioProcessorEditor::setupNativeControls()
             slot->paramId = meta.apvtsId;
             slot->button.setButtonText(meta.name);
             slot->attachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, meta.apvtsId, slot->button);
-            addAndMakeVisible(slot->button);
+            addChildComponent(slot->button);
             buttonSlots.push_back(std::move(slot));
         }
         else
@@ -998,13 +1185,20 @@ void BRAUN_MR16AudioProcessorEditor::setupNativeControls()
             slot->paramId = meta.apvtsId;
             slot->slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
             slot->slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 55, 14);
+            if (std::strlen(meta.unit) > 0)
+                slot->slider.setTextValueSuffix(juce::String(" ") + meta.unit);
+
             slot->nameLabel.setText(meta.name, juce::dontSendNotification);
             slot->nameLabel.setFont(juce::Font(juce::FontOptions(9.0f, juce::Font::bold)));
             slot->nameLabel.setJustificationType(juce::Justification::centred);
 
             slot->attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, meta.apvtsId, slot->slider);
-            addAndMakeVisible(slot->nameLabel);
-            addAndMakeVisible(slot->slider);
+
+            slot->slider.addMouseListener(this, false);
+            slot->nameLabel.addMouseListener(this, false);
+
+            addChildComponent(slot->nameLabel);
+            addChildComponent(slot->slider);
             knobSlots.push_back(std::move(slot));
         }
     }
@@ -1017,6 +1211,9 @@ void BRAUN_MR16AudioProcessorEditor::updateNativeControlVisibility()
     powerButton.setVisible(show);
     themeButton.setVisible(show);
     recordButton.setVisible(show);
+#if JUCE_WEB_BROWSER
+    viewModeButton.setVisible(show);
+#endif
     presetLabel.setVisible(show);
     presetComboBox.setVisible(show);
     prevPresetBtn.setVisible(show);
@@ -1032,15 +1229,46 @@ void BRAUN_MR16AudioProcessorEditor::updateNativeControlVisibility()
     {
         s->slider.setVisible(show);
         s->nameLabel.setVisible(show);
+        if (show)
+        {
+            s->slider.toFront(false);
+            s->nameLabel.toFront(false);
+        }
     }
     for (auto& s : buttonSlots)
     {
         s->button.setVisible(show);
+        if (show)
+            s->button.toFront(false);
     }
     for (auto& s : comboSlots)
     {
         s->comboBox.setVisible(show);
         s->label.setVisible(show);
+        if (show)
+        {
+            s->comboBox.toFront(false);
+            s->label.toFront(false);
+        }
+    }
+
+    if (show)
+    {
+        powerButton.toFront(false);
+        themeButton.toFront(false);
+        recordButton.toFront(false);
+        presetLabel.toFront(false);
+        presetComboBox.toFront(false);
+        prevPresetBtn.toFront(false);
+        nextPresetBtn.toFront(false);
+        strikeTriggerBtn.toFront(false);
+        frictionTriggerBtn.toFront(false);
+        vactrolTriggerBtn.toFront(false);
+        poissonTriggerBtn.toFront(false);
+        diracTriggerBtn.toFront(false);
+#if JUCE_WEB_BROWSER
+        viewModeButton.toFront(true);
+#endif
     }
 }
 
@@ -1076,51 +1304,113 @@ void BRAUN_MR16AudioProcessorEditor::paint(juce::Graphics& g)
     {
         drawBraunChassis(g, getLocalBounds());
     }
+    else
+    {
+        g.fillAll(juce::Colour(0xff141517));
+    }
 }
 
 void BRAUN_MR16AudioProcessorEditor::drawBraunChassis(juce::Graphics& g, juce::Rectangle<int> bounds)
 {
     g.fillAll(findColour(mr16::BraunColours::bgAppColourId));
 
-    // Top Header Banner
-    auto headerRect = bounds.removeFromTop(48);
+    // Outer precision border
     g.setColour(findColour(mr16::BraunColours::borderLineColourId));
-    g.fillRect(headerRect.removeFromBottom(1));
+    g.drawRect(bounds.toFloat(), 1.5f);
 
+    // 1. Top Header Deck (54px)
+    auto headerArea = bounds.removeFromTop(54);
+    g.setColour(findColour(mr16::BraunColours::bgPanelColourId));
+    g.fillRect(headerArea);
+    g.setColour(findColour(mr16::BraunColours::borderLineColourId));
+    g.drawHorizontalLine(headerArea.getBottom(), 0.0f, static_cast<float>(bounds.getWidth()));
+
+    // Typography: Dieter Rams Braun styling
     g.setColour(findColour(mr16::BraunColours::textPrimaryColourId));
-    g.setFont(juce::Font(juce::FontOptions(15.0f, juce::Font::bold)));
-    g.drawText("BRAUN MR-16", 18, 10, 140, 18, juce::Justification::centredLeft);
+    g.setFont(juce::Font(juce::FontOptions(16.0f, juce::Font::bold)));
+    g.drawText("BRAUN MR-16", headerArea.removeFromLeft(160).reduced(16, 0), juce::Justification::centredLeft);
 
     g.setColour(findColour(mr16::BraunColours::textMutedColourId));
-    g.setFont(juce::Font(juce::FontOptions(9.0f)));
-    g.drawText("MODAL RESONATOR & KINETIC SYNTHESIZER", 18, 28, 240, 14, juce::Justification::centredLeft);
+    g.setFont(juce::Font(juce::FontOptions(9.5f, juce::Font::plain)));
+    g.drawText(juce::String("MODAL RESONATOR & KINETIC SYNTHESIZER ") + juce::String::charToString(0x00B7) + " DIN 1451",
+               headerArea.removeFromLeft(330).reduced(4, 0), juce::Justification::centredLeft);
 
-    // Vector CRT display
-    auto crtArea = juce::Rectangle<int>(bounds.getRight() - 320, 56, 300, 160);
+    // 2. Central CRT Phosphor Visualizer Scope (130px)
+    auto crtArea = bounds.removeFromTop(130).reduced(16, 4);
     drawCrtDisplay(g, crtArea);
+
+    // 3. Audition Strip (34px)
+    auto auditionArea = bounds.removeFromTop(34).reduced(16, 2);
+    g.setColour(findColour(mr16::BraunColours::bgPanelColourId));
+    g.fillRoundedRectangle(auditionArea.toFloat(), 3.0f);
+    g.setColour(findColour(mr16::BraunColours::borderLineColourId));
+    g.drawRoundedRectangle(auditionArea.toFloat(), 3.0f, 1.0f);
+
+    auto auditionLabelArea = auditionArea.removeFromLeft(130);
+    g.setColour(findColour(mr16::BraunColours::textMutedColourId));
+    g.setFont(juce::Font(juce::FontOptions(9.0f, juce::Font::bold)));
+    g.drawText("AUDITION EXCITER:", auditionLabelArea.reduced(8, 0), juce::Justification::centredLeft);
+
+    // 4. 5 Signal-Flow Decks Grid
+    auto gridArea = bounds.reduced(16, 6);
+    const int numCols = 5;
+    const int colWidth = gridArea.getWidth() / numCols;
+
+    const char* deckTitles[5] = {
+        "1. KINETIC EXCITER",
+        "2. MODAL MATRIX",
+        "3. LORENZ ATTRACTOR",
+        "4. BBD CHORUS",
+        "5. SPATIAL & DYNAMICS"
+    };
+
+    for (int c = 0; c < numCols; ++c)
+    {
+        auto cell = juce::Rectangle<int>(gridArea.getX() + c * colWidth, gridArea.getY(), colWidth, gridArea.getHeight()).reduced(4);
+
+        g.setColour(findColour(mr16::BraunColours::bgPanelColourId));
+        g.fillRoundedRectangle(cell.toFloat(), 3.0f);
+        g.setColour(findColour(mr16::BraunColours::borderLineColourId));
+        g.drawRoundedRectangle(cell.toFloat(), 3.0f, 1.0f);
+
+        // Deck header banner
+        auto deckHeader = cell.removeFromTop(24);
+        g.setColour(findColour(mr16::BraunColours::braunOrangeColourId));
+        g.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
+        g.drawText(deckTitles[c], deckHeader.reduced(8, 0), juce::Justification::centredLeft);
+    }
 }
 
 void BRAUN_MR16AudioProcessorEditor::drawCrtDisplay(juce::Graphics& g, juce::Rectangle<int> crtBounds)
 {
     // CRT outer bezel
     g.setColour(findColour(mr16::BraunColours::bgBezelColourId));
-    g.fillRoundedRectangle(crtBounds.toFloat(), 6.0f);
+    g.fillRoundedRectangle(crtBounds.toFloat(), 5.0f);
     g.setColour(findColour(mr16::BraunColours::borderLineColourId));
-    g.drawRoundedRectangle(crtBounds.toFloat(), 6.0f, 1.0f);
+    g.drawRoundedRectangle(crtBounds.toFloat(), 5.0f, 1.0f);
 
-    auto screen = crtBounds.reduced(8);
+    auto screen = crtBounds.reduced(6);
     g.setColour(juce::Colour(0xFF070A08));
     g.fillRoundedRectangle(screen.toFloat(), 3.0f);
 
-    // Subtle CRT raster scanlines
+    // Split screen: Left 42% for Vector Scope & Waveform, Right 58% for 16 Modal Energy Bars
+    const int scopeWidth = juce::jlimit(340, 520, static_cast<int>(screen.getWidth() * 0.42f));
+    auto scopeScreen = screen.removeFromLeft(scopeWidth);
+    auto meterScreen = screen.reduced(10, 4);
+
+    // Subtle CRT raster scanlines on scope screen
     g.setColour(juce::Colours::black.withAlpha(0.20f));
-    for (int y = screen.getY(); y < screen.getBottom(); y += 3)
-        g.drawHorizontalLine(y, (float)screen.getX(), (float)screen.getRight());
+    for (int y = scopeScreen.getY(); y < scopeScreen.getBottom(); y += 3)
+        g.drawHorizontalLine(y, (float)scopeScreen.getX(), (float)scopeScreen.getRight());
 
     // Center graticule crosshair
     g.setColour(juce::Colour(0xFF142218));
-    g.drawHorizontalLine(screen.getCentreY(), (float)screen.getX(), (float)screen.getRight());
-    g.drawVerticalLine(screen.getCentreX(), (float)screen.getY(), (float)screen.getBottom());
+    g.drawHorizontalLine(scopeScreen.getCentreY(), (float)scopeScreen.getX(), (float)scopeScreen.getRight());
+    g.drawVerticalLine(scopeScreen.getCentreX(), (float)scopeScreen.getY(), (float)scopeScreen.getBottom());
+
+    // Vertical separator between scope and modal meters
+    g.setColour(juce::Colour(0xFF162419));
+    g.drawVerticalLine(meterScreen.getX() - 6, (float)screen.getY(), (float)screen.getBottom());
 
     // Determine current display mode
     int mode = 0;
@@ -1131,14 +1421,12 @@ void BRAUN_MR16AudioProcessorEditor::drawCrtDisplay(juce::Graphics& g, juce::Rec
 
     if (mode == 0)
     {
-        // --------------------------------------------------------------------
         // Mode 0: 2D Chladni Nodal Geometry Simulation
-        // --------------------------------------------------------------------
         g.setColour(findColour(mr16::BraunColours::phosphorColourId).withAlpha(0.85f));
 
-        const float cx = (float)screen.getCentreX();
-        const float cy = (float)screen.getCentreY();
-        const float maxR = (float)juce::jmin(screen.getWidth(), screen.getHeight()) * 0.42f;
+        const float cx = (float)scopeScreen.getCentreX();
+        const float cy = (float)scopeScreen.getCentreY();
+        const float maxR = (float)juce::jmin(scopeScreen.getWidth(), scopeScreen.getHeight()) * 0.40f;
 
         static float phase = 0.0f;
         phase += 0.02f;
@@ -1159,12 +1447,10 @@ void BRAUN_MR16AudioProcessorEditor::drawCrtDisplay(juce::Graphics& g, juce::Rec
     }
     else if (mode == 1)
     {
-        // --------------------------------------------------------------------
         // Mode 1: 3D Lorenz Attractor Orbit
-        // --------------------------------------------------------------------
         g.setColour(findColour(mr16::BraunColours::phosphorColourId).withAlpha(0.85f));
-        const float cx = (float)screen.getCentreX();
-        const float cy = (float)screen.getCentreY();
+        const float cx = (float)scopeScreen.getCentreX();
+        const float cy = (float)scopeScreen.getCentreY();
 
         juce::Path lorenzPath;
         const int nPts = 100;
@@ -1184,172 +1470,274 @@ void BRAUN_MR16AudioProcessorEditor::drawCrtDisplay(juce::Graphics& g, juce::Rec
     }
     else
     {
-        // --------------------------------------------------------------------
-        // Mode 2: 16-Pole Modal FFT Bars
-        // --------------------------------------------------------------------
-        const int nBars = 16;
-        float barWidth = ((float)screen.getWidth() - 4.0f) / (float)nBars;
-        for (int i = 0; i < nBars; ++i)
-        {
-            float energy = std::clamp(latestTelemetryFrame.modalEnergies[i] * 120.0f, 0.0f, 1.0f);
-            float barH = energy * ((float)screen.getHeight() - 8.0f);
-            float bx = (float)screen.getX() + 2.0f + (float)i * barWidth;
-            float by = (float)screen.getBottom() - 4.0f - barH;
-
-            g.setColour(findColour(mr16::BraunColours::phosphorColourId));
-            g.fillRect(bx + 1.0f, by, barWidth - 2.0f, barH);
-        }
+        // Mode 2: Kinetic Exciter Waveform Glow
+        g.setColour(findColour(mr16::BraunColours::braunOrangeColourId).withAlpha(0.80f));
+        const float cx = (float)scopeScreen.getCentreX();
+        const float cy = (float)scopeScreen.getCentreY();
+        const float radius = juce::jmin(scopeScreen.getWidth(), scopeScreen.getHeight()) * 0.36f;
+        g.drawEllipse(cx - radius, cy - radius, radius * 2.0f, radius * 2.0f, 1.2f);
     }
 
-    // Overlay real-time oscilloscope waveform trace
+    // Overlay real-time oscilloscope waveform trace on scope screen
     float scopeL[256];
     processorRef.getScopeSamples(scopeL, nullptr, 256);
 
     juce::Path wave;
-    for (int i = 0; i < screen.getWidth(); ++i)
+    for (int i = 0; i < scopeScreen.getWidth(); ++i)
     {
-        int idx = (i * 256) / screen.getWidth();
-        float y = (float)screen.getCentreY() - (scopeL[idx] * (float)screen.getHeight() * 0.35f);
-        if (i == 0) wave.startNewSubPath((float)screen.getX() + (float)i, y);
-        else wave.lineTo((float)screen.getX() + (float)i, y);
+        int idx = (i * 256) / juce::jmax(1, scopeScreen.getWidth());
+        float y = (float)scopeScreen.getCentreY() - (scopeL[idx] * (float)scopeScreen.getHeight() * 0.35f);
+        if (i == 0) wave.startNewSubPath((float)scopeScreen.getX() + (float)i, y);
+        else wave.lineTo((float)scopeScreen.getX() + (float)i, y);
     }
     g.setColour(findColour(mr16::BraunColours::phosphorColourId).withAlpha(0.50f));
     g.strokePath(wave, juce::PathStrokeType(1.0f));
 
-    // Corner CRT legend
+    // Corner CRT legend on scope screen
     g.setColour(findColour(mr16::BraunColours::phosphorColourId).withAlpha(0.65f));
-    g.setFont(juce::Font(juce::FontOptions(8.0f, juce::Font::bold)));
+    g.setFont(juce::Font(juce::FontOptions(8.5f, juce::Font::bold)));
     juce::String modeName = (mode == 0) ? "CHLADNI 2D" : (mode == 1) ? "ATTRACTOR 3D" : "MODAL FFT";
-    g.drawText(modeName, screen.reduced(4), juce::Justification::topRight);
+    g.drawText(modeName, scopeScreen.reduced(6), juce::Justification::topRight);
+
+    // Right side: 16 Modal Energy Bars
+    const int nBars = 16;
+    const float totalW = (float)meterScreen.getWidth();
+    const float barSpacing = 4.0f;
+    const float barW = (totalW - barSpacing * (nBars + 1)) / (float)nBars;
+    const float maxH = (float)meterScreen.getHeight() - 16.0f;
+
+    for (int i = 0; i < nBars; ++i)
+    {
+        const float bx = (float)meterScreen.getX() + barSpacing + (float)i * (barW + barSpacing);
+        const float by = (float)meterScreen.getY() + 2.0f;
+
+        // Background track
+        g.setColour(juce::Colour(0xFF101612));
+        g.fillRect(bx, by, barW, maxH);
+
+        // Energy fill
+        const float energy = std::clamp(latestTelemetryFrame.modalEnergies[i] * 120.0f, 0.0f, 1.0f);
+        const float fillH = energy * maxH;
+        const float fillY = by + maxH - fillH;
+
+        // Color: phosphor green with amber peak for high energy
+        const juce::Colour barCol = (energy > 0.85f)
+            ? findColour(mr16::BraunColours::braunOrangeColourId)
+            : findColour(mr16::BraunColours::phosphorColourId);
+        g.setColour(barCol);
+        g.fillRect(bx, fillY, barW, fillH);
+
+        // Label "M1", "M2", ...
+        g.setColour(juce::Colour(0xFF7E8085));
+        g.setFont(juce::Font(juce::FontOptions(7.5f, juce::Font::plain)));
+        g.drawText("M" + juce::String(i + 1),
+                   (int)bx - 2, (int)(by + maxH + 1.0f), (int)barW + 4, 12,
+                   juce::Justification::centred);
+    }
 }
 
 void BRAUN_MR16AudioProcessorEditor::resized()
 {
-    auto bounds = getLocalBounds();
-
 #if JUCE_WEB_BROWSER
-    if (webComponent && !useNativeUI)
+    if (webComponent != nullptr)
     {
-        webComponent->setBounds(bounds);
-        return;
+        if (!useNativeUI)
+            webComponent->setBounds(getLocalBounds());
+        else
+            webComponent->setBounds(0, 0, 0, 0);
     }
 #endif
 
+    updateNativeControlVisibility();
     layoutNativeControls();
 }
 
 void BRAUN_MR16AudioProcessorEditor::layoutNativeControls()
 {
-    auto bounds = getLocalBounds();
+    if (!useNativeUI)
+        return;
 
-    // 1. Top Header Bar (48px)
-    auto header = bounds.removeFromTop(48);
-    powerButton.setBounds(header.removeFromRight(88).reduced(6, 10));
-    recordButton.setBounds(header.removeFromRight(88).reduced(6, 10));
-    themeButton.setBounds(header.removeFromRight(76).reduced(6, 10));
+    auto bounds = getLocalBounds();
+    if (bounds.isEmpty()) return;
+
+    // 1. Top Header Bar (54px)
+    auto header = bounds.removeFromTop(54);
+    auto rightHeader = header.removeFromRight(header.getWidth() - 480).reduced(8, 10);
 
 #if JUCE_WEB_BROWSER
-    viewModeButton.setBounds(header.removeFromRight(88).reduced(6, 10));
+    viewModeButton.setBounds(rightHeader.removeFromRight(140).reduced(4, 2));
 #endif
+    recordButton.setBounds(rightHeader.removeFromRight(100).reduced(4, 2));
+    themeButton.setBounds(rightHeader.removeFromRight(80).reduced(4, 2));
+    powerButton.setBounds(rightHeader.removeFromRight(95).reduced(4, 2));
 
-    // Preset cluster
-    nextPresetBtn.setBounds(header.removeFromRight(32).reduced(2, 12));
-    presetComboBox.setBounds(header.removeFromRight(150).reduced(2, 12));
-    prevPresetBtn.setBounds(header.removeFromRight(32).reduced(2, 12));
-    presetLabel.setBounds(header.removeFromRight(60).reduced(2, 12));
+    // Preset selector in header space
+    if (rightHeader.getWidth() >= 160)
+    {
+        nextPresetBtn.setBounds(rightHeader.removeFromRight(26).reduced(2, 3));
+        const int comboW = juce::jlimit(100, 180, rightHeader.getWidth() - 85);
+        presetComboBox.setBounds(rightHeader.removeFromRight(comboW).reduced(2, 3));
+        prevPresetBtn.setBounds(rightHeader.removeFromRight(26).reduced(2, 3));
+        presetLabel.setBounds(rightHeader.removeFromRight(juce::jmin(65, rightHeader.getWidth())).reduced(2, 3));
+    }
 
-    // 2. Audition Exciter Bar (36px)
-    auto audition = bounds.removeFromTop(36).reduced(12, 4);
-    strikeTriggerBtn.setBounds(audition.removeFromLeft(80).reduced(4, 2));
-    frictionTriggerBtn.setBounds(audition.removeFromLeft(80).reduced(4, 2));
-    vactrolTriggerBtn.setBounds(audition.removeFromLeft(80).reduced(4, 2));
-    poissonTriggerBtn.setBounds(audition.removeFromLeft(90).reduced(4, 2));
-    diracTriggerBtn.setBounds(audition.removeFromLeft(80).reduced(4, 2));
+    // 2. Skip Central CRT Phosphor Visualizer Scope (130px)
+    bounds.removeFromTop(130);
 
-    // 3. Grid for 5 Main Decks
-    bounds.reduce(12, 8);
+    // 3. Audition Exciter Bar (34px)
+    auto audition = bounds.removeFromTop(34).reduced(16, 2);
+    audition.removeFromLeft(130); // Skip label drawn by chassis
+    strikeTriggerBtn.setBounds(audition.removeFromLeft(110).reduced(4, 2));
+    frictionTriggerBtn.setBounds(audition.removeFromLeft(110).reduced(4, 2));
+    vactrolTriggerBtn.setBounds(audition.removeFromLeft(110).reduced(4, 2));
+    poissonTriggerBtn.setBounds(audition.removeFromLeft(130).reduced(4, 2));
+    diracTriggerBtn.setBounds(audition.removeFromLeft(110).reduced(4, 2));
 
-    const int colW = bounds.getWidth() / 5;
-    auto deck1Area = bounds.removeFromLeft(colW).reduced(4);
-    auto deck2Area = bounds.removeFromLeft(colW).reduced(4);
-    auto deck3Area = bounds.removeFromLeft(colW).reduced(4);
-    auto deck4Area = bounds.removeFromLeft(colW).reduced(4);
-    auto deck5Area = bounds.reduced(4);
+    // 4. 5 Signal-Flow Decks Grid
+    auto gridArea = bounds.reduced(16, 6);
+    const int numCols = 5;
+    const int colW = gridArea.getWidth() / numCols;
 
-    auto layoutSlotInArea = [](juce::Rectangle<int>& area, KnobSlot* k) {
-        if (!k) return;
-        auto row = area.removeFromTop(58);
-        k->nameLabel.setBounds(row.removeFromTop(12));
-        k->slider.setBounds(row);
+    auto deck1Area = juce::Rectangle<int>(gridArea.getX() + 0 * colW, gridArea.getY(), colW, gridArea.getHeight()).reduced(4);
+    auto deck2Area = juce::Rectangle<int>(gridArea.getX() + 1 * colW, gridArea.getY(), colW, gridArea.getHeight()).reduced(4);
+    auto deck3Area = juce::Rectangle<int>(gridArea.getX() + 2 * colW, gridArea.getY(), colW, gridArea.getHeight()).reduced(4);
+    auto deck4Area = juce::Rectangle<int>(gridArea.getX() + 3 * colW, gridArea.getY(), colW, gridArea.getHeight()).reduced(4);
+    auto deck5Area = juce::Rectangle<int>(gridArea.getX() + 4 * colW, gridArea.getY(), colW, gridArea.getHeight()).reduced(4);
+
+    auto layoutKnobInArea = [](KnobSlot* slot, juce::Rectangle<int> area) {
+        if (slot == nullptr) return;
+        auto labelArea = area.removeFromBottom(16);
+        slot->nameLabel.setBounds(labelArea);
+        slot->slider.setBounds(area);
     };
 
-    // Deck 01 (Exciter)
-    if (auto* c = findCombo(mr16::ParamIDs::exciterType)) {
-        auto row = deck1Area.removeFromTop(36);
-        c->label.setBounds(row.removeFromTop(12));
-        c->comboBox.setBounds(row);
-    }
-    layoutSlotInArea(deck1Area, findKnob(mr16::ParamIDs::strikeHardness));
-    layoutSlotInArea(deck1Area, findKnob(mr16::ParamIDs::strikeVelocity));
-    layoutSlotInArea(deck1Area, findKnob(mr16::ParamIDs::frictionForce));
-    layoutSlotInArea(deck1Area, findKnob(mr16::ParamIDs::frictionSpeed));
-    layoutSlotInArea(deck1Area, findKnob(mr16::ParamIDs::vactrolSag));
-    layoutSlotInArea(deck1Area, findKnob(mr16::ParamIDs::extInputGain));
-    layoutSlotInArea(deck1Area, findKnob(mr16::ParamIDs::poissonDensity));
+    auto layoutComboInArea = [](ComboSlot* slot, juce::Rectangle<int> area) {
+        if (slot == nullptr) return;
+        auto labelArea = area.removeFromTop(14);
+        slot->label.setBounds(labelArea);
+        slot->comboBox.setBounds(area.reduced(2, 1));
+    };
+
+    auto layout2Knobs = [&](KnobSlot* k1, KnobSlot* k2, juce::Rectangle<int>& area, int rowH) {
+        auto row = area.removeFromTop(rowH).reduced(2);
+        const int w = row.getWidth() / 2;
+        if (k1) layoutKnobInArea(k1, row.removeFromLeft(w).reduced(2));
+        if (k2) layoutKnobInArea(k2, row.reduced(2));
+    };
+
+    auto layout1Knob = [&](KnobSlot* k, juce::Rectangle<int>& area, int rowH) {
+        auto row = area.removeFromTop(rowH).reduced(2);
+        if (k) layoutKnobInArea(k, row.withSizeKeepingCentre(juce::jmin(110, row.getWidth()), rowH - 4));
+    };
+
+    // Skip deck headers (24px)
+    deck1Area.removeFromTop(24);
+    deck2Area.removeFromTop(24);
+    deck3Area.removeFromTop(24);
+    deck4Area.removeFromTop(24);
+    deck5Area.removeFromTop(24);
+
+    // Deck 01 (Kinetic Exciter)
+    layoutComboInArea(findCombo(mr16::ParamIDs::exciterType), deck1Area.removeFromTop(38).reduced(4, 2));
+    layout2Knobs(findKnob(mr16::ParamIDs::strikeHardness), findKnob(mr16::ParamIDs::strikeVelocity), deck1Area, 72);
+    layout2Knobs(findKnob(mr16::ParamIDs::frictionForce), findKnob(mr16::ParamIDs::frictionSpeed), deck1Area, 72);
+    layout2Knobs(findKnob(mr16::ParamIDs::vactrolSag), findKnob(mr16::ParamIDs::extInputGain), deck1Area, 72);
+    layout2Knobs(findKnob(mr16::ParamIDs::poissonDensity), findKnob(mr16::ParamIDs::euclideanPulses), deck1Area, 72);
+    layout1Knob(findKnob(mr16::ParamIDs::euclideanSteps), deck1Area, 72);
 
     // Deck 02 (Modal Matrix)
-    if (auto* c = findCombo(mr16::ParamIDs::manifoldType)) {
-        auto row = deck2Area.removeFromTop(36);
-        c->label.setBounds(row.removeFromTop(12));
-        c->comboBox.setBounds(row);
-    }
-    if (auto* c = findCombo(mr16::ParamIDs::materialProfile)) {
-        auto row = deck2Area.removeFromTop(36);
-        c->label.setBounds(row.removeFromTop(12));
-        c->comboBox.setBounds(row);
-    }
-    layoutSlotInArea(deck2Area, findKnob(mr16::ParamIDs::modalFrequency));
-    layoutSlotInArea(deck2Area, findKnob(mr16::ParamIDs::modalDamping));
-    layoutSlotInArea(deck2Area, findKnob(mr16::ParamIDs::modalCoupling));
-    layoutSlotInArea(deck2Area, findKnob(mr16::ParamIDs::modalSpread));
+    layoutComboInArea(findCombo(mr16::ParamIDs::manifoldType), deck2Area.removeFromTop(38).reduced(4, 2));
+    layoutComboInArea(findCombo(mr16::ParamIDs::materialProfile), deck2Area.removeFromTop(38).reduced(4, 2));
+    layout2Knobs(findKnob(mr16::ParamIDs::modalFrequency), findKnob(mr16::ParamIDs::modalDamping), deck2Area, 75);
+    layout2Knobs(findKnob(mr16::ParamIDs::modalCoupling), findKnob(mr16::ParamIDs::modalSpread), deck2Area, 75);
 
     // Deck 03 (Lorenz Attractor)
-    layoutSlotInArea(deck3Area, findKnob(mr16::ParamIDs::lorenzRate));
-    layoutSlotInArea(deck3Area, findKnob(mr16::ParamIDs::lorenzChaos));
-    layoutSlotInArea(deck3Area, findKnob(mr16::ParamIDs::lorenzFreqMod));
-    layoutSlotInArea(deck3Area, findKnob(mr16::ParamIDs::lorenzQMod));
+    layout2Knobs(findKnob(mr16::ParamIDs::lorenzRate), findKnob(mr16::ParamIDs::lorenzChaos), deck3Area, 80);
+    layout2Knobs(findKnob(mr16::ParamIDs::lorenzFreqMod), findKnob(mr16::ParamIDs::lorenzQMod), deck3Area, 80);
 
     // Deck 04 (Chorus)
-    if (auto* b = findButton(mr16::ParamIDs::chorusEnable)) {
-        b->button.setBounds(deck4Area.removeFromTop(28).reduced(4, 2));
+    if (auto* b = findButton(mr16::ParamIDs::chorusEnable))
+    {
+        b->button.setBounds(deck4Area.removeFromTop(32).reduced(12, 2));
     }
-    layoutSlotInArea(deck4Area, findKnob(mr16::ParamIDs::chorusRateHz));
-    layoutSlotInArea(deck4Area, findKnob(mr16::ParamIDs::chorusDepthMs));
-    layoutSlotInArea(deck4Area, findKnob(mr16::ParamIDs::chorusDimension));
-    layoutSlotInArea(deck4Area, findKnob(mr16::ParamIDs::chorusMix));
+    layout2Knobs(findKnob(mr16::ParamIDs::chorusRateHz), findKnob(mr16::ParamIDs::chorusDepthMs), deck4Area, 80);
+    layout2Knobs(findKnob(mr16::ParamIDs::chorusDimension), findKnob(mr16::ParamIDs::chorusMix), deck4Area, 80);
 
     // Deck 05 (Spatial & Dynamics)
-    layoutSlotInArea(deck5Area, findKnob(mr16::ParamIDs::goldenPanSpread));
-    layoutSlotInArea(deck5Area, findKnob(mr16::ParamIDs::vactrolLpgCutoff));
-    layoutSlotInArea(deck5Area, findKnob(mr16::ParamIDs::driveSaturation));
-    layoutSlotInArea(deck5Area, findKnob(mr16::ParamIDs::masterTrimDb));
-    layoutSlotInArea(deck5Area, findKnob(mr16::ParamIDs::dryWetMix));
-
-    // Deck 06 Display Mode Combo
-    if (auto* c = findCombo(mr16::ParamIDs::displayMode)) {
-        auto row = deck5Area.removeFromTop(36);
-        c->label.setBounds(row.removeFromTop(12));
-        c->comboBox.setBounds(row);
-    }
+    layoutComboInArea(findCombo(mr16::ParamIDs::displayMode), deck5Area.removeFromTop(38).reduced(4, 2));
+    layout2Knobs(findKnob(mr16::ParamIDs::goldenPanSpread), findKnob(mr16::ParamIDs::vactrolLpgCutoff), deck5Area, 75);
+    layout2Knobs(findKnob(mr16::ParamIDs::driveSaturation), findKnob(mr16::ParamIDs::masterTrimDb), deck5Area, 75);
+    layout1Knob(findKnob(mr16::ParamIDs::dryWetMix), deck5Area, 75);
 }
 
 void BRAUN_MR16AudioProcessorEditor::parentHierarchyChanged()
 {
+    AudioProcessorEditor::parentHierarchyChanged();
+    hwndStylesConfigured = false;
+    if (!useNativeUI)
+    {
+        ensureHwndStyles();
+    }
+}
+
+void BRAUN_MR16AudioProcessorEditor::ensureHwndStyles()
+{
+#if JUCE_WINDOWS
+    if (useNativeUI)
+        return;
+
+    if (auto* peer = getPeer())
+    {
+        HWND hwnd = static_cast<HWND>(peer->getNativeHandle());
+        if (hwnd == nullptr || !::IsWindow(hwnd))
+            return;
+
+        // Apply WS_CLIPCHILDREN | WS_CLIPSIBLINGS to our own plugin HWND only.
+        // We NEVER touch ancestor/parent windows to avoid corrupting FL Studio or host DAW title bars/frames.
+        LONG_PTR style = ::GetWindowLongPtr(hwnd, GWL_STYLE);
+        if ((style & (WS_CLIPCHILDREN | WS_CLIPSIBLINGS)) != (WS_CLIPCHILDREN | WS_CLIPSIBLINGS))
+        {
+            ::SetWindowLongPtr(hwnd, GWL_STYLE, style | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
+        }
+
+        // Also ensure child windows (WebView2 host HWNDs and render widget) enforce clipping
+        int childCount = 0;
+        ::EnumChildWindows(hwnd, [](HWND child, LPARAM lParam) -> BOOL {
+            if (child == nullptr || !::IsWindow(child))
+                return TRUE;
+            auto* count = reinterpret_cast<int*>(lParam);
+            (*count)++;
+            LONG_PTR childStyle = ::GetWindowLongPtr(child, GWL_STYLE);
+            if ((childStyle & (WS_CLIPCHILDREN | WS_CLIPSIBLINGS)) != (WS_CLIPCHILDREN | WS_CLIPSIBLINGS))
+            {
+                ::SetWindowLongPtr(child, GWL_STYLE, childStyle | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
+            }
+            return TRUE;
+        }, reinterpret_cast<LPARAM>(&childCount));
+
+        if (childCount > 0)
+            hwndStylesConfigured = true;
+    }
+#endif
 }
 
 void BRAUN_MR16AudioProcessorEditor::mouseDown(const juce::MouseEvent& e)
 {
-    juce::ignoreUnused(e);
+    if (!useNativeUI)
+        return;
+
+    if (e.mods.isPopupMenu())
+    {
+        for (auto& slot : knobSlots)
+        {
+            if (e.eventComponent == &slot->slider || slot->slider.isParentOf(e.eventComponent)
+                || e.eventComponent == &slot->nameLabel || slot->nameLabel.isParentOf(e.eventComponent))
+            {
+                showKnobContextMenu(*slot, e.getScreenPosition());
+                return;
+            }
+        }
+    }
 }
 
 void BRAUN_MR16AudioProcessorEditor::showKnobContextMenu(KnobSlot& slot, juce::Point<int> screenPos)

@@ -43,12 +43,13 @@ void KineticExciter::reset() noexcept {
     mEuclideanClockCounter = 1000;
     mEuclideanCurrentStep = 0;
 
-    mNewChimeTriggered = false;
-    mExciterActivity = 0.0f;
-
     computeScaleRatios();
     updatePoissonCountdown();
     updateEuclideanRhythm();
+
+    // Verify exciter activity and all exciter outputs start completely silent on reset()
+    mNewChimeTriggered = false;
+    mExciterActivity = 0.0f;
 }
 
 void KineticExciter::triggerStrike(float velocity, float hardness) noexcept {
@@ -294,6 +295,7 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
     // ------------------------------------------------------------------------
     // 4. Karnopp Stick-Slip Friction Dynamics (Bowed Metal / Glass)
     // ------------------------------------------------------------------------
+    float frictionOut = 0.0f;
     if (mBowPressure > 0.001f && std::abs(mBowVelocity) > 0.001f) {
         const float vRel = mBowVelocity - bodyVelocity;
         constexpr float kDeadband = 0.0015f;
@@ -313,8 +315,9 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
             frictionForce = sgn * (fc + (fs - fc) * decay) + 0.12f * vRel;
         }
 
-        exciterSum += frictionForce * 0.35f;
+        frictionOut = frictionForce * 0.35f;
     }
+    exciterSum += frictionOut;
 
     // ------------------------------------------------------------------------
     // 5. External Audio Input & Transient Punch Follower

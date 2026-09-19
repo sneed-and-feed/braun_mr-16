@@ -97,6 +97,10 @@ private:
     void sendScopeDataToWeb();
 #endif
 
+    bool hwndStylesConfigured { false };
+    int hwndCheckCounter { 0 };
+    void ensureHwndStyles();
+
     mr16::VisualizerFrame latestTelemetryFrame {};
 
     void registerParameterListeners();

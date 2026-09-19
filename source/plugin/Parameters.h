@@ -228,7 +228,7 @@ inline const std::array<ParameterMetadata, 32>& getParameterMetadataTable() {
         { 1, "friction_force",    "frictionForce",   "Friction Force",      "%",    0.0f,    1.0f,     0.35f,   false, false },
         { 1, "friction_speed",    "frictionSpeed",   "Friction Speed",      "%",    0.0f,    1.0f,     0.40f,   false, false },
         { 1, "vactrol_sag",       "vactrolSag",      "Vactrol Sag",         "%",    0.0f,    1.0f,     0.60f,   false, false },
-        { 1, "ext_input_gain",    "extInputGain",    "Ext Input Gain",      "dB",   -24.0f,  12.0f,    0.0f,    false, false },
+        { 1, "ext_input_gain",    "extInputGain",    "Ext Input Gain",      "dB",   -24.0f,  12.0f,    -24.0f,  false, false },
         { 1, "poisson_density",   "poissonDensity",  "Poisson Density",     "Hz",   0.0f,    25.0f,    0.0f,    false, false },
         { 1, "euclidean_pulses",  "euclideanPulses", "Euclidean Pulses",    "",     0.0f,    32.0f,    4.0f,    false, false },
         { 1, "euclidean_steps",   "euclideanSteps",  "Euclidean Steps",     "",     1.0f,    32.0f,    16.0f,   false, false },
@@ -260,7 +260,7 @@ inline const std::array<ParameterMetadata, 32>& getParameterMetadataTable() {
         { 5, "drive_saturation",  "driveSaturation", "Resonator Drive",     "dB",   0.0f,    24.0f,    0.0f,    false, false },
         { 5, "master_trim_db",    "masterTrimDb",    "Output Trim",         "dB",   -24.0f,  12.0f,    0.0f,    false, false },
         { 5, "dry_wet_mix",       "dryWetMix",       "Dry / Wet Mix",       "%",    0.0f,    1.0f,     0.65f,   false, false },
-        { 5, "power_state",       "powerState",      "Power Standby",       "",     0.0f,    1.0f,     1.0f,    true,  false },
+        { 5, "power_state",       "powerState",      "Power Standby",       "",     0.0f,    1.0f,     0.0f,    true,  false },
 
         // Deck 06: Vector Phosphor CRT Display
         { 6, "display_mode",      "displayMode",     "Vector Display Mode", "",     0.0f,    2.0f,     0.0f,    false, true  }
@@ -295,7 +295,7 @@ struct alignas(64) Mr16ParameterSnapshot {
     float       frictionForce    { 0.35f };
     float       frictionSpeed    { 0.40f };
     float       vactrolSag       { 0.60f };
-    float       extInputGainDb   { 0.0f };
+    float       extInputGainDb   { -24.0f };
     float       poissonDensity   { 0.0f };
     int         euclideanPulses  { 4 };
     int         euclideanSteps   { 16 };
@@ -327,7 +327,7 @@ struct alignas(64) Mr16ParameterSnapshot {
     float driveSaturationDb { 0.0f };
     float masterTrimDb      { 0.0f };
     float dryWetMix         { 0.65f };
-    bool  powerState        { true };
+    bool  powerState        { false };
 
     // Deck 06: Vector Phosphor CRT Display
     DisplayMode displayMode { DisplayMode::Chladni };
@@ -337,14 +337,15 @@ struct alignas(64) Mr16ParameterSnapshot {
         braun::mr16::Mr16Parameters p;
         p.exciterStrikeVelocity = strikeVelocity;
         p.exciterStrikeHardness = strikeHardness;
-        p.exciterBowPressure    = frictionForce;
-        p.exciterBowVelocity    = frictionSpeed;
+        const bool isFriction   = (exciterType == ExciterType::Friction);
+        p.exciterBowPressure    = isFriction ? frictionForce : 0.0f;
+        p.exciterBowVelocity    = isFriction ? frictionSpeed : 0.0f;
         p.poissonEnable         = (poissonDensity > 0.01f);
         p.poissonEpm            = poissonDensity * 60.0f;
         p.euclideanEnable       = (euclideanPulses > 0);
         p.euclideanPulses       = euclideanPulses;
         p.euclideanSteps        = euclideanSteps;
-        p.externalAudioEnable   = (extInputGainDb > -23.0f);
+        p.externalAudioEnable   = (exciterType == ExciterType::ExtIn && extInputGainDb > -23.0f);
         p.externalSensitivity   = std::pow(10.0f, extInputGainDb * 0.05f);
 
         p.fundamentalHz         = modalFrequency;
@@ -587,7 +588,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         ParamIDs::extInputGain,
         "Ext Input Gain",
         juce::NormalisableRange<float>(-24.0f, 12.0f, 0.1f, 1.0f),
-        0.0f,
+        -24.0f,
         juce::AudioParameterFloatAttributes().withLabel("dB")
             .withStringFromValueFunction([](float val, int) {
                 return juce::String(val, 1) + " dB";
@@ -817,7 +818,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<juce::AudioParameterBool>(
         ParamIDs::powerState,
         "Power Standby",
-        true));
+        false));
 
     // ------------------------------------------------------------------------
     // Deck 06: Vector Phosphor CRT Display
