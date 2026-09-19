@@ -12,6 +12,16 @@ void KineticExciter::prepare(double sampleRate) noexcept {
     mVactrolPluck.setCutoffRange(50.0f, 16000.0f);
     mVactrolPluck.setDecayTime(0.065f);
 
+    // Friction velocity and pressure slewing (5 ms de-zippering, click-free)
+    mBowVelocitySmoother.setSampleRate(mSampleRate);
+    mBowVelocitySmoother.setTimeConstant(0.005f);
+    mBowPressureSmoother.setSampleRate(mSampleRate);
+    mBowPressureSmoother.setTimeConstant(0.005f);
+
+    // External audio input gain slewing (10 ms crossfade, click-free)
+    mExtGainSmoother.setSampleRate(mSampleRate);
+    mExtGainSmoother.setTimeConstant(0.010f);
+
     // Sample-rate invariant DC blocking (15 Hz) and envelope follower filter coefficients
     mDcR = 1.0f - (kTwoPi * 15.0f / mSampleRate);
     mAlphaFast = 1.0f - std::exp(-1.0f / (mSampleRate * 0.0015f));
@@ -27,12 +37,13 @@ void KineticExciter::reset() noexcept {
     mHammerForce = 0.0f;
     mInContact = false;
 
-    mBowVelocity = 0.0f;
-    mBowPressure = 0.0f;
+    mBowVelocitySmoother.reset(0.0f);
+    mBowPressureSmoother.reset(0.0f);
     mFrictionState = 0.0f;
 
     mVactrolPluck.reset();
 
+    mExtGainSmoother.reset(mExtEnable ? 1.0f : 0.0f);
     mDcStateX = 0.0f;
     mDcStateY = 0.0f;
     mEnvFast = 0.0f;
@@ -105,8 +116,8 @@ bool KineticExciter::hasNewChimeTrigger(float& outHz) noexcept {
 }
 
 void KineticExciter::setFriction(float bowVelocity, float bowPressure) noexcept {
-    mBowVelocity = std::clamp(bowVelocity, 0.0f, 2.0f);
-    mBowPressure = std::clamp(bowPressure, 0.0f, 2.0f);
+    mBowVelocitySmoother.setTarget(std::clamp(bowVelocity, 0.0f, 2.0f));
+    mBowPressureSmoother.setTarget(std::clamp(bowPressure, 0.0f, 2.0f));
 }
 
 void KineticExciter::setPoissonRain(bool enable, float epm, float humanize) noexcept {
@@ -128,6 +139,7 @@ void KineticExciter::setExternalInput(bool enable, float sensitivity, float dire
     mExtEnable = enable;
     mExtSensitivity = std::clamp(sensitivity, 0.0f, 5.0f);
     mExtDirectMix = std::clamp(directMix, 0.0f, 1.0f);
+    mExtGainSmoother.setTarget(enable ? 1.0f : 0.0f);
 }
 
 void KineticExciter::setMicrotonalScale(MicrotonalScale scale) noexcept {
@@ -295,11 +307,14 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
     // ------------------------------------------------------------------------
     // 4. Karnopp Stick-Slip Friction Dynamics (Bowed Metal / Glass)
     // ------------------------------------------------------------------------
+    const float currentBowVelocity = mBowVelocitySmoother.next();
+    const float currentBowPressure = mBowPressureSmoother.next();
+
     float frictionOut = 0.0f;
-    if (mBowPressure > 0.001f && std::abs(mBowVelocity) > 0.001f) {
-        const float vRel = mBowVelocity - bodyVelocity;
+    if (currentBowPressure > 1.0e-5f && std::abs(currentBowVelocity) > 1.0e-5f) {
+        const float vRel = currentBowVelocity - bodyVelocity;
         constexpr float kDeadband = 0.0015f;
-        const float fn = mBowPressure;
+        const float fn = currentBowPressure;
         const float fs = 0.85f * fn;
         const float fc = 0.35f * fn;
         constexpr float vStribeck = 0.06f;
@@ -309,10 +324,10 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
             // Stick phase: locked contact balancing external shear force
             frictionForce = std::clamp(vRel * 400.0f, -fs, +fs);
         } else {
-            // Slip phase: Stribeck velocity curve
+            // Slip phase: Stribeck velocity curve with normal-force-scaled viscous damping
             const float sgn = (vRel > 0.0f) ? 1.0f : -1.0f;
             const float decay = std::exp(-(vRel * vRel) / (vStribeck * vStribeck));
-            frictionForce = sgn * (fc + (fs - fc) * decay) + 0.12f * vRel;
+            frictionForce = sgn * (fc + (fs - fc) * decay) + 0.12f * fn * vRel;
         }
 
         frictionOut = frictionForce * 0.35f;
@@ -322,13 +337,15 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
     // ------------------------------------------------------------------------
     // 5. External Audio Input & Transient Punch Follower
     // ------------------------------------------------------------------------
-    if (mExtEnable) {
-        // Sample-rate invariant 15 Hz DC Blocking filter
-        const float cleanIn = flushDenormal(externalAudioIn);
-        const float dcY = cleanIn - mDcStateX + mDcR * mDcStateY;
-        mDcStateX = cleanIn;
-        mDcStateY = flushDenormal(dcY);
+    // Continuous 15 Hz DC blocking filter maintains primed state to prevent step jumps
+    const float cleanIn = flushDenormal(externalAudioIn);
+    const float dcY = cleanIn - mDcStateX + mDcR * mDcStateY;
+    mDcStateX = cleanIn;
+    mDcStateY = flushDenormal(dcY);
 
+    const float currentExtGain = mExtGainSmoother.next();
+
+    if (currentExtGain > 1.0e-5f) {
         const float absIn = std::abs(dcY);
 
         // Fast envelope follower (tau = 1.5 ms, sample-rate scaled)
@@ -344,14 +361,18 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
         const float deltaE = mEnvFast - mEnvPrevFast;
         mEnvPrevFast = mEnvFast;
 
-        // Dynamic transient onset strike trigger
-        if (tr > 1.80f && deltaE > 0.008f) {
+        // Dynamic transient onset strike trigger scaled by active gain
+        if (tr > 1.80f && deltaE > 0.008f && currentExtGain > 0.5f) {
             const float trigVel = std::clamp(deltaE * 8.0f * mExtSensitivity, 0.10f, 1.0f);
             triggerStrike(trigVel, 0.70f);
         }
 
-        // Direct audio feedthrough into the resonator matrix
-        exciterSum += dcY * mExtDirectMix;
+        // Direct audio feedthrough into the resonator matrix with smooth crossfading
+        exciterSum += dcY * (mExtDirectMix * currentExtGain);
+    } else {
+        mEnvFast = 0.0f;
+        mEnvSlow = 0.0f;
+        mEnvPrevFast = 0.0f;
     }
 
     exciterSum = flushDenormal(exciterSum);

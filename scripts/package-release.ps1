@@ -36,7 +36,7 @@ Write-Host "====================================================================
 
 # 1. Version Resolution
 $PackageJsonPath = Join-Path $RootDir "package.json"
-$Version = "1.0.1"
+$Version = "1.0.2"
 if (Test-Path $PackageJsonPath) {
     try {
         $Pkg = Get-Content $PackageJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -54,14 +54,16 @@ $StandaloneBin = Join-Path $ArtefactsDir "Standalone\BRAUN_MR16.exe"
 $Vst3Dir = Join-Path $ArtefactsDir "VST3\BRAUN_MR16.vst3"
 $ClapBin = Join-Path $ArtefactsDir "CLAP\BRAUN_MR16.clap"
 
-# Inspect CMakeCache for stale WebView settings
+# Inspect CMakeCache for stale WebView settings or force rebuild
 $CacheFile = Join-Path $BuildDir "CMakeCache.txt"
 $StaleCacheDetected = $false
 if (Test-Path $CacheFile) {
     $CacheContent = Get-Content $CacheFile -Raw -ErrorAction SilentlyContinue
-    if ($CacheContent -match "MR16_USE_WEBVIEW:BOOL=OFF" -or $CacheContent -match "JUCE_WEBVIEW2_PACKAGE_LOCATION:BOOL=OFF") {
-        Write-Warning "Stale CMakeCache.txt detected with MR16_USE_WEBVIEW=OFF! Clearing stale cache to enforce WebView2 build."
-        Remove-Item -Path $CacheFile -Force
+    if ($ForceBuild -or $CacheContent -match "MR16_USE_WEBVIEW:BOOL=OFF" -or $CacheContent -match "JUCE_WEBVIEW2_PACKAGE_LOCATION:BOOL=OFF") {
+        Write-Host "[INFO] Clearing CMakeCache.txt, CMakeFiles, and FetchContent subbuilds to enforce clean configuration..."
+        Remove-Item -Path $CacheFile -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path (Join-Path $BuildDir "CMakeFiles") -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path (Join-Path $BuildDir "_deps\*-subbuild") -Recurse -Force -ErrorAction SilentlyContinue
         $StaleCacheDetected = $true
     }
 }
@@ -141,7 +143,7 @@ if (-not $SkipTests) {
         if ($LASTEXITCODE -ne 0) {
             throw "Headless DSP verification failed with exit code $LASTEXITCODE. Packaging aborted."
         }
-        Write-Host "[INFO] All 35 headless DSP tests passed successfully."
+        Write-Host "[INFO] All headless DSP tests passed successfully."
     } else {
         Write-Warning "Headless test executable not found in candidate paths. Skipping test step."
     }
@@ -306,6 +308,19 @@ Set-Content -Path (Join-Path $StageWeb "INSTALL.txt") -Value $WebInstallGuide -E
 
 $WebZipPath = Join-Path $DistWebDir "BRAUN_MR16_v${Version}_Web_Showcase.zip"
 Create-ZipArchive -SourceDirectory $StageWeb -DestinationZipPath $WebZipPath
+
+# ------------------------------------------------------------------------------
+# Package 5: Root Releases (Standalone + VST3 bundles)
+# ------------------------------------------------------------------------------
+$ReleasePy = Join-Path $RootDir "scripts\package_release.py"
+if (Test-Path $ReleasePy) {
+    Write-Host "[INFO] Generating root releases/ bundles via package_release.py..."
+    python $ReleasePy
+    $ReleaseZips = Get-ChildItem -Path (Join-Path $RootDir "releases") -Filter "BRAUN_MR16-v${Version}-*.zip"
+    foreach ($RZip in $ReleaseZips) {
+        Copy-Item $RZip.FullName -Destination $DistWinDir -Force
+    }
+}
 
 # ------------------------------------------------------------------------------
 # 5. Cryptographic Verification Checksum Generation (SHA-256)

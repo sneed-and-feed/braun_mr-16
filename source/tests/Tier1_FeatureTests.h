@@ -640,6 +640,70 @@ inline void registerTier1Tests() {
         return test::gCurrentTestAssertFailures == 0;
     });
 
+    registerTest("Tier 1", "T1_DYN_06", "Mr16Engine - Exciter Mode Switching Without Discontinuities", []() {
+        mr16::Mr16Engine engine;
+        engine.prepare(48000.0, 128);
+        engine.reset();
+
+        mr16::Mr16Parameters p;
+        p.fundamentalHz = 440.0f;
+        p.euclideanEnable = false;
+        p.poissonEnable = false;
+        p.chorusEnable = false;
+        p.outputMute = false;
+
+        constexpr int blockSize = 128;
+        std::vector<float> outL(blockSize, 0.0f);
+        std::vector<float> outR(blockSize, 0.0f);
+
+        // 1. Start in Strike mode (idle)
+        p.exciterBowPressure = 0.0f;
+        p.exciterBowVelocity = 0.0f;
+        p.externalAudioEnable = false;
+        engine.setParameters(p);
+        for (int b = 0; b < 4; ++b) {
+            engine.processBlock(nullptr, nullptr, outL.data(), outR.data(), blockSize);
+        }
+
+        // 2. Switch to Friction mode (pressure = 0.5, velocity = 0.5)
+        p.exciterBowPressure = 0.50f;
+        p.exciterBowVelocity = 0.50f;
+        engine.setParameters(p);
+
+        float maxStepDelta = 0.0f;
+        float prevSample = 0.0f;
+        for (int b = 0; b < 10; ++b) {
+            engine.processBlock(nullptr, nullptr, outL.data(), outR.data(), blockSize);
+            for (int s = 0; s < blockSize; ++s) {
+                const float curr = outL[s];
+                const float delta = std::abs(curr - prevSample);
+                maxStepDelta = std::max(maxStepDelta, delta);
+                prevSample = curr;
+            }
+        }
+        TEST_ASSERT(maxStepDelta < 0.015f, "Exciter mode switch into friction must slew smoothly without step impulse (< 0.015)");
+        TEST_ASSERT(test_utils::isSignalFinite(outL), "Friction output must remain strictly finite");
+
+        // 3. Switch from Friction back to Strike mode (pressure = 0.0, velocity = 0.0)
+        p.exciterBowPressure = 0.0f;
+        p.exciterBowVelocity = 0.0f;
+        engine.setParameters(p);
+
+        maxStepDelta = 0.0f;
+        for (int b = 0; b < 10; ++b) {
+            engine.processBlock(nullptr, nullptr, outL.data(), outR.data(), blockSize);
+            for (int s = 0; s < blockSize; ++s) {
+                const float curr = outL[s];
+                const float delta = std::abs(curr - prevSample);
+                maxStepDelta = std::max(maxStepDelta, delta);
+                prevSample = curr;
+            }
+        }
+        TEST_ASSERT(maxStepDelta < 0.015f, "Exciter mode switch out of friction must slew smoothly without step impulse (< 0.015)");
+
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
 }
 
 } // namespace test

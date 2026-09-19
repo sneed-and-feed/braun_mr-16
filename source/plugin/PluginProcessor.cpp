@@ -438,15 +438,14 @@ void BRAUN_MR16AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     mr16Engine.setParameters(dspParams);
 
     // Clean audio input handling:
-    // Prevent mic bleed / feedback loops / blowout: external audio is strictly enabled only when
-    // mainInput bus is enabled and active, exciterType == ExtIn, and extInputGainDb > -23.0f.
+    // When mainInput bus is active, input streams are fed to mr16Engine where KineticExciter
+    // handles 15 Hz DC blocking and click-free parameter-slewed crossfading based on externalAudioEnable.
     const auto* mainInputBus = getBus(true, 0);
     const bool isInputBusActive = (mainInputBus != nullptr && mainInputBus->isEnabled() && getTotalNumInputChannels() > 0);
-    const bool isExtInUsed = isInputBusActive && (snapshot.exciterType == mr16::ExciterType::ExtIn) && (snapshot.extInputGainDb > -23.0f);
 
     const float* inChannels[2];
-    inChannels[0] = isExtInUsed ? buffer.getReadPointer(0) : nullptr;
-    inChannels[1] = (isExtInUsed && getTotalNumInputChannels() > 1) ? buffer.getReadPointer(1) : inChannels[0];
+    inChannels[0] = isInputBusActive ? buffer.getReadPointer(0) : nullptr;
+    inChannels[1] = (isInputBusActive && getTotalNumInputChannels() > 1) ? buffer.getReadPointer(1) : inChannels[0];
 
     mr16Engine.processBlock(inChannels[0], inChannels[1], outChannels[0], outChannels[1], numSamples);
 

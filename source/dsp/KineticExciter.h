@@ -90,8 +90,8 @@ private:
     bool  mInContact { false };
 
     // 2. Karnopp Stick-Slip Friction (Bowed Metal / Glass)
-    float mBowVelocity { 0.0f };
-    float mBowPressure { 0.0f };
+    OnePoleSmoother mBowVelocitySmoother;
+    OnePoleSmoother mBowPressureSmoother;
     float mFrictionState { 0.0f };
 
     // 3. Buchla 292 Optical Vactrol Dynamic Pluck
@@ -101,6 +101,7 @@ private:
     bool  mExtEnable { false };
     float mExtSensitivity { 1.0f };
     float mExtDirectMix { 0.35f };
+    OnePoleSmoother mExtGainSmoother;
     float mDcStateX { 0.0f };
     float mDcStateY { 0.0f };
     float mDcR { 0.998f };
