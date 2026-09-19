@@ -36,8 +36,6 @@ package-lock.json
 # Archives & Releases
 *.zip
 releases/
-!dist/
-!dist/**
 
 # Agent metadata
 .agents/

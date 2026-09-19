@@ -57,12 +57,12 @@ Pre-compiled binary packages and checksum manifests are staged in `dist/` and pu
  
 | Platform | Format | Architecture | Distribution Package Archive | Verification Manifest |
 |:---|:---|:---|:---|:---|
-| **Windows** | Standalone (.exe) | x86_64 | [`BRAUN_MR16_v1.0.5_Standalone_Win64.zip`](dist/windows/BRAUN_MR16_v1.0.5_Standalone_Win64.zip) | `dist/SHA256SUMS.txt` |
-| **Windows** | VST3 Plugin | x86_64 | [`BRAUN_MR16_v1.0.5_VST3_Win64.zip`](dist/windows/BRAUN_MR16_v1.0.5_VST3_Win64.zip) | `dist/SHA256SUMS.txt` |
-| **Windows** | CLAP Plugin | x86_64 | [`BRAUN_MR16_v1.0.5_CLAP_Win64.zip`](dist/windows/BRAUN_MR16_v1.0.5_CLAP_Win64.zip) | `dist/SHA256SUMS.txt` |
+| **Windows** | Standalone (.exe) | x86_64 | [`BRAUN_MR16_v1.0.5_Standalone_Win64.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.5/BRAUN_MR16_v1.0.5_Standalone_Win64.zip) | `dist/SHA256SUMS.txt` |
+| **Windows** | VST3 Plugin | x86_64 | [`BRAUN_MR16_v1.0.5_VST3_Win64.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.5/BRAUN_MR16_v1.0.5_VST3_Win64.zip) | `dist/SHA256SUMS.txt` |
+| **Windows** | CLAP Plugin | x86_64 | [`BRAUN_MR16_v1.0.5_CLAP_Win64.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.5/BRAUN_MR16_v1.0.5_CLAP_Win64.zip) | `dist/SHA256SUMS.txt` |
 | **macOS** | Universal (AU, VST3, CLAP, App) | arm64 + x86_64 | [`BRAUN_MR16_v1.0.5_macOS_Universal.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.5/BRAUN_MR16_v1.0.5_macOS_Universal.zip) | `SHA256SUMS.txt` |
 | **Linux** | Standalone, VST3, CLAP | x86_64 | [`BRAUN_MR16_v1.0.5_Linux_x64.tar.gz`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.5/BRAUN_MR16_v1.0.5_Linux_x64.tar.gz) | `SHA256SUMS.txt` |
-| **Web** | Zero-Install Showcase | Cross-Platform | [`BRAUN_MR16_v1.0.5_Web_Showcase.zip`](dist/web/BRAUN_MR16_v1.0.5_Web_Showcase.zip) | `dist/SHA256SUMS.txt` |
+| **Web** | Zero-Install Showcase | Cross-Platform | [`BRAUN_MR16_v1.0.5_Web_Showcase.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.5/BRAUN_MR16_v1.0.5_Web_Showcase.zip) | `dist/SHA256SUMS.txt` |
 
 ### 2.3 Platform Requirements
 
