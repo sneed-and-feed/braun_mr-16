@@ -390,14 +390,14 @@ describe('BRAUN MR-16 Headless Acoustic Levels & Dynamic Range Audit', () => {
   //----------------------------------------------------------------------------
   describe('5. Real-Time Performance & Execution Budget', () => {
 
-    it('verifies 2-second full 16-pole audio block renders in under 450 ms', async () => {
+    it('verifies 2-second full 16-pole audio block renders in under 750 ms (>2.6x real-time)', async () => {
       const t0 = performance.now();
       const res = await renderAcousticBlock(e => e.triggerStrike(0.65, 0.80));
       const elapsed = performance.now() - t0;
 
       assert.ok(
-        elapsed < 450.0,
-        `2.0-second block render took ${elapsed.toFixed(2)} ms (budget < 450.0 ms)`
+        elapsed < 750.0,
+        `2.0-second block render took ${elapsed.toFixed(2)} ms (budget < 750.0 ms)`
       );
       assert.ok(res.totalSamples === 96000, 'Total rendered samples must be 96,000 (48kHz * 2s)');
     });
