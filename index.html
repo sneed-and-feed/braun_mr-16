@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#ECEBE4">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="BRAUN MR-16">
+  <title>BRAUN &middot; MR-16 MODAL RESONATOR &amp; KINETIC EXCITER</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/rack.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2216%22 fill=%22%23EE592B%22/><circle cx=%2250%22 cy=%2250%22 r=%2228%22 fill=%22%23ECEBE4%22/></svg>">
+</head>
+<body>
+
+  <!-- 19-Inch 2U Studio Rack Outer Assembly -->
+  <div class="braun-rack-outer">
+    
+    <!-- Left Rack Ear with Precision Hex Screws -->
+    <aside class="braun-rack-ear ear-left" aria-hidden="true">
+      <div class="braun-rack-screw"></div>
+      <div class="braun-rack-screw"></div>
+    </aside>
+
+    <!-- Main 2U Chassis Faceplate -->
+    <main class="braun-chassis" id="braun-chassis">
+
+      <!-- Drag & Drop Audio Sample or RFC 8259 JSON Patch Overlay -->
+      <div class="braun-drop-overlay" id="drop-overlay" aria-hidden="true">
+        <span class="braun-drop-text">DROP AUDIO SAMPLE (.WAV / .MP3) OR RFC 8259 JSON PATCH HERE</span>
+      </div>
+
+      <!-- Header / Deck 07: Master Utilities & Patch Management Bar -->
+      <header class="braun-header">
+        <div class="braun-header-main">
+          <div class="braun-logo-group">
+            <h1 class="braun-brand">BRAUN</h1>
+            <span class="braun-model">MR-16 &middot; MODAL RESONATOR &amp; KINETIC EXCITER</span>
+          </div>
+
+          <div class="braun-utility-group">
+            <!-- Finish Theme Selector -->
+            <div class="braun-select-group">
+              <label class="braun-label-inline" for="select-theme">FINISH</label>
+              <select id="select-theme" class="braun-select" title="Braun Industrial Finish">
+                <option value="light">ALUMINUM (LIGHT)</option>
+                <option value="dark">ANTHRACITE (DARK)</option>
+              </select>
+            </div>
+
+            <!-- Factory & User Preset Selector -->
+            <div class="braun-select-group">
+              <label class="braun-label-inline" for="select-preset">PRESET</label>
+              <select id="select-preset" class="braun-select" title="Curated Modal Resonator Presets">
+                <optgroup label="--- FACTORY PRESETS ---">
+                  <option value="DEFAULT_CONCERT_CHLADNI">CALIBRATED DEFAULT</option>
+                  <option value="MARIMBA_ROSEWOOD_BAR">MARIMBA ROSEWOOD BAR</option>
+                  <option value="CRYSTAL_WINE_GLASS">CRYSTAL WINE GLASS</option>
+                  <option value="TIBETAN_BRONZE_BELL">TIBETAN BRONZE BELL</option>
+                  <option value="CATHEDRAL_TUBE_DRONE">CATHEDRAL TUBE DRONE</option>
+                  <option value="VOCAL_FORMANT_CHOIR">VOCAL FORMANT CHOIR</option>
+                  <option value="POISSON_ZINC_ROOF">POISSON ZINC ROOF</option>
+                  <option value="EUCLIDEAN_METALLOPHONE">EUCLIDEAN METALLOPHONE</option>
+                  <option value="DIMENSION_CELESTE">DIMENSION CELESTE</option>
+                  <option value="LORENZ_CHAOTIC_ORBIT">LORENZ CHAOTIC ORBIT</option>
+                  <option value="BOWED_TITANIUM_SHEET">BOWED TITANIUM SHEET</option>
+                  <option value="HYPERBOLIC_SUB_RESONATOR">HYPERBOLIC SUB RESONATOR</option>
+                  <option value="AFRICAN_BALAFON">AFRICAN BALAFON</option>
+                  <option value="SOLAR_WIND_RESONANCE">SOLAR WIND RESONANCE</option>
+                  <option value="FROSTED_GLASS_ARPEGGIO">FROSTED GLASS ARPEGGIO</option>
+                  <option value="INFINITE_MODAL_SINGULARITY">INFINITE MODAL SINGULARITY</option>
+                </optgroup>
+                <optgroup id="user-presets-group" label="--- USER PRESETS ---">
+                </optgroup>
+              </select>
+            </div>
+
+            <!-- UI Mode Selector -->
+            <button id="btn-ui-mode" class="braun-btn" title="Toggle UI Display Mode"><span>UI: NATIVE</span></button>
+
+            <!-- Patch Management Utilities -->
+            <button id="btn-save-patch" class="braun-btn" title="Save Custom Patch to Local Storage">
+              <span>SAVE</span>
+            </button>
+            <button id="btn-export-patch" class="braun-btn" title="Export Patch as RFC 8259 JSON">
+              <span>EXPORT</span>
+            </button>
+            <button id="btn-load-patch" class="braun-btn" title="Load RFC 8259 JSON Patch">
+              <span>LOAD</span>
+            </button>
+            <input type="file" id="input-load-patch" accept=".json,application/json" style="display:none;">
+
+            <!-- A/B Comparison Buffer -->
+            <button id="btn-ab-toggle" class="braun-btn" title="Instant A/B Resonator Comparison Buffer">
+              <span>A/B:</span> <span id="ab-status-text">A</span>
+            </button>
+            <button id="btn-ab-copy" class="braun-btn" title="Copy Active Buffer to Alternate Buffer">
+              <span>COPY A&rarr;B</span>
+            </button>
+
+            <!-- Lossless 16-Bit 48kHz WAV Master Recorder -->
+            <button id="btn-record-wav" class="braun-btn" title="Lossless 16-Bit 48kHz WAV Master Bus Recorder">
+              <span class="braun-led"></span>
+              <span class="braun-rec-text">REC WAV</span>
+            </button>
+
+            <!-- Calibrated Reset All Knobs -->
+            <button id="btn-reset-all" class="braun-btn" title="Reset All Parameters to Selected Preset Default">
+              <span>RESET</span>
+            </button>
+
+            <!-- Master Power Standby Button -->
+            <button id="btn-power" class="braun-btn" title="System Power On / Standby">
+              <span class="braun-led"></span>
+              <span class="braun-status-text">STANDBY</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Audition Sound Bar -->
+        <div class="braun-audition-bar">
+          <div class="braun-audition-cluster">
+            <span class="braun-label-inline">AUDITION SOURCE:</span>
+            <button id="btn-audition-impulse" class="braun-audition-btn" title="Dirac Mathematical Impulse [Spacebar]">
+              DIRAC IMPULSE [SPACE]
+            </button>
+            <button id="btn-audition-hammer" class="braun-audition-btn" title="Acoustic Felt Mallet Strike">
+              FELT HAMMER
+            </button>
+            <button id="btn-audition-friction" class="braun-audition-btn" title="Stick-Slip Friction Scrape">
+              BOWED FRICTION
+            </button>
+            <button id="btn-audition-air" class="braun-audition-btn" title="Optical Vactrol Air Jet Turbulence">
+              OPTICAL AIR JET
+            </button>
+            <button id="btn-audition-poisson" class="braun-audition-btn" title="Stochastic Poisson Rain Generator">
+              POISSON RAIN
+            </button>
+          </div>
+          <div class="braun-audition-cluster">
+            <span class="braun-deck-subtitle">DIETER RAMS FUNCTIONALIST LABORATORY NOMENCLATURE &middot; DIN 1451</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- 6-Deck Rack Grid (Decks 01 - 06) -->
+      <div class="braun-rack-grid">
+
+        <!-- Deck 01: KINETIC EXCITER ENGINE -->
+        <section class="braun-deck braun-deck-01" aria-label="Kinetic Exciter Engine Deck">
+          <div class="braun-deck-header">
+            <div>
+              <span class="braun-deck-num">01</span>
+              <span class="braun-panel-title">KINETIC EXCITER ENGINE</span>
+            </div>
+            <span class="braun-deck-subtitle">COLLISION, FRICTION &amp; VACTROL</span>
+          </div>
+          <div class="braun-deck-controls">
+            <!-- Exciter Mode Selector -->
+            <div class="braun-sub-row">
+              <span class="braun-label-inline">EXCITER MODE</span>
+              <div class="braun-segment-group" id="group-exciter-mode">
+                <button class="braun-segment-btn is-selected" data-val="0">STRIKE</button>
+                <button class="braun-segment-btn" data-val="1">FRICTION</button>
+                <button class="braun-segment-btn" data-val="2">VACTROL</button>
+                <button class="braun-segment-btn" data-val="3">EXT IN</button>
+              </div>
+            </div>
+
+            <!-- Primary Strike & Friction Knobs Row -->
+            <div class="braun-knobs-row">
+              <div id="knob-exciter-velocity"></div>
+              <div id="knob-exciter-hardness"></div>
+              <div id="knob-vactrol-sag"></div>
+              <div id="knob-friction-velocity"></div>
+              <div id="knob-friction-force"></div>
+            </div>
+
+            <!-- Autonomous Clocks & External Input Row -->
+            <div class="braun-knobs-row">
+              <div id="knob-ext-input-gain"></div>
+              <div id="knob-poisson-density"></div>
+              <div id="knob-euclidean-pulses"></div>
+              <div id="knob-euclidean-steps"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Deck 02: 16-POLE MODAL RESONATOR MATRIX -->
+        <section class="braun-deck braun-deck-02" aria-label="16-Pole Modal Resonator Matrix Deck">
+          <div class="braun-deck-header">
+            <div>
+              <span class="braun-deck-num">02</span>
+              <span class="braun-panel-title">16-POLE MODAL RESONATOR</span>
+            </div>
+            <span class="braun-deck-subtitle">BIHARMONIC DISPERSION &amp; SCATTERING</span>
+          </div>
+          <div class="braun-deck-controls">
+            <!-- Geometric Manifold & Acoustic Material Selectors -->
+            <div class="braun-sub-row braun-deck-02-selectors">
+              <div class="braun-selector-cluster">
+                <span class="braun-label-inline">MANIFOLD</span>
+                <div class="braun-segment-group" id="group-manifold">
+                  <button class="braun-segment-btn is-selected" data-val="0">CHLADNI</button>
+                  <button class="braun-segment-btn" data-val="1">BEAM</button>
+                  <button class="braun-segment-btn" data-val="2">VOCAL</button>
+                  <button class="braun-segment-btn" data-val="3">HORN</button>
+                </div>
+              </div>
+
+              <div class="braun-selector-cluster">
+                <span class="braun-label-inline">MATERIAL</span>
+                <div class="braun-segment-group" id="group-material">
+                  <button class="braun-segment-btn" data-val="0">WOOD</button>
+                  <button class="braun-segment-btn" data-val="1">GLASS</button>
+                  <button class="braun-segment-btn is-selected" data-val="2">STEEL</button>
+                  <button class="braun-segment-btn" data-val="3">BRASS</button>
+                  <button class="braun-segment-btn" data-val="4">NYLON</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 16-Pole Modal Tuning, Q & Coupling Knobs Row -->
+            <div class="braun-knobs-row">
+              <div id="knob-modal-frequency"></div>
+              <div id="knob-modal-spread"></div>
+              <div id="knob-modal-damping"></div>
+              <div id="knob-modal-q"></div>
+              <div id="knob-modal-coupling"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Deck 03: KINETIC MORPH & 3D CHAOTIC ATTRACTOR -->
+        <section class="braun-deck braun-deck-03" aria-label="Kinetic Morph and 3D Chaotic Attractor Deck">
+          <div class="braun-deck-header">
+            <div>
+              <span class="braun-deck-num">03</span>
+              <span class="braun-panel-title">KINETIC MORPH &amp; 3D ATTRACTOR</span>
+            </div>
+            <span class="braun-deck-subtitle">CONTINUOUS LORENZ DYNAMICAL SYSTEM</span>
+          </div>
+          <div class="braun-deck-controls">
+            <!-- Target Routing Declaration -->
+            <div class="braun-sub-row">
+              <span class="braun-label-inline">VECTOR ROUTING</span>
+              <span class="braun-deck-subtitle" style="color: var(--braun-orange);">X &rarr; FREQ &middot; Y &rarr; Q DAMP &middot; Z &rarr; PAN</span>
+            </div>
+
+            <!-- Attractor Dynamics & Modulation Depth Knobs -->
+            <div class="braun-knobs-row">
+              <div id="knob-attractor-rate"></div>
+              <div id="knob-attractor-chaos"></div>
+              <div id="knob-attractor-freq-mod"></div>
+              <div id="knob-attractor-q-mod"></div>
+            </div>
+
+            <!-- Modal Profile Slot & Sample Extraction Dropzone -->
+            <div class="braun-sample-dropzone" id="sample-dropzone">
+              <div class="braun-dropzone-header">
+                <div class="braun-slot-cluster">
+                  <span class="braun-label-inline">PROFILE SLOT</span>
+                  <div class="braun-segment-group" id="group-profile-slot">
+                    <button class="braun-segment-btn is-selected" id="btn-slot-a" data-slot="A">SLOT A</button>
+                    <button class="braun-segment-btn" id="btn-slot-b" data-slot="B">SLOT B</button>
+                  </div>
+                </div>
+                <button id="btn-load-sample" class="braun-btn" title="Extract 16-Pole Modal Profile from Audio File">
+                  <span>EXTRACT SAMPLE</span>
+                </button>
+                <input type="file" id="input-load-sample" accept="audio/*,.wav,.mp3,.ogg,.flac,.aiff" style="display:none;">
+              </div>
+              <div class="braun-dropzone-target" id="dropzone-target" title="Click or Drag Audio File to Extract">
+                <span class="braun-dropzone-text">DROP AUDIO FILE TO EXTRACT MODAL PROFILE INTO ACTIVE SLOT</span>
+              </div>
+            </div>
+
+            <!-- Profile Morph & Lorenz Steer Knobs -->
+            <div class="braun-knobs-row">
+              <div id="knob-morph-alpha"></div>
+              <div id="knob-lorenz-steer"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Deck 04: TRI-PHASE SPATIAL BBD CHORUS -->
+        <section class="braun-deck braun-deck-04" aria-label="Tri-Phase Spatial BBD Chorus Deck">
+          <div class="braun-deck-header">
+            <div>
+              <span class="braun-deck-num">04</span>
+              <span class="braun-panel-title">TRI-PHASE SPATIAL BBD CHORUS</span>
+            </div>
+            <span class="braun-deck-subtitle">ANALOG ENSEMBLE &amp; DIMENSION MATRIX</span>
+          </div>
+          <div class="braun-deck-controls">
+            <!-- Bypass Toggle & Dimension Selector -->
+            <div class="braun-sub-row">
+              <button id="btn-chorus-enable" class="braun-btn is-active" title="Hardwire Relay Bypass">
+                <span class="braun-led is-active-orange"></span>
+                <span>CHORUS ACTIVE</span>
+              </button>
+              <div class="braun-segment-group" id="group-dimension-mode">
+                <button class="braun-segment-btn" data-val="1">MODE I</button>
+                <button class="braun-segment-btn is-selected" data-val="2">MODE II</button>
+                <button class="braun-segment-btn" data-val="3">MODE III</button>
+                <button class="braun-segment-btn" data-val="4">MODE IV</button>
+              </div>
+            </div>
+
+            <!-- Chorus Modulation Knobs -->
+            <div class="braun-knobs-row">
+              <div id="knob-chorus-rate"></div>
+              <div id="knob-chorus-depth"></div>
+              <div id="knob-chorus-dimension"></div>
+              <div id="knob-chorus-mix"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Deck 06: VECTOR PHOSPHOR CRT DISPLAY -->
+        <section class="braun-deck braun-deck-06 braun-crt-deck" aria-label="Vector Phosphor CRT Display Deck">
+          <div class="braun-deck-header">
+            <div>
+              <span class="braun-deck-num">06</span>
+              <span class="braun-panel-title">VECTOR PHOSPHOR CRT</span>
+            </div>
+            <span class="braun-deck-subtitle">60 FPS VECTOR OSCILLOSCOPE</span>
+          </div>
+          <div class="braun-deck-controls">
+            <!-- Optical CRT Bezel Cavity -->
+            <div class="braun-crt-cavity">
+              <canvas id="crt-canvas" class="braun-crt-canvas" width="580" height="260"></canvas>
+              <div class="braun-crt-controls">
+                <!-- Mode Selector -->
+                <div class="braun-segment-group" id="group-crt-mode">
+                  <button class="braun-segment-btn is-selected" data-val="CHLADNI">CHLADNI</button>
+                  <button class="braun-segment-btn" data-val="ATTRACTOR">ATTRACTOR</button>
+                  <button class="braun-segment-btn" data-val="MODAL_FFT">MODAL FFT</button>
+                </div>
+
+                <!-- Phosphor Selector -->
+                <div class="braun-segment-group" id="group-phosphor-type">
+                  <button class="braun-segment-btn is-selected" data-val="GREEN_P1">P1 GREEN</button>
+                  <button class="braun-segment-btn" data-val="AMBER_P3">P3 AMBER</button>
+                </div>
+
+                <!-- Intensity Knob -->
+                <div id="knob-crt-intensity"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Deck 05: SPATIAL DISPERSION & MASTER DYNAMICS -->
+        <section class="braun-deck braun-deck-05 braun-deck-full" aria-label="Spatial Dispersion and Master Dynamics Deck">
+          <div class="braun-deck-header">
+            <div>
+              <span class="braun-deck-num">05</span>
+              <span class="braun-panel-title">SPATIAL DISPERSION &amp; DYNAMICS</span>
+            </div>
+            <span class="braun-deck-subtitle">GOLDEN PAN &amp; HERMITE LIMITER</span>
+          </div>
+          <div class="braun-deck-controls">
+            <!-- Soft Limiter Toggle -->
+            <div class="braun-sub-row">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="braun-label-inline">HERMITE C1 LIMITER</span>
+                <button id="btn-soft-limit" class="braun-btn is-active" title="Hermite Soft-Knee Acoustic Limiter">
+                  <span class="braun-led is-active-green"></span>
+                  <span>LIMITER ACTIVE</span>
+                </button>
+              </div>
+              <span class="braun-deck-subtitle" style="color: var(--text-secondary);">GOLDEN RATIO SPATIAL SPREAD &middot; TRANSIENT-AWARE VACTROL LPG &middot; 137.5&deg; AZIMUTH</span>
+            </div>
+
+            <!-- Output Levels & Panning Knobs Row -->
+            <div class="braun-knobs-row braun-knobs-row-spread">
+              <div id="knob-spatial-pan"></div>
+              <div id="knob-dynamics-lpg"></div>
+              <div id="knob-dynamics-drive"></div>
+              <div id="knob-master-trim"></div>
+              <div id="knob-master-mix"></div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- Tactile Performance Section: Strike Buttons + 16-Key Chime Strip -->
+      <section class="braun-performance-section" aria-label="Tactile Performance Deck">
+        <div class="braun-performance-header">
+          <div class="braun-strike-cluster">
+            <span class="braun-label-inline">TACTILE STRIKE:</span>
+            <button id="btn-strike-dirac" class="braun-strike-btn" title="Dirac Instantaneous Impulse">DIRAC IMPULSE</button>
+            <button id="btn-strike-hammer" class="braun-strike-btn" title="Acoustic Felt Mallet Strike">FELT HAMMER</button>
+            <button id="btn-strike-friction" class="braun-strike-btn" title="Stick-Slip Friction Burst">BOWED FRICTION</button>
+            <button id="btn-strike-air" class="braun-strike-btn" title="Optical Vactrol Air Jet Puff">AIR JET</button>
+          </div>
+
+          <div class="braun-strike-cluster">
+            <div class="braun-select-group">
+              <label class="braun-label-inline" for="select-root">ROOT</label>
+              <select id="select-root" class="braun-select" title="Microtonal Scale Root">
+                <option value="A">A (220 Hz)</option>
+                <option value="C">C (130 Hz)</option>
+                <option value="D">D (146 Hz)</option>
+                <option value="E">E (164 Hz)</option>
+                <option value="F">F (174 Hz)</option>
+                <option value="G">G (196 Hz)</option>
+              </select>
+            </div>
+            <div class="braun-select-group">
+              <label class="braun-label-inline" for="select-scale">SCALE</label>
+              <select id="select-scale" class="braun-select" title="Microtonal Performance Tuning">
+                <option value="BUDD_PENTATONIC">BUDD PENTATONIC</option>
+                <option value="LYDIAN_DREAM">LYDIAN DREAM</option>
+                <option value="DORIAN_MYSTIC">DORIAN MYSTIC</option>
+                <option value="YOSHIMURA_AMBIENT">YOSHIMURA AMBIENT</option>
+                <option value="AEOLIAN_MIDNIGHT">AEOLIAN MIDNIGHT</option>
+                <option value="PYTHAGOREAN_JUST">PYTHAGOREAN JUST</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 16-Key Microtonal Chime Strip -->
+        <div class="braun-chime-deck">
+          <div class="braun-chime-strip" id="chime-strip">
+            <!-- 16 Keys generated dynamically by app.js -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Footer Manifesto -->
+      <footer class="braun-footer">
+        <span>DESIGN: DIETER RAMS FUNCTIONALIST PRINCIPLES &middot; "WENIGER, ABER BESSER"</span>
+        <span>BRAUN MR-16 AUDIO ENGINEERING LABS &middot; DIN 1451 TECHNICAL NOMENCLATURE</span>
+      </footer>
+
+    </main>
+
+    <!-- Right Rack Ear with Precision Hex Screws -->
+    <aside class="braun-rack-ear ear-right" aria-hidden="true">
+      <div class="braun-rack-screw"></div>
+      <div class="braun-rack-screw"></div>
+    </aside>
+
+  </div>
+
+  <script>
+    window.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+  </script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
