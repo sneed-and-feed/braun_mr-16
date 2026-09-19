@@ -30,20 +30,16 @@ jobs:
   # 1. Web Audio & JavaScript Verification Suite
   # ==============================================================================
   test-web:
-    name: Web Audio Verification (Node.js 20)
+    name: Web Audio Verification (Node.js 22)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Install Dependencies
-        run: npm ci || npm install
+          node-version: 22
 
       - name: Run Web Audio Verification Suite
         run: npm test
@@ -96,10 +92,10 @@ jobs:
         run: |
           brew install ninja
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Run Web Audio Verification Suite
         run: npm test
@@ -201,10 +197,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Run Web Audio Verification Suite
         shell: pwsh
@@ -263,10 +259,10 @@ jobs:
             libcurl4-openssl-dev \
             ninja-build
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Run Web Audio Verification Suite
         run: npm test
