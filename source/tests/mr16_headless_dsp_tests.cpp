@@ -52,6 +52,7 @@ void operator delete[](void* p, size_t) noexcept {
 #include "TestHarness.h"
 #include "Tier1_FeatureTests.h"
 #include "Tier2_BoundaryTests.h"
+#include "Tier3_PhysicalAcousticTests.h"
 
 int main() {
     std::cout << "================================================================================\n";
@@ -61,6 +62,7 @@ int main() {
     // 1. Register all test suites
     test::registerTier1Tests();
     test::registerTier2Tests();
+    test::registerTier3Tests();
 
     auto& registry = test::getTestRegistry();
     const size_t totalTests = registry.size();
@@ -70,6 +72,7 @@ int main() {
 
     int tier1Total = 0, tier1Pass = 0;
     int tier2Total = 0, tier2Pass = 0;
+    int tier3Total = 0, tier3Pass = 0;
     int overallPass = 0;
     int overallFail = 0;
 
@@ -101,6 +104,9 @@ int main() {
         } else if (testCase.tier == "Tier 2") {
             ++tier2Total;
             if (passed) ++tier2Pass;
+        } else if (testCase.tier == "Tier 3") {
+            ++tier3Total;
+            if (passed) ++tier3Pass;
         }
 
         if (passed) {
@@ -125,6 +131,8 @@ int main() {
               << " (" << (tier1Total > 0 ? (tier1Pass * 100 / tier1Total) : 0) << "%)\n";
     std::cout << "  Tier 2 (Boundary & Corners)   : " << tier2Pass << " / " << tier2Total
               << " (" << (tier2Total > 0 ? (tier2Pass * 100 / tier2Total) : 0) << "%)\n";
+    std::cout << "  Tier 3 (Physical Acoustics)   : " << tier3Pass << " / " << tier3Total
+              << " (" << (tier3Total > 0 ? (tier3Pass * 100 / tier3Total) : 0) << "%)\n";
     std::cout << "--------------------------------------------------------------------------------\n";
     std::cout << "  Total Test Cases Executed     : " << totalTests << "\n";
     std::cout << "  Passed                        : " << overallPass << "\n";

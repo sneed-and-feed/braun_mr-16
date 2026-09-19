@@ -267,18 +267,21 @@ void ModalResonatorMatrix::processSample(float exciterInput, float& outL, float&
         const float vBp = mG[i] * vHp + mS1[i];
         const float vLp = mG[i] * vBp + mS2[i];
 
-        // State update preserving physical kinetic / potential energy
-        mS1[i] = flushDenormal(2.0f * vBp - mS1[i]);
-        mS2[i] = flushDenormal(2.0f * vLp - mS2[i]);
+        // State update preserving physical kinetic / potential energy with finite bounding
+        const float nextS1 = 2.0f * vBp - mS1[i];
+        const float nextS2 = 2.0f * vLp - mS2[i];
+        mS1[i] = flushDenormal(std::clamp(nextS1, -6.0f, +6.0f));
+        mS2[i] = flushDenormal(std::clamp(nextS2, -6.0f, +6.0f));
 
-        // Mode output with gentle soft saturation to prevent ear-piercing sine spikes at high Q
+        // Mode output with hard limiter / saturation to prevent ear-piercing sine spikes at high Q
         float rawMode = vBp * mModeWeights[i];
         const float absMode = std::abs(rawMode);
-        if (absMode > 1.2f) {
+        if (absMode > 0.85f) {
             const float sgn = (rawMode > 0.0f) ? 1.0f : -1.0f;
-            const float excess = absMode - 1.2f;
-            rawMode = sgn * (1.2f + 0.3f * (excess / (1.0f + excess)));
+            const float excess = absMode - 0.85f;
+            rawMode = sgn * (0.85f + 0.15f * std::tanh(excess * 1.5f));
         }
+        rawMode = std::clamp(rawMode, -1.0f, 1.0f);
         modeOutputs[i] = flushDenormal(rawMode);
 
         // Real-time modal energy envelope tracking for Phosphor CRT Scope
@@ -330,8 +333,12 @@ void ModalResonatorMatrix::processSample(float exciterInput, float& outL, float&
 
     // Calibrated 16-mode normalization to maintain linear headroom in [0.50, 0.75]
     constexpr float kModalNormalization = 0.17f;
-    outL = flushDenormal(sumL * kModalNormalization);
-    outR = flushDenormal(sumR * kModalNormalization);
+    const float rawOutL = sumL * kModalNormalization;
+    const float rawOutR = sumR * kModalNormalization;
+    // Central modal resonator hard limiter / brickwall safety ceiling (0.95 peak)
+    // Guarantees zero ear-bleeding volume outbursts even when fundamental aligns with input resonances at max Q
+    outL = flushDenormal(std::clamp(rawOutL, -0.95f, +0.95f));
+    outR = flushDenormal(std::clamp(rawOutR, -0.95f, +0.95f));
 }
 
 void ModalResonatorMatrix::processBlock(const float* exciterBuffer, float* outL, float* outR, int numSamples) noexcept {

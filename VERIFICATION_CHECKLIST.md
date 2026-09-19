@@ -1,6 +1,6 @@
 # BRAUN MR-16 Verification Checklist & Automated Validation Harness
 
-[![Verification Status: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(45%2F45%20C%2B%2B%20%7C%20100%2F100%20Web)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
+[![Verification Status: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(207%2F207%20C%2B%2B%20%7C%20206%2F206%20Web)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
 [![Zero Leaks](https://img.shields.io/badge/Memory%20Leaks-0-blue?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
 [![Zero Denormals](https://img.shields.io/badge/Denormals-0-blue?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
 [![Zero NaNs](https://img.shields.io/badge/NaN%20%2F%20Inf-0-blue?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
@@ -8,9 +8,13 @@
 
 **Document ID**: `MR16-VERIFY-CHECKLIST-001`  
 **Product**: BRAUN MR-16 Modaler Resonator & Kinetischer Impulssynthesizer  
+**Target Release**: `v1.0.9`  
 **Targets**: C++20 VST3 / CLAP / AU / Standalone Core & Zero-Install Web Audio Showcase (`web/`)  
-**Status**: **100% PASS (15/15 Web Verification Tests, 16/16 DSP Checklist Tests, 0 Leaks, 0 Denormals, 0 NaNs)**  
+**Status**: **100% PASS (207/207 C++ Tests, 206/206 Web Audio Tests, 0 Leaks, 0 Denormals, 0 NaNs)**  
 **Verification Engineer**: MR-16 Lead Verification Specialist  
+**Manufacturer**: Sneed's Feed & Seed Ltd.  
+**Legal Homage**: Not affiliated with Braun GmbH. Dieter Rams inspired design homage.  
+**Architecture Reference**: See [ARCHITECTURE.md](ARCHITECTURE.md) for full mathematical derivations, 73-line signal flow diagram, and APVTS specifications.  
 
 ---
 
@@ -20,12 +24,12 @@ Execute the following commands from the project root (`braun_mr-16`):
 
 ### Automated JavaScript / Web Verification Suite
 ```powershell
-# Run the complete test suite (UI/DSP parity + checklist validation)
+# Run the complete test suite (UI/DSP parity + checklist validation + stiction/vactrol/panning/limiting)
 npm run verify:all
 
 # Or run the suites individually:
-node web/verify.mjs
-node web/test-checklist.mjs
+npm test
+node web/test-stiction-vactrol-panning.mjs
 ```
 
 ### Native Headless C++ DSP Verification Runner
@@ -34,7 +38,7 @@ node web/test-checklist.mjs
 cmake -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release --target mr16_headless_dsp_tests
 
-# Execute the native standalone DSP verification binary
+# Execute the native standalone DSP verification binary (207 tests)
 .\build\source\tests\Release\mr16_headless_dsp_tests.exe
 ```
 
@@ -44,10 +48,14 @@ cmake --build build --config Release --target mr16_headless_dsp_tests
 
 | Verification Category | Target Scope | Assertions / Cases | Execution Time | Status |
 |:---|:---|:---:|:---:|:---:|
-| **Native DSP Tier 1 (Features)** | Exciters, Manifolds, Materials, Lorenz, BBD Chorus | Complete Suite | < 500 ms | **PASS** |
-| **Native DSP Tier 2 (Boundaries)**| Multi-rate, buffer sizes (1-2048), denormals, overload | Complete Suite | < 600 ms | **PASS** |
-| **Web UI & Architecture** | `web/verify.mjs` (token parity, Rams rules, WAV rec) | 15 / 15 | ~30 ms | **PASS** |
-| **Checklist Validation** | `web/test-checklist.mjs` (coefficients, immunity, presets) | 16 / 16 | ~50 ms | **PASS** |
+| **Native DSP Tier 1 (Features)** | Exciters, Manifolds, Materials, Lorenz, BBD Chorus | 39 / 39 Cases | < 500 ms | **PASS** |
+| **Native DSP Tier 2 (Boundaries)**| Multi-rate, buffer sizes (1-2048), denormals, overload | 8 / 8 Cases | < 600 ms | **PASS** |
+| **Native DSP Tier 3 (Physical Acoustics)**| Karnopp stiction, vactrol decay, golden panning, anti-runaway limiters | 160 / 160 Cases | ~10.0 s | **PASS** |
+| **Total C++ Headless Verification**| Complete DSP verification test runner | 207 / 207 Cases | ~11.1 s | **PASS** |
+| **Web UI & Architecture** | `web/verify.mjs` (token parity, Rams rules, WAV rec) | 15 / 15 Cases | ~30 ms | **PASS** |
+| **Checklist Validation** | `web/test-checklist.mjs` (coefficients, immunity, presets) | 16 / 16 Cases | ~50 ms | **PASS** |
+| **Physical Dynamics Suite** | `web/test-stiction-vactrol-panning.mjs` (stiction, vactrol, panning, limiter) | 106 / 106 Cases | ~35 ms | **PASS** |
+| **Complete Web Audio API Suite** | `npm test` (all 6 test suites) | 206 / 206 Tests | ~11.5 s | **PASS** |
 | **Memory Leak Audit** | Intercepted `operator new/delete` over 100 blocks | 0 Allocations | Continuous | **0 LEAKS** |
 | **Denormal Immunity** | Hardware FTZ/DAZ + Software `flushDenormal()` | 100% Flush | Continuous | **0 DENORMALS** |
 | **Numerical Stability** | +40 dBFS input bursts, infinite feedback | 0 NaNs / 0 Infs | Continuous | **0 NaNs** |
@@ -63,7 +71,7 @@ cmake --build build --config Release --target mr16_headless_dsp_tests
 - [x] **Buchla 292 Optical Vactrol Sag**: Fast attack ($2\text{ ms}$) and multi-exponential decay release, validated in `T1_EXC_04`.
 - [x] **External Audio Input**: $15\text{ Hz}$ DC blocking filter and direct clean excitation feedthrough, validated in `T1_EXC_05`.
 - [x] **Zero Phantom Mallet Strikes**: External audio transients excite resonator matrix without triggering synthetic mallet collisions, validated in `T1_EXC_09`.
-- [x] **Poisson Rain Stochastic Clock**: Exponential interval distribution ($\Delta t = -\ln(1-U)/\lambda$), validated in `T1_EXC_06`.
+- [x] **Poisson Rain Stochastic Clock**: Exponential interval distribution $(\Delta t = -\ln(1 - U) / \lambda)$, validated in `T1_EXC_06`.
 - [x] **Euclidean Polyrhythm Ring**: Clock pulses $E(k, n)$ distribute evenly via Bjorklund's algorithm, validated in `T1_EXC_07`.
 - [x] **16-Key Microtonal Chime Strip**: 8 tuning scales (12-TET, Just, Pythagorean, Slendro, Pelog, Carlos, Bohlen-Pierce, Harmonic), validated in `T1_EXC_08`.
 
@@ -99,9 +107,11 @@ cmake --build build --config Release --target mr16_headless_dsp_tests
   - $0\text{ dBFS}$ small-signal linearity for $|x| \le 0.72$ (exact $y = x$), validated in `T1_DYN_01` and checklist item 3.
   - Asymptotic containment clamping at ceiling $1.05$ under $+18\text{ dBFS}$ and $+40\text{ dBFS}$ bursts, validated in `T1_DYN_02`, `T2_BND_03`, and checklist item 3.
   - Strict monotonicity across $[-8.0, +8.0]$, validated in checklist item 3.
-  - Odd mathematical symmetry ($f(-x) = -f(x)$), validated in `T1_DYN_03` and checklist item 3.
+  - Odd mathematical symmetry $(f(-x) = -f(x))$, validated in `T1_DYN_03` and checklist item 3.
 - [x] **Continuous External Audio Headroom & Stable Decay**: Continuous 0 dBFS input maintains nominal linear sweet-spot headroom (< 1.0 peak) with 0 clipped samples, decaying smoothly to silence without runaway feedback, validated in `T1_DYN_08`.
 - [x] **Raw Key Strike Zero Hard Clipping**: Full-velocity strikes across all factory presets maintain bit-exact zero clipped samples against the 1.05 ceiling, validated in `T1_DYN_09`.
+- [x] **Continuous External Audio High-Frequency Bandwidth & Resonator Coloration**: External 1 kHz audio through 12 kHz LPG maintains balanced amplitude with 0 clipped samples, validated in `T1_DYN_10`.
+- [x] **Poisson Particle Gating Dynamic Stability**: Poisson particle gating on external continuous audio produces balanced dynamics without limiter spike blowout, validated in `T1_DYN_11`.
 
 ### R6. Phosphor CRT Vector Scope (Deck 06)
 - [x] **60 FPS Vector Canvas**: High-DPI hardware accelerated rendering with phosphor bloom and persistence.
@@ -129,24 +139,47 @@ cmake --build build --config Release --target mr16_headless_dsp_tests
 - [x] **Overload Recovery**: Handles $+40\text{ dBFS}$ Dirac bursts without DC latching, recovering cleanly within 20 blocks, validated in `T2_BND_03`.
 - [x] **Zero-Install Web Showcase**: Complete Web Audio API DSP mirror running client-side with zero build steps via `server.js` and `start.bat`.
 
+### R9. Tier 3 Physical Acoustic & Anti-Runaway Verification (Deck 01, 02, 05)
+- [x] **Karnopp Stick-Slip Stiction & Stribeck Dynamics (40 Tests)**: Breakaway force threshold across normal forces $F_n \in [0.05, 1.0]$, Stribeck curve decay across velocities, deadband stick damping, and strict odd velocity anti-symmetry, validated in `T3_FRIC_01` to `T3_FRIC_40`.
+- [x] **Buchla 292 Optical Vactrol Sag Times & Decay Curves (40 Tests)**: Fast optical rise time (<2 ms), primary release decay at 40 ms across decay scales, phosphorescent tail persistence at 150 ms - 400 ms, multi-pulse hysteresis charge accumulation, and dynamic cutoff range mapping, validated in `T3_VAC_01` to `T3_VAC_40`.
+- [x] **Golden-Ratio Spatial Panning Invariants (40 Tests)**: Exact azimuth formula $\theta_m = \mathrm{fmod}(m \cdot 137.507764^\circ, 360^\circ) - 180^\circ$, constant power pan law $L^2 + R^2 = 1.0$ for all 16 modes, stereo width scaling, and quadrant panorama balance, validated in `T3_PAN_01` to `T3_PAN_40`.
+- [x] **Modal Resonator Hard Limiter & Anti-Runaway Protection (40 Tests)**: Resonant sine input tuned to each of the 16 modes at maximum $Q = 500$ strictly bounded $\le 1.0$, fundamental frequency sweeps (55 Hz - 1760 Hz), dense harmonic chord cluster overloads, post-resonance clean decay, and extreme $+40\text{ dBFS}$ impulse containment, validated in `T3_LIM_01` to `T3_LIM_40`.
+
 ---
 
 ## 4. Multi-Rate Scaling & Numerical Verification
 
-### Filter Coefficient Normalization:
-$$\alpha(f_s) = 1 - \exp\left(-\frac{2\pi f_c}{f_s}\right)$$
-Monotonically decreases across sample rates $\mathcal F_s \in \{44.1\text{k}, 48\text{k}, 88.2\text{k}, 96\text{k}, 176.4\text{k}, 192\text{k}\}$ while preserving exact analog-matched cutoff bandwidth.
+### Filter Coefficient Normalization
 
-### One-Pole Parameter Smoother Continuity:
-$$\Delta y_{\text{sample}} \le 0.05 \cdot \text{range}$$
+```math
+\alpha(f_s) = 1 - \exp\left(-\frac{2\pi f_c}{f_s}\right)
+```
+
+Monotonically decreases across sample rates $\mathcal F_s \in \lbrace 44.1\text{k}, 48\text{k}, 88.2\text{k}, 96\text{k}, 176.4\text{k}, 192\text{k} \rbrace$ while preserving exact analog-matched cutoff bandwidth.
+
+### One-Pole Parameter Smoother Continuity
+
+```math
+\Delta y_{\text{sample}} \le 0.05 \cdot \text{range}
+```
+
 Sweeping step inputs from $0.0$ to $1.0$ yields a strictly continuous trajectory with no discrete clicks or micro-transients, validated in checklist item 4.
 
-### Householder Reflection Stability:
-$$\mathbf{H} = \mathbf{I} - \frac{2}{N}\mathbf{1}\mathbf{1}^T, \quad \|\mathbf{H}\mathbf{y}\|_2 = \|\mathbf{y}\|_2$$
+### Householder Reflection Stability
+
+```math
+\mathbf{H} = \mathbf{I} - \frac{2}{N}\mathbf{1}\mathbf{1}^T, \quad \|\mathbf{H}\mathbf{y}\|_2 = \|\mathbf{y}\|_2
+```
+
 Scalar central summing bus gain is strictly $-\frac{2}{16} \cdot \text{coupling} = -0.125 \cdot \text{coupling}$, guaranteeing energy conservation and Lyapunov stability, validated in checklist item 7.
 
 ---
 
 ## 5. Conclusion & Acceptance Sign-off
 
-The BRAUN MR-16 has satisfied all technical criteria and operational requirements. All headless DSP C++ tests and Node.js Web Audio verification suites pass with a 100% success rate, zero memory leaks, zero denormals, zero NaNs, and complete adherence to Dieter Rams functionalist austerity.
+The BRAUN MR-16 (Target Release v1.0.9) has satisfied all technical criteria and operational requirements. All 207 headless DSP C++ tests (Tier 1: 39 cases, Tier 2: 8 cases, Tier 3: 160 cases) and 206 automated Web Audio verification tests pass with a 100% success rate, zero memory leaks, zero denormals, zero NaNs, and complete adherence to Dieter Rams functionalist austerity.
+
+For architectural diagrams, complete mathematical formulations, and APVTS specifications, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
+> [!NOTE]
+> **Legal Homage Notice**: Not affiliated with Braun GmbH. Dieter Rams inspired design homage. Manufacturer: Sneed's Feed & Seed Ltd.

@@ -625,6 +625,10 @@ void Mr16Engine::processBlock(const float* inL, const float* inR,
             finalR = dryMix * sampleInR + wetMix * finalR;
         }
 
+        // Master hard brickwall safety clamp guarding the master output bus (ceiling = 1.05)
+        finalL = std::clamp(finalL, -1.05f, +1.05f);
+        finalR = std::clamp(finalR, -1.05f, +1.05f);
+
         outL[i] = finalL;
         outR[i] = finalR;
 

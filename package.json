@@ -1,16 +1,17 @@
 {
   "name": "braun-mr-16",
-  "version": "1.0.8",
-  "description": "BRAUN MR-16 Modal Resonator & Kinetic Impulse Synthesizer (16-pole modal matrix, 4 manifolds, 3D Lorenz attractor, tri-phase BBD chorus)",
+  "version": "1.0.9",
+  "description": "BRAUN MR-16 Modal Resonator & Kinetic Impulse Synthesizer. Dieter Rams inspired design homage (not affiliated with Braun GmbH). 16-pole modal matrix, 4 manifolds, 3D Lorenz attractor, tri-phase BBD chorus.",
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test web/test-acoustic-levels.mjs web/test-ui-audit.mjs web/test-modal-extractor.mjs web/test-checklist.mjs web/verify.mjs",
+    "test": "node --test web/test-acoustic-levels.mjs web/test-ui-audit.mjs web/test-modal-extractor.mjs web/test-checklist.mjs web/verify.mjs web/test-stiction-vactrol-panning.mjs",
     "test:acoustics": "node --test web/test-acoustic-levels.mjs",
     "test:ui": "node --test web/test-ui-audit.mjs",
     "test:extractor": "node --test web/test-modal-extractor.mjs",
     "test:checklist": "node --test web/test-checklist.mjs",
-    "verify:all": "node --test web/test-acoustic-levels.mjs web/test-ui-audit.mjs web/test-modal-extractor.mjs web/test-checklist.mjs web/verify.mjs"
+    "test:stiction": "node --test web/test-stiction-vactrol-panning.mjs",
+    "verify:all": "node --test web/test-acoustic-levels.mjs web/test-ui-audit.mjs web/test-modal-extractor.mjs web/test-checklist.mjs web/verify.mjs web/test-stiction-vactrol-panning.mjs"
   },
   "keywords": [
     "web-audio",

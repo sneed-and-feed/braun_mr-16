@@ -15,7 +15,7 @@ if(APPLE)
     endif()
 endif()
 
-project(BRAUN_MR16_PROJECT VERSION 1.0.8 LANGUAGES C CXX)
+project(BRAUN_MR16_PROJECT VERSION 1.0.9 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -40,7 +40,12 @@ endif()
 # ==============================================================================
 # GUI Mode Selection Option: WebView (Default) vs Pure Native LookAndFeel
 # ==============================================================================
-option(MR16_USE_WEBVIEW "Build BRAUN MR-16 with WebView GUI (disable for pure native JUCE UI)" ON)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(MR16_USE_WEBVIEW_DEFAULT OFF)
+else()
+    set(MR16_USE_WEBVIEW_DEFAULT ON)
+endif()
+option(MR16_USE_WEBVIEW "Build BRAUN MR-16 with WebView GUI (disable for pure native JUCE UI)" ${MR16_USE_WEBVIEW_DEFAULT})
 if(DEFINED MR16_ENABLE_WEBVIEW)
     set(MR16_USE_WEBVIEW ${MR16_ENABLE_WEBVIEW})
 endif()
@@ -260,7 +265,8 @@ if(MR16_USE_WEBVIEW)
 endif()
 
 juce_add_plugin(BRAUN_MR16
-    COMPANY_NAME "Braun"
+    COMPANY_NAME "Sneed's Feed & Seed Ltd."
+    BUNDLE_ID "com.sneedandfeed.mr16"
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT FALSE
@@ -271,7 +277,7 @@ juce_add_plugin(BRAUN_MR16
     PLUGIN_CODE Mr16
     FORMATS ${MR16_FORMATS}
     PRODUCT_NAME "BRAUN_MR16"
-    VERSION "1.0.8"
+    VERSION "1.0.9"
     ${MR16_EXTRA_PLUGIN_ARGS}
 )
 
@@ -343,7 +349,7 @@ endif()
 if(TARGET clap_juce_extensions)
     clap_juce_extensions_plugin(
         TARGET BRAUN_MR16
-        CLAP_ID "com.braun.mr16"
+        CLAP_ID "com.sneedandfeed.mr16"
         CLAP_FEATURES audio-effect synthesizer physical-modelling modal spatial chorus
     )
 endif()

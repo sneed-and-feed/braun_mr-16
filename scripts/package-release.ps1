@@ -36,7 +36,7 @@ Write-Host "====================================================================
 
 # 1. Version Resolution
 $PackageJsonPath = Join-Path $RootDir "package.json"
-$Version = "1.0.6"
+$Version = "1.0.9"
 if (Test-Path $PackageJsonPath) {
     try {
         $Pkg = Get-Content $PackageJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -196,6 +196,10 @@ BRAUN MR-16 MODAL RESONATOR & KINETIC SYNTHESIZER
 STANDALONE APPLICATION (WIN64) INSTALLATION & EXECUTION GUIDE
 Standard: DIN 1451 Technical Specification
 
+LEGAL NOTICE:
+Not affiliated with Braun GmbH. Dieter Rams inspired design homage.
+Manufacturer: Sneed's Feed & Seed Ltd.
+
 1. EXECUTION:
    Launch BRAUN_MR16.exe directly. No administrative elevation required.
 
@@ -225,6 +229,9 @@ BRAUN MR-16 MODAL RESONATOR & KINETIC SYNTHESIZER
 VST3 PLUGIN BUNDLE (WIN64) INSTALLATION GUIDE
 Standard: DIN 1451 Technical Specification
 
+LEGAL NOTICE:
+Not affiliated with Braun GmbH. Dieter Rams inspired design homage.
+
 1. INSTALLATION DIRECTORY:
    Copy the directory 'BRAUN_MR16.vst3' into your system VST3 directory:
    %CommonProgramFiles%\VST3\
@@ -235,7 +242,7 @@ Standard: DIN 1451 Technical Specification
 
 3. INSTRUMENT CLASSIFICATION:
    Category: Synthesizer / Physical Modelling / Resonator / Spatial FX.
-   Manufacturer: Braun
+   Manufacturer: Sneed's Feed & Seed Ltd.
 "@
 Set-Content -Path (Join-Path $StageVst3 "INSTALL.txt") -Value $Vst3InstallGuide -Encoding UTF8
 
@@ -256,6 +263,10 @@ if (Test-Path $ClapBin) {
 BRAUN MR-16 MODAL RESONATOR & KINETIC SYNTHESIZER
 CLAP PLUGIN (WIN64) INSTALLATION GUIDE
 Standard: DIN 1451 Technical Specification / CLAP 1.0+ Standard
+
+LEGAL NOTICE:
+Not affiliated with Braun GmbH. Dieter Rams inspired design homage.
+Manufacturer: Sneed's Feed & Seed Ltd.
 
 1. INSTALLATION DIRECTORY:
    Copy 'BRAUN_MR16.clap' into your system CLAP directory:
@@ -292,6 +303,10 @@ $WebInstallGuide = @"
 BRAUN MR-16 MODAL RESONATOR & KINETIC SYNTHESIZER
 WEB SHOWCASE BUNDLE (CROSS-PLATFORM ZERO-INSTALL)
 Standard: DIN 1451 Technical Specification
+
+LEGAL NOTICE:
+Not affiliated with Braun GmbH. Dieter Rams inspired design homage.
+Manufacturer: Sneed's Feed & Seed Ltd.
 
 1. EXECUTION:
    Windows: Double-click 'start.bat'
@@ -339,6 +354,21 @@ foreach ($Zip in $AllZipFiles) {
 $ChecksumFile = Join-Path $DistDir "SHA256SUMS.txt"
 [System.IO.File]::WriteAllLines($ChecksumFile, $ChecksumLines, [System.Text.Encoding]::UTF8)
 Write-Host "[INFO] Wrote checksum manifest to $ChecksumFile"
+
+$ReleasesDir = Join-Path $RootDir "releases"
+if (Test-Path $ReleasesDir) {
+    $RootReleaseZips = Get-ChildItem -Path $ReleasesDir -Filter "*.zip" | Sort-Object FullName
+    if ($RootReleaseZips.Count -gt 0) {
+        $ReleaseChecksumLines = [System.Collections.Generic.List[string]]::new()
+        foreach ($Zip in $RootReleaseZips) {
+            $Hash = (Get-FileHash -Path $Zip.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            $ReleaseChecksumLines.Add("$Hash  $($Zip.Name)")
+        }
+        $ReleaseChecksumFile = Join-Path $ReleasesDir "SHA256SUMS.txt"
+        [System.IO.File]::WriteAllLines($ReleaseChecksumFile, $ReleaseChecksumLines, [System.Text.Encoding]::UTF8)
+        Write-Host "[INFO] Wrote releases checksum manifest to $ReleaseChecksumFile"
+    }
+}
 
 # ------------------------------------------------------------------------------
 # 6. Cleanup Staging Directory
