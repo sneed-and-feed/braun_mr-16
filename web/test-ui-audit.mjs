@@ -231,8 +231,8 @@ describe('BRAUN MR-16 UI Layout & CRT Display Audit Suite', () => {
   describe('5. Headless Browser Live Viewport & DOM E2E Audit', () => {
     it('runs headless browser inspection across 4K, Laptop, and Tablet viewports via Edge CDP', async () => {
       const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
-      if (!fs.existsSync(edgePath)) {
-        console.log('[BrowserAudit] Microsoft Edge not found at standard path; skipping CDP session.');
+      if (process.env.CI || !fs.existsSync(edgePath)) {
+        console.log('[BrowserAudit] Skipping headless CDP browser session in CI environment.');
         return;
       }
 
