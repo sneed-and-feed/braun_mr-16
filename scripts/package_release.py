@@ -2,9 +2,11 @@ import os
 import zipfile
 import json
 
-root_dir = r"c:\Users\x\Documents\antigravity\braun_mr-16"
+root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 release_dir = os.path.join(root_dir, "releases")
 build_dir = os.path.join(root_dir, "build", "BRAUN_MR16_artefacts", "Release")
+if not os.path.exists(build_dir):
+    build_dir = os.path.join(root_dir, "build", "BRAUN_MR16_artefacts")
 
 os.makedirs(release_dir, exist_ok=True)
 

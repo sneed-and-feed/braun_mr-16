@@ -111,7 +111,7 @@ jobs:
 
       - name: Compile Targets (Release)
         run: |
-          cmake --build build --config Release --target BRAUN_MR16_All mr16_headless_dsp_tests -j 4
+          cmake --build build --config Release -j 4
 
       - name: Run Headless DSP Verification Tests
         run: |
@@ -223,7 +223,7 @@ jobs:
       - name: Compile Targets (Release)
         shell: pwsh
         run: |
-          cmake --build build --config Release --target BRAUN_MR16_All mr16_headless_dsp_tests -j 4
+          cmake --build build --config Release -j 4
 
       - name: Run Headless DSP Verification Tests
         shell: pwsh
@@ -244,7 +244,11 @@ jobs:
       - name: Execute Local Packaging Pipeline
         shell: pwsh
         run: |
-          .\scripts\package-release.ps1
+          python scripts/package_release.py
+          .\scripts\package-release.ps1 -SkipTests
+          if (Test-Path "releases") {
+            Copy-Item -Path "releases\*.zip" -Destination "dist\windows\" -Force
+          }
 
       - name: Upload Windows Distribution Artifacts
         uses: actions/upload-artifact@v4
@@ -295,7 +299,7 @@ jobs:
 
       - name: Compile Targets (Release)
         run: |
-          cmake --build build --config Release --target BRAUN_MR16_All mr16_headless_dsp_tests -j 4
+          cmake --build build --config Release -j 4
 
       - name: Run Headless DSP Verification Tests
         run: |

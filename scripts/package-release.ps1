@@ -66,7 +66,7 @@ if (Test-Path $CacheFile) {
     }
 }
 
-$NeedBuild = $ForceBuild -or $StaleCacheDetected -or (-not (Test-Path $StandaloneBin)) -or (-not (Test-Path $Vst3Dir)) -or (-not (Test-Path $ClapBin))
+$NeedBuild = $ForceBuild -or $StaleCacheDetected -or (-not (Test-Path $StandaloneBin)) -or (-not (Test-Path $Vst3Dir))
 
 # Resolve local WebView2 package repository if available
 $LocalWebview2Parent = $null
@@ -91,6 +91,8 @@ if ($NeedBuild) {
     Write-Host "[INFO] Compiling Release binaries via CMake (MR16_USE_WEBVIEW=ON)..."
     $CmakeArgs = @(
         "-B", "build",
+        "-G", "Visual Studio 17 2022",
+        "-A", "x64",
         "-DCMAKE_BUILD_TYPE=Release",
         "-DMR16_USE_WEBVIEW=ON",
         "-DMR16_BUILD_TESTS=ON"
@@ -241,13 +243,14 @@ Create-ZipArchive -SourceDirectory $StageVst3 -DestinationZipPath $Vst3ZipPath
 # ------------------------------------------------------------------------------
 # Package 3: CLAP Plugin (Windows x64)
 # ------------------------------------------------------------------------------
-$StageClap = Join-Path $StagingBase "clap"
-New-Item -ItemType Directory -Path $StageClap -Force | Out-Null
-Copy-Item -Path $ClapBin -Destination (Join-Path $StageClap "BRAUN_MR16.clap")
-Copy-Item -Path $LicenseFile -Destination (Join-Path $StageClap "LICENSE")
-Copy-Item -Path $ReadmeFile -Destination (Join-Path $StageClap "README.md")
+if (Test-Path $ClapBin) {
+    $StageClap = Join-Path $StagingBase "clap"
+    New-Item -ItemType Directory -Path $StageClap -Force | Out-Null
+    Copy-Item -Path $ClapBin -Destination (Join-Path $StageClap "BRAUN_MR16.clap")
+    Copy-Item -Path $LicenseFile -Destination (Join-Path $StageClap "LICENSE")
+    Copy-Item -Path $ReadmeFile -Destination (Join-Path $StageClap "README.md")
 
-$ClapInstallGuide = @"
+    $ClapInstallGuide = @"
 BRAUN MR-16 MODAL RESONATOR & KINETIC SYNTHESIZER
 CLAP PLUGIN (WIN64) INSTALLATION GUIDE
 Standard: DIN 1451 Technical Specification / CLAP 1.0+ Standard
@@ -263,10 +266,13 @@ Standard: DIN 1451 Technical Specification / CLAP 1.0+ Standard
 3. FEATURES:
    Non-destructive polyphonic parameter modulation, sample-accurate automation.
 "@
-Set-Content -Path (Join-Path $StageClap "INSTALL.txt") -Value $ClapInstallGuide -Encoding UTF8
+    Set-Content -Path (Join-Path $StageClap "INSTALL.txt") -Value $ClapInstallGuide -Encoding UTF8
 
-$ClapZipPath = Join-Path $DistWinDir "BRAUN_MR16_v${Version}_CLAP_Win64.zip"
-Create-ZipArchive -SourceDirectory $StageClap -DestinationZipPath $ClapZipPath
+    $ClapZipPath = Join-Path $DistWinDir "BRAUN_MR16_v${Version}_CLAP_Win64.zip"
+    Create-ZipArchive -SourceDirectory $StageClap -DestinationZipPath $ClapZipPath
+} else {
+    Write-Host "[INFO] CLAP plugin binary not found; skipping CLAP package generation."
+}
 
 # ------------------------------------------------------------------------------
 # Package 4: Web Showcase Bundle (Cross-Platform Zero-Install)
