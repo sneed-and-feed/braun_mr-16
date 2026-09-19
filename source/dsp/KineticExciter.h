@@ -105,6 +105,8 @@ private:
     float mDcStateX { 0.0f };
     float mDcStateY { 0.0f };
     float mDcR { 0.998f };
+    float mExtPulseEnv { 0.0f };
+    float mExtPulseDecayCoeff { 0.995f };
 
     // 5. Poisson Rain Stochastic Generator
     bool  mPoissonEnable { false };

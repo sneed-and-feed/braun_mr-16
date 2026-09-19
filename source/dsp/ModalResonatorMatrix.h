@@ -142,6 +142,7 @@ private:
     std::array<float, kNumModes> mG { 0.0f };
     std::array<float, kNumModes> mK { 0.0f };
     std::array<float, kNumModes> mA1 { 0.0f };
+    std::array<float, kNumModes> mCoupledFeedback { 0.0f };
 
     // Acyclic diffuse body resonance states (Householder scattering tail)
     static constexpr size_t kDiffuserBufferSize = 8192;

@@ -1558,10 +1558,10 @@ class BraunMr16App {
         const textEl = this.dom.dropzoneTarget.querySelector('.braun-dropzone-text');
         if (textEl) {
           const origText = textEl.textContent;
-          textEl.textContent = `EXTRACTED INTO ${slot}: ${profile.manifoldClassification.type} (${profile.modes.length} MODES)`;
+          textEl.textContent = `EXTRACTED 16 MODES (SLOT ${slot}): ${profile.manifoldClassification.type.toUpperCase()} (MORPH WITH MORPH A/B KNOB)`;
           setTimeout(() => {
             textEl.textContent = origText;
-          }, 3500);
+          }, 4500);
         }
       }
     } catch (err) {

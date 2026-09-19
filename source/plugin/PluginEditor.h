@@ -94,7 +94,6 @@ private:
     int silentFrameCounter { 0 };
     int silentTelemetryCounter { 0 };
     void sendTelemetryToWeb();
-    void sendScopeDataToWeb();
 #endif
 
     bool hwndStylesConfigured { false };
@@ -141,6 +140,7 @@ private:
     void setupNativeControls();
     void updateNativeControlVisibility();
     void layoutNativeControls();
+    void showParameterContextMenu(const juce::String& paramId, juce::Point<int> screenPos);
     void showKnobContextMenu(KnobSlot& slot, juce::Point<int> screenPos);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BRAUN_MR16AudioProcessorEditor)

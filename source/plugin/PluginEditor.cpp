@@ -603,10 +603,7 @@ juce::WebBrowserComponent::Options BRAUN_MR16AudioProcessorEditor::createWebOpti
                 const juce::String id = data.getProperty("id", "").toString();
                 const int x = static_cast<int>(data.getProperty("x", 0));
                 const int y = static_cast<int>(data.getProperty("y", 0));
-                if (auto* slot = editor.findKnob(id))
-                {
-                    editor.showKnobContextMenu(*slot, { x, y });
-                }
+                editor.showParameterContextMenu(id, { x, y });
             }
         });
 
@@ -968,19 +965,6 @@ void BRAUN_MR16AudioProcessorEditor::sendTelemetryToWeb()
 
     webComponent->emitEventIfBrowserIsVisible("telemetryFrame", juce::var(obj.get()));
 }
-
-void BRAUN_MR16AudioProcessorEditor::sendScopeDataToWeb()
-{
-    if (!webComponent) return;
-
-    juce::DynamicObject::Ptr obj = new juce::DynamicObject();
-    juce::Array<juce::var> samples;
-    for (size_t i = 0; i < 256; ++i)
-        samples.add(latestTelemetryFrame.scopeSamplesL[i]);
-    obj->setProperty("scopeL", samples);
-
-    webComponent->emitEventIfBrowserIsVisible("telemetryFrame", juce::var(obj.get()));
-}
 #endif
 
 void BRAUN_MR16AudioProcessorEditor::setNativeMode(bool native)
@@ -1032,7 +1016,6 @@ void BRAUN_MR16AudioProcessorEditor::timerCallback()
         if (!useNativeUI)
         {
             sendTelemetryToWeb();
-            sendScopeDataToWeb();
         }
 #endif
     }
@@ -1817,13 +1800,51 @@ void BRAUN_MR16AudioProcessorEditor::mouseDown(const juce::MouseEvent& e)
     }
 }
 
-void BRAUN_MR16AudioProcessorEditor::showKnobContextMenu(KnobSlot& slot, juce::Point<int> screenPos)
+void BRAUN_MR16AudioProcessorEditor::showParameterContextMenu(const juce::String& paramId, juce::Point<int> screenPos)
 {
+    juce::String resolvedId = paramId;
+    auto* p = processorRef.getAPVTS().getParameter(resolvedId);
+    if (p == nullptr)
+    {
+        for (const auto& meta : mr16::getParameterMetadataTable())
+        {
+            if (juce::String(meta.webId) == paramId)
+            {
+                resolvedId = meta.apvtsId;
+                p = processorRef.getAPVTS().getParameter(resolvedId);
+                break;
+            }
+        }
+    }
+
     juce::PopupMenu m;
-    m.addItem("Reset to Default", [this, &slot] {
-        if (auto* p = processorRef.getAPVTS().getParameter(slot.paramId))
+    if (auto* hostCtx = getHostContext())
+    {
+        if (p != nullptr)
+        {
+            if (auto hostMenu = hostCtx->getContextMenuForParameter(p))
+            {
+                m = hostMenu->getEquivalentPopupMenu();
+            }
+        }
+    }
+
+    if (m.getNumItems() > 0)
+    {
+        m.addSeparator();
+    }
+
+    if (p != nullptr)
+    {
+        m.addItem("Reset to Default", [p] {
             p->setValueNotifyingHost(p->getDefaultValue());
-    });
+        });
+    }
 
     m.showMenuAsync(juce::PopupMenu::Options().withTargetScreenArea(juce::Rectangle<int>(screenPos.x, screenPos.y, 1, 1)));
+}
+
+void BRAUN_MR16AudioProcessorEditor::showKnobContextMenu(KnobSlot& slot, juce::Point<int> screenPos)
+{
+    showParameterContextMenu(slot.paramId, screenPos);
 }

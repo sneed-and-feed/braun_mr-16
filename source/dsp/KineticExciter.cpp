@@ -24,6 +24,7 @@ void KineticExciter::prepare(double sampleRate) noexcept {
 
     // Sample-rate invariant DC blocking (15 Hz) filter coefficient
     mDcR = 1.0f - (kTwoPi * 15.0f / mSampleRate);
+    mExtPulseDecayCoeff = std::exp(-1.0f / (mSampleRate * 0.025f));
 
     reset();
 }
@@ -44,6 +45,7 @@ void KineticExciter::reset() noexcept {
     mExtGainSmoother.reset(mExtEnable ? 1.0f : 0.0f);
     mDcStateX = 0.0f;
     mDcStateY = 0.0f;
+    mExtPulseEnv = 0.0f;
 
     mPoissonCountdown = 1000;
     mEuclideanClockCounter = 1000;
@@ -239,6 +241,7 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
             const float strikeVel = std::clamp(dropletMass * jitter, 0.05f, 1.0f);
             const float strikeHard = 0.55f + 0.30f * mPrng.nextFloat();
             triggerStrike(strikeVel, strikeHard);
+            mExtPulseEnv = 1.0f;
         }
     }
 
@@ -253,6 +256,7 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
             if ((step * mEuclideanPulses) % steps < mEuclideanPulses) {
                 const int key = step % static_cast<int>(kNumChimeKeys);
                 triggerChimeKey(key, 0.75f);
+                mExtPulseEnv = 1.0f;
             }
         }
     }
@@ -338,10 +342,13 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
     mDcStateX = cleanIn;
     mDcStateY = flushDenormal(dcY);
 
+    mExtPulseEnv = flushDenormal(mExtPulseEnv * mExtPulseDecayCoeff);
     const float currentExtGain = mExtGainSmoother.next();
     if (currentExtGain > 1.0e-5f) {
         constexpr float kExtHeadroomCompensation = 0.08f;
-        exciterSum += dcY * (mExtSensitivity * mExtDirectMix * kExtHeadroomCompensation * currentExtGain);
+        const float continuousExt = dcY * (mExtSensitivity * mExtDirectMix * kExtHeadroomCompensation * currentExtGain);
+        const float pulseExt = dcY * (mExtPulseEnv * mExtSensitivity * 0.35f * currentExtGain);
+        exciterSum += continuousExt + pulseExt;
     }
 
     // Soft limiter / ceiling on exciter bus output to prevent extreme velocity strikes

@@ -419,17 +419,20 @@ export class BraunCrtDisplay {
     const midY = h / 2;
     const plateRadius = Math.min(midX * 0.72, midY * 0.86);
 
-    // Harmonic mode integers m and n derived from modal energies
-    let eMax1 = 0.05;
-    let m = 3;
-    let n = 2;
-    for (let i = 0; i < 8; i++) {
-      if (this.modalEnergies[i] > eMax1) {
-        eMax1 = this.modalEnergies[i];
-        m = (i % 4) + 2;
-        n = ((i + 1) % 3) + 1;
+    // Harmonic mode integers m and n derived from dominant modal energies
+    let totalEnergy = 0.0;
+    let maxIdx = 0;
+    let maxE = 0.0;
+    for (let i = 0; i < 16; i++) {
+      const e = this.modalEnergies[i] || 0.0;
+      totalEnergy += e;
+      if (e > maxE) {
+        maxE = e;
+        maxIdx = i;
       }
     }
+    let m = (maxIdx % 4) + 2;
+    let n = ((maxIdx + 1) % 3) + 1;
     // Prevent degenerate identical modes where w(x,y) vanishes everywhere
     if (m === n) {
       n = (n % 3) + 1;
@@ -492,9 +495,16 @@ export class BraunCrtDisplay {
       const gradY = -n * Math.PI * Math.cos(m * Math.PI * px) * Math.sin(n * Math.PI * py)
                     + m * Math.PI * Math.cos(n * Math.PI * px) * Math.sin(m * Math.PI * py);
 
-      const forceScale = 0.08 * (eMax1 + 0.1);
+      const forceScale = 0.10 * (maxE * 15.0 + 0.1);
       vx -= Math.sign(wx) * gradX * forceScale * dt;
       vy -= Math.sign(wx) * gradY * forceScale * dt;
+
+      // Continuous plate acoustic agitation proportional to total modal vibration
+      const audioVibe = Math.min(0.04, Math.sqrt(totalEnergy) * 0.15);
+      if (audioVibe > 0.0005) {
+        vx += (Math.random() - 0.5) * audioVibe;
+        vy += (Math.random() - 0.5) * audioVibe;
+      }
 
       vx *= dampingFactor;
       vy *= dampingFactor;
@@ -572,6 +582,7 @@ export class BraunCrtDisplay {
 
     const fov = 300;
     const camDist = 68;
+    const orbitScale = 0.52;
 
     // Render Lorenz 3D Trajectory
     const count = this.attractorHistoryFilled;
@@ -594,9 +605,9 @@ export class BraunCrtDisplay {
         let first = true;
         for (let i = startIdx; i <= endIdx; i++) {
           const ringIdx = (this.attractorHistoryIdx - count + i + this.attractorHistorySize) % this.attractorHistorySize;
-          const x = this.attractorHistoryX[ringIdx];
-          const y = this.attractorHistoryY[ringIdx];
-          const z = this.attractorHistoryZ[ringIdx] - 25.0; // Center Z
+          const x = this.attractorHistoryX[ringIdx] * orbitScale;
+          const y = this.attractorHistoryY[ringIdx] * orbitScale;
+          const z = (this.attractorHistoryZ[ringIdx] - 25.0) * orbitScale;
 
           const rx = x * cosT + z * sinT;
           const ry = y * cosP - (-x * sinT + z * cosT) * sinP;
@@ -619,9 +630,9 @@ export class BraunCrtDisplay {
 
       // Glowing Focus Head
       const lastIdx = (this.attractorHistoryIdx - 1 + this.attractorHistorySize) % this.attractorHistorySize;
-      const hx = this.attractorHistoryX[lastIdx];
-      const hy = this.attractorHistoryY[lastIdx];
-      const hz = this.attractorHistoryZ[lastIdx] - 25.0;
+      const hx = this.attractorHistoryX[lastIdx] * orbitScale;
+      const hy = this.attractorHistoryY[lastIdx] * orbitScale;
+      const hz = (this.attractorHistoryZ[lastIdx] - 25.0) * orbitScale;
 
       const rhx = hx * cosT + hz * sinT;
       const rhy = hy * cosP - (-hx * sinT + hz * cosT) * sinP;
@@ -671,7 +682,8 @@ export class BraunCrtDisplay {
 
     for (let i = 0; i < numBars; i++) {
       const x = paddingX + i * barSpacing + (barSpacing - barWidth) / 2;
-      const energy = Math.min(1.0, Math.max(0.0, this.modalEnergies[i]));
+      const rawE = Math.max(0.0, this.modalEnergies[i] || 0.0);
+      const energy = Math.min(1.0, Math.sqrt(rawE * 36.0));
 
       // Target bar height
       const targetH = energy * maxBarHeight;
