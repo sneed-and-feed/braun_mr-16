@@ -139,7 +139,7 @@ if (-not $SkipTests) {
         if ($LASTEXITCODE -ne 0) {
             throw "Headless DSP verification failed with exit code $LASTEXITCODE. Packaging aborted."
         }
-        Write-Host "[INFO] All 34 headless DSP tests passed successfully."
+        Write-Host "[INFO] All 35 headless DSP tests passed successfully."
     } else {
         Write-Warning "Headless test executable not found in candidate paths. Skipping test step."
     }

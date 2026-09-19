@@ -553,6 +553,69 @@ inline void registerTier1Tests() {
         return test::gCurrentTestAssertFailures == 0;
     });
 
+    registerTest("Tier 1", "T1_DYN_05", "Mr16Engine - Idle Silence on Power On / Reset", []() {
+        mr16::Mr16Engine engine;
+        engine.prepare(48000.0, 512);
+
+        // 1. Verify fresh engine with default parameters is strictly silent on power-on
+        engine.reset();
+
+        const int numBlocks = 100; // ~1.06 seconds of audio at 48 kHz
+        const int blockSize = 512;
+        std::vector<float> outL(blockSize, 0.0f), outR(blockSize, 0.0f);
+
+        float peakIdleFresh = 0.0f;
+        for (int b = 0; b < numBlocks; ++b) {
+            engine.processBlock(nullptr, nullptr, outL.data(), outR.data(), blockSize);
+            for (int s = 0; s < blockSize; ++s) {
+                peakIdleFresh = std::max(peakIdleFresh, std::max(std::abs(outL[s]), std::abs(outR[s])));
+            }
+        }
+        TEST_ASSERT(peakIdleFresh <= 1.0e-5f, "Fresh engine on power-on must be strictly silent (<= 1e-5)");
+
+        // 2. Verify engine with snapshot parameters (euclideanEnable = false) is strictly silent
+        mr16::Mr16Parameters p;
+        p.exciterStrikeVelocity = 0.80f;
+        p.exciterStrikeHardness = 0.50f;
+        p.exciterBowPressure    = 0.0f;
+        p.exciterBowVelocity    = 0.0f;
+        p.poissonEnable         = false;
+        p.poissonEpm            = 0.0f;
+        p.euclideanEnable       = false; // Explicitly false as configured in snapshot
+        p.euclideanPulses       = 4;
+        p.euclideanSteps        = 16;
+        p.externalAudioEnable   = false;
+        p.fundamentalHz         = 440.0f;
+        p.couplingDepth         = 0.25f;
+        p.chorusEnable          = true;
+        p.outputMute            = false;
+
+        engine.setParameters(p);
+        engine.reset();
+
+        float peakIdlePlugin = 0.0f;
+        for (int b = 0; b < numBlocks; ++b) {
+            engine.processBlock(nullptr, nullptr, outL.data(), outR.data(), blockSize);
+            for (int s = 0; s < blockSize; ++s) {
+                peakIdlePlugin = std::max(peakIdlePlugin, std::max(std::abs(outL[s]), std::abs(outR[s])));
+            }
+        }
+        TEST_ASSERT(peakIdlePlugin <= 1.0e-5f, "Plugin engine with euclideanEnable=false must remain completely silent on power-on (<= 1e-5)");
+
+        // 3. Verify that the engine produces sound when an explicit strike is triggered
+        engine.enqueueTriggerStrike(0.85f, 0.70f);
+        float peakAfterStrike = 0.0f;
+        for (int b = 0; b < 10; ++b) {
+            engine.processBlock(nullptr, nullptr, outL.data(), outR.data(), blockSize);
+            for (int s = 0; s < blockSize; ++s) {
+                peakAfterStrike = std::max(peakAfterStrike, std::max(std::abs(outL[s]), std::abs(outR[s])));
+            }
+        }
+        TEST_ASSERT(peakAfterStrike > 0.005f, "Engine must produce audible output once an explicit strike is triggered");
+
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
 }
 
 } // namespace test

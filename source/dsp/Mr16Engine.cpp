@@ -379,7 +379,7 @@ void Mr16Engine::reset() noexcept {
     mChorus.reset();
     mVactrolGate.reset();
 
-    const float targetGain = dbToGain(mParams.masterVolumeDb);
+    const float targetGain = mParams.outputMute ? 0.0f : dbToGain(mParams.masterVolumeDb);
     mVolumeSmoother.reset(targetGain);
 
     mQueueWriteHead.store(0, std::memory_order_relaxed);

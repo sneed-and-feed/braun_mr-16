@@ -297,6 +297,7 @@ struct alignas(64) Mr16ParameterSnapshot {
     float       vactrolSag       { 0.60f };
     float       extInputGainDb   { -24.0f };
     float       poissonDensity   { 0.0f };
+    bool        euclideanEnable  { false };
     int         euclideanPulses  { 4 };
     int         euclideanSteps   { 16 };
 
@@ -342,7 +343,7 @@ struct alignas(64) Mr16ParameterSnapshot {
         p.exciterBowVelocity    = isFriction ? frictionSpeed : 0.0f;
         p.poissonEnable         = (poissonDensity > 0.01f);
         p.poissonEpm            = poissonDensity * 60.0f;
-        p.euclideanEnable       = (euclideanPulses > 0);
+        p.euclideanEnable       = euclideanEnable;
         p.euclideanPulses       = euclideanPulses;
         p.euclideanSteps        = euclideanSteps;
         p.externalAudioEnable   = (exciterType == ExciterType::ExtIn && extInputGainDb > -23.0f);
@@ -386,6 +387,7 @@ struct Mr16AtomicPointers {
     std::atomic<float>* vactrolSag       { nullptr };
     std::atomic<float>* extInputGain     { nullptr };
     std::atomic<float>* poissonDensity   { nullptr };
+    std::atomic<bool>*  euclideanEnable  { nullptr };
     std::atomic<float>* euclideanPulses  { nullptr };
     std::atomic<float>* euclideanSteps   { nullptr };
 
@@ -471,6 +473,7 @@ struct Mr16AtomicPointers {
         if (vactrolSag)      s.vactrolSag      = vactrolSag->load(std::memory_order_relaxed);
         if (extInputGain)    s.extInputGainDb  = extInputGain->load(std::memory_order_relaxed);
         if (poissonDensity)  s.poissonDensity  = poissonDensity->load(std::memory_order_relaxed);
+        if (euclideanEnable) s.euclideanEnable = euclideanEnable->load(std::memory_order_relaxed);
         if (euclideanPulses) s.euclideanPulses = static_cast<int>(std::round(euclideanPulses->load(std::memory_order_relaxed)));
         if (euclideanSteps)  s.euclideanSteps  = static_cast<int>(std::round(euclideanSteps->load(std::memory_order_relaxed)));
 

@@ -98,6 +98,7 @@ private:
     mr16::Mr16AtomicPointers atomicPointers;
     std::atomic<bool> isPoweredOn { true };
     std::atomic<bool> mPendingEngineReset { false };
+    std::atomic<bool> mEuclideanEnable { false };
     int mCurrentProgram { 0 };
 
 #if MR16_HAS_DSP_ENGINE

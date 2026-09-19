@@ -8,6 +8,7 @@ BRAUN_MR16AudioProcessor::BRAUN_MR16AudioProcessor()
       apvts(*this, nullptr, "Parameters", mr16::createParameterLayout())
 {
     atomicPointers.initialize(apvts);
+    atomicPointers.euclideanEnable = &mEuclideanEnable;
     recorderThread.startThread();
 #if MR16_HAS_DSP_ENGINE
     mr16Engine.reset();
@@ -113,6 +114,8 @@ void BRAUN_MR16AudioProcessor::setPresetParameters(const mr16::Mr16ParameterSnap
 
     // Deck 06
     setParamChoice(mr16::ParamIDs::displayMode, static_cast<float>(mr16::indexFromDisplayMode(s.displayMode)));
+
+    mEuclideanEnable.store(s.euclideanEnable, std::memory_order_relaxed);
 }
 
 #if MR16_HAS_DSP_ENGINE
@@ -133,8 +136,10 @@ void BRAUN_MR16AudioProcessor::setPresetParameters(const braun::mr16::Mr16Parame
     s.vactrolSag     = p.vactrolSagAmount;
     s.extInputGainDb = (p.externalSensitivity > 0.0f) ? (20.0f * std::log10(p.externalSensitivity)) : 0.0f;
     s.poissonDensity = p.poissonEnable ? (p.poissonEpm / 60.0f) : 0.0f;
+    s.euclideanEnable = p.euclideanEnable;
     s.euclideanPulses = p.euclideanPulses;
     s.euclideanSteps  = p.euclideanSteps;
+    mEuclideanEnable.store(p.euclideanEnable, std::memory_order_relaxed);
 
     // Map modal matrix
     s.manifoldType   = static_cast<mr16::ManifoldType>(static_cast<int>(p.manifold));
@@ -181,6 +186,7 @@ void BRAUN_MR16AudioProcessor::setCurrentProgram(int index)
     const auto presets = braun::mr16::Mr16Engine::getFactoryPresets();
     if (static_cast<size_t>(index) < presets.size())
     {
+        mEuclideanEnable.store(presets[static_cast<size_t>(index)].params.euclideanEnable, std::memory_order_relaxed);
         setPresetParameters(presets[static_cast<size_t>(index)].params);
         return;
     }
@@ -189,6 +195,7 @@ void BRAUN_MR16AudioProcessor::setCurrentProgram(int index)
     const auto& defaultPresets = getFactoryPresets();
     if (static_cast<size_t>(index) < defaultPresets.size())
     {
+        mEuclideanEnable.store(defaultPresets[static_cast<size_t>(index)].params.euclideanEnable, std::memory_order_relaxed);
         setPresetParameters(defaultPresets[static_cast<size_t>(index)].params);
     }
 }
@@ -248,7 +255,9 @@ const std::vector<BRAUN_MR16AudioProcessor::Preset>& BRAUN_MR16AudioProcessor::g
         list.push_back(makePreset("Hyperbolic Bell Flare", 330.0f, mr16::ManifoldType::PoincareHorn, mr16::MaterialProfile::Brass, 0.08f, 0.45f, 0.75f, 0.65f, 0.35f, 0.40f, true, 0.50f));
         list.push_back(makePreset("Vocal Formant Choir", 146.83f, mr16::ManifoldType::VocalFormant, mr16::MaterialProfile::Nylon, 0.15f, 0.35f, 0.60f, 0.50f, 0.80f, 0.60f, true, 0.55f));
         list.push_back(makePreset("Monsoon Zinc Roof", 185.0f, mr16::ManifoldType::ChladniPlate, mr16::MaterialProfile::Steel, 0.20f, 0.20f, 0.50f, 0.80f, 0.20f, 0.15f, true, 0.40f));
-        list.push_back(makePreset("Euclidean Glass Chime", 523.25f, mr16::ManifoldType::ChladniPlate, mr16::MaterialProfile::Glass, 0.05f, 0.30f, 0.70f, 0.75f, 0.40f, 0.25f, true, 0.50f));
+        auto euclideanPreset = makePreset("Euclidean Glass Chime", 523.25f, mr16::ManifoldType::ChladniPlate, mr16::MaterialProfile::Glass, 0.05f, 0.30f, 0.70f, 0.75f, 0.40f, 0.25f, true, 0.50f);
+        euclideanPreset.params.euclideanEnable = true;
+        list.push_back(euclideanPreset);
         list.push_back(makePreset("Bowed Crystal Rod", 440.0f, mr16::ManifoldType::StiffBeam, mr16::MaterialProfile::Glass, 0.06f, 0.38f, 0.40f, 0.60f, 0.60f, 0.30f, true, 0.50f));
         list.push_back(makePreset("Dimension Brass Matrix", 261.63f, mr16::ManifoldType::PoincareHorn, mr16::MaterialProfile::Brass, 0.10f, 0.32f, 0.80f, 0.70f, 0.45f, 0.35f, true, 0.75f));
         list.push_back(makePreset("Lorenz Butterfly Orbit", 196.0f, mr16::ManifoldType::ChladniPlate, mr16::MaterialProfile::Wood, 0.14f, 0.40f, 0.65f, 0.55f, 1.80f, 0.85f, true, 0.40f));
@@ -272,7 +281,9 @@ void BRAUN_MR16AudioProcessor::prepareToPlay(double sampleRate, int samplesPerBl
     mr16Engine.prepare(sampleRate, samplesPerBlock);
 
     const auto snapshot = atomicPointers.loadSnapshot();
-    mr16Engine.setParameters(snapshot.toDspParams());
+    auto dspParams = snapshot.toDspParams();
+    dspParams.euclideanEnable = mEuclideanEnable.load(std::memory_order_relaxed);
+    mr16Engine.setParameters(dspParams);
     mr16Engine.reset();
 #endif
 
@@ -422,7 +433,9 @@ void BRAUN_MR16AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     const auto snapshot = atomicPointers.loadSnapshot();
 
 #if MR16_HAS_DSP_ENGINE
-    mr16Engine.setParameters(snapshot.toDspParams());
+    auto dspParams = snapshot.toDspParams();
+    dspParams.euclideanEnable = mEuclideanEnable.load(std::memory_order_relaxed);
+    mr16Engine.setParameters(dspParams);
 
     // Clean audio input handling:
     // Prevent mic bleed / feedback loops / blowout: external audio is strictly enabled only when
