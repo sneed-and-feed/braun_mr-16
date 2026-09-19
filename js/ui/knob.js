@@ -307,6 +307,21 @@ export class BraunKnob {
       }
     });
 
+    // Mouse wheel support (parity with BRAUN AS-42 and RB-26)
+    this.element.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const direction = e.deltaY < 0 ? 1 : -1;
+      const stepFactor = e.shiftKey ? 0.2 : 1.0;
+      if (this.isLog) {
+        const deltaNorm = direction * 0.025 * stepFactor;
+        const normVal = Math.max(0, Math.min(1, this._valueToNormalized(this.value) + deltaNorm));
+        this.setValue(this._normalizedToValue(normVal), true);
+      } else {
+        const stepSize = (this.step || (this.max - this.min) / 100) * stepFactor;
+        this.setValue(this.value + direction * stepSize, true);
+      }
+    }, { passive: false });
+
     this.element.addEventListener('pointerdown', onPointerDown);
   }
 
