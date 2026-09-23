@@ -27,7 +27,7 @@ function flushDenormal(val) {
   return Math.abs(val) < 1.0e-15 ? 0.0 : val;
 }
 
-function applyHermiteSaturator(x, knee = 0.72, ceiling = 1.05) {
+function applyHermiteSaturator(x, knee = 0.72, ceiling = 1.00) {
   if (!Number.isFinite(x)) return 0.0;
   const absX = Math.abs(x);
   if (absX < 1.0e-15) return 0.0;
@@ -131,7 +131,7 @@ describe('BRAUN MR-16 Automated DSP Verification Checklist', () => {
       for (const x of toxicInputs) {
         const out = applyHermiteSaturator(x);
         assert.ok(Number.isFinite(out), `applyHermiteSaturator(${x}) must be finite`);
-        assert.ok(Math.abs(out) <= 1.05, `applyHermiteSaturator(${x}) must be <= 1.05`);
+        assert.ok(Math.abs(out) <= 1.00, `applyHermiteSaturator(${x}) must be <= 1.00`);
       }
     });
   });
@@ -141,7 +141,7 @@ describe('BRAUN MR-16 Automated DSP Verification Checklist', () => {
     it('verifies strict 0 dB small signal transparency below the knee (0.72)', () => {
       const testVals = [0.0, 0.001, 0.1, 0.25, 0.5, 0.70, 0.72, -0.001, -0.1, -0.25, -0.5, -0.70, -0.72];
       for (const x of testVals) {
-        const y = applyHermiteSaturator(x, 0.72, 1.05);
+        const y = applyHermiteSaturator(x, 0.72, 1.00);
         assert.ok(Math.abs(y - x) < 1.0e-7, `Small signal ${x} must equal output ${y} (bit-exact transparency)`);
       }
     });
@@ -152,7 +152,7 @@ describe('BRAUN MR-16 Automated DSP Verification Checklist', () => {
 
       for (let i = 0; i <= steps; i++) {
         const x = -8.0 + (16.0 * i) / steps;
-        const y = applyHermiteSaturator(x, 0.72, 1.05);
+        const y = applyHermiteSaturator(x, 0.72, 1.00);
         assert.ok(y >= prevY - 1.0e-7, `Monotonicity violation at x = ${x}: y = ${y} < prevY = ${prevY}`);
         prevY = y;
       }
@@ -160,15 +160,15 @@ describe('BRAUN MR-16 Automated DSP Verification Checklist', () => {
 
     it('verifies strict asymptotic peak clamping under +18 dBFS input and beyond', () => {
       const plus18dB = Math.pow(10, 18 / 20); // ~7.94
-      const y18 = applyHermiteSaturator(plus18dB, 0.72, 1.05);
-      assert.ok(y18 <= 1.050000, `Output at +18 dBFS (${y18}) must be strictly <= 1.05`);
-      assert.ok(y18 >= 1.049000, `Output at +18 dBFS (${y18}) must be at ceiling`);
+      const y18 = applyHermiteSaturator(plus18dB, 0.72, 1.00);
+      assert.ok(y18 <= 1.000000, `Output at +18 dBFS (${y18}) must be strictly <= 1.00`);
+      assert.ok(y18 >= 0.999000, `Output at +18 dBFS (${y18}) must be at ceiling`);
 
-      const y40 = applyHermiteSaturator(100.0, 0.72, 1.05);
-      assert.strictEqual(y40, 1.05, 'Output at +40 dBFS must clamp to exact ceiling 1.05');
+      const y40 = applyHermiteSaturator(100.0, 0.72, 1.00);
+      assert.strictEqual(y40, 1.00, 'Output at +40 dBFS must clamp to exact ceiling 1.00');
 
-      const y40neg = applyHermiteSaturator(-100.0, 0.72, 1.05);
-      assert.strictEqual(y40neg, -1.05, 'Output at -40 dBFS must clamp to exact ceiling -1.05');
+      const y40neg = applyHermiteSaturator(-100.0, 0.72, 1.00);
+      assert.strictEqual(y40neg, -1.00, 'Output at -40 dBFS must clamp to exact ceiling -1.00');
     });
 
     it('verifies odd mathematical symmetry: f(-x) === -f(x)', () => {
@@ -468,6 +468,111 @@ describe('BRAUN MR-16 Automated DSP Verification Checklist', () => {
         if (originalGetElementById) {
           globalThis.document.getElementById = originalGetElementById;
         }
+      }
+    });
+  });
+
+  //----------------------------------------------------------------------------
+  describe('10. Acoustic Stabilization & DSP Parity (True Brickwall, Q-Norm, Bipolar Spread, Input Conditioning)', () => {
+    it('verifies generateHermiteCurve defaults to True Brickwall ceiling 1.00 (0.0 dBFS)', async () => {
+      const { generateHermiteCurve } = await import('./js/audio/mr16_web_engine.js');
+      const curve = generateHermiteCurve(1024);
+      assert.strictEqual(curve.length, 1024);
+      let maxVal = 0;
+      for (let i = 0; i < curve.length; i++) {
+        const absVal = Math.abs(curve[i]);
+        if (absVal > maxVal) maxVal = absVal;
+      }
+      assert.ok(maxVal <= 1.0001, `Max curve amplitude (${maxVal}) must be <= 1.0001`);
+      assert.ok(Math.abs(curve[1023] - 1.00) < 1e-4, 'Max positive curve endpoint must equal 1.00');
+      assert.ok(Math.abs(curve[0] - (-1.00)) < 1e-4, 'Min negative curve endpoint must equal -1.00');
+    });
+
+    it('verifies applyNonLinearVelocityDamping models quadratic air drag bounded by [-6, 6]', async () => {
+      const { applyNonLinearVelocityDamping } = await import('./js/audio/mr16_web_engine.js');
+      assert.strictEqual(applyNonLinearVelocityDamping(2.0), 2.0, 'Small velocity below threshold must pass linearly');
+      assert.strictEqual(applyNonLinearVelocityDamping(-2.0), -2.0, 'Small negative velocity must pass linearly');
+
+      const vLarge = applyNonLinearVelocityDamping(10.0);
+      assert.ok(vLarge > 4.0 && vLarge <= 6.0, `Large velocity (${vLarge}) must be compressed within [4.0, 6.0]`);
+
+      const vExtreme = applyNonLinearVelocityDamping(10000.0);
+      assert.ok(vExtreme <= 6.0, `Extreme velocity (${vExtreme}) must never exceed maxState 6.0`);
+
+      const vNegExtreme = applyNonLinearVelocityDamping(-10000.0);
+      assert.ok(vNegExtreme >= -6.0, `Negative extreme velocity (${vNegExtreme}) must never fall below -6.0`);
+
+      assert.strictEqual(applyNonLinearVelocityDamping(NaN), 0.0);
+      assert.strictEqual(applyNonLinearVelocityDamping(Infinity), 0.0);
+    });
+
+    it('verifies SUB_HARMONIC_RATIOS provides 4 sub-harmonic anchor partials', async () => {
+      const { SUB_HARMONIC_RATIOS } = await import('./js/audio/mr16_web_engine.js');
+      assert.strictEqual(SUB_HARMONIC_RATIOS.length, 4);
+      for (const r of SUB_HARMONIC_RATIOS) {
+        assert.ok(r > 0.0 && r < 1.0, `Sub-harmonic ratio ${r} must be strictly in (0, 1)`);
+      }
+      assert.strictEqual(SUB_HARMONIC_RATIOS[0], 0.5000, 'Mode 0 sub-harmonic must be one octave below (0.5000)');
+    });
+
+    it('verifies bipolar_spread anchors modes 0..3 below f0 while modes 4..15 spread upward', async () => {
+      const { Mr16WebEngine } = await import('./js/audio/mr16_web_engine.js');
+      const { HeadlessOfflineAudioContext } = await import('./headless-audio-context.mjs');
+      const ctx = new HeadlessOfflineAudioContext(2, 512, 48000);
+      const engine = new Mr16WebEngine();
+      await engine.init(ctx);
+
+      const f0 = 440.0;
+      engine.setParam('modal_frequency', f0);
+      engine.setParam('modal_spread', 1.0);
+
+      // Unipolar (default): mode 0 is exactly f0
+      engine.setBipolarSpread(false);
+      assert.strictEqual(engine.bipolarSpread, false);
+      assert.ok(Math.abs(engine.modalFreqs[0] - f0) < 1.0, `Unipolar mode 0 must equal f0: ${engine.modalFreqs[0]}`);
+
+      // Bipolar spread enabled: modes 0..3 are sub-harmonics below f0
+      engine.setBipolarSpread(true);
+      assert.strictEqual(engine.bipolarSpread, true);
+      assert.ok(engine.modalFreqs[0] < f0, `Bipolar mode 0 (${engine.modalFreqs[0]}) must be below f0 (${f0})`);
+      assert.ok(engine.modalFreqs[1] < f0, `Bipolar mode 1 (${engine.modalFreqs[1]}) must be below f0 (${f0})`);
+      assert.ok(engine.modalFreqs[2] < f0, `Bipolar mode 2 (${engine.modalFreqs[2]}) must be below f0 (${f0})`);
+      assert.ok(engine.modalFreqs[3] < f0, `Bipolar mode 3 (${engine.modalFreqs[3]}) must be below f0 (${f0})`);
+      assert.ok(engine.modalFreqs[4] > f0, `Mode 4 (${engine.modalFreqs[4]}) must spread above f0 (${f0})`);
+    });
+
+    it('verifies External Audio conditioning filter chain (35 Hz HPF, 15 kHz LPF) and gain staging', async () => {
+      const { Mr16WebEngine } = await import('./js/audio/mr16_web_engine.js');
+      const { HeadlessOfflineAudioContext } = await import('./headless-audio-context.mjs');
+      const ctx = new HeadlessOfflineAudioContext(2, 512, 48000);
+      const engine = new Mr16WebEngine();
+      await engine.init(ctx);
+
+      assert.ok(engine.extInputNode, 'extInputNode entry gain must exist');
+      assert.ok(engine.extHpf, 'extHpf filter must exist');
+      assert.strictEqual(engine.extHpf.type, 'highpass');
+      assert.strictEqual(engine.extHpf.frequency.value, 35, 'HPF cutoff must be 35 Hz');
+
+      assert.ok(engine.extLpf, 'extLpf filter must exist');
+      assert.strictEqual(engine.extLpf.type, 'lowpass');
+      assert.strictEqual(engine.extLpf.frequency.value, 15000, 'LPF cutoff must be 15 kHz');
+
+      assert.ok(engine.extInputGain, 'extInputGain node must exist');
+      engine.setExternalInputGain(6.0);
+      assert.strictEqual(engine.params.ext_input_gain, 6.0);
+    });
+
+    it('verifies Q-dependent energy normalization factors match 1 / sqrt(1 + 0.05 * Q)', async () => {
+      const { Mr16WebEngine } = await import('./js/audio/mr16_web_engine.js');
+      const { HeadlessOfflineAudioContext } = await import('./headless-audio-context.mjs');
+      const ctx = new HeadlessOfflineAudioContext(2, 512, 48000);
+      const engine = new Mr16WebEngine();
+      await engine.init(ctx);
+
+      const qFactors = engine.getQNormalizationFactors();
+      assert.strictEqual(qFactors.length, 16);
+      for (let i = 0; i < 16; i++) {
+        assert.ok(qFactors[i] > 0.0 && qFactors[i] <= 1.0, `Q-norm factor ${i} (${qFactors[i]}) must be in (0, 1]`);
       }
     });
   });

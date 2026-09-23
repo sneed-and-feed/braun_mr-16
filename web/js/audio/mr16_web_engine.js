@@ -34,6 +34,11 @@ export const MANIFOLD_RATIOS = {
   HORN: [
     1.000, 1.414, 1.732, 2.000, 2.236, 2.449, 2.646, 2.828,
     3.000, 3.162, 3.317, 3.464, 3.606, 3.742, 3.873, 4.000
+  ],
+  // 4: Diffuse Widebody Acoustic Plate (EMT 140 / Schroeder reverberation plate)
+  DIFFUSE: [
+    1.000, 1.189, 1.414, 1.682, 2.000, 2.378, 2.828, 3.364,
+    4.000, 4.757, 5.657, 6.727, 8.000, 9.514, 11.314, 13.454
   ]
 };
 
@@ -97,21 +102,50 @@ export const MATERIAL_PROFILES = {
 };
 
 /**
- * Generate 1024-point Float32Array Hermite / Tanh Soft Limiter transfer curve
+ * Sub-harmonic undertone ratios for modes 0..3 (1/2, 2/3, 3/4, 8/9)
  */
-export function generateHermiteCurve(samples = 1024) {
+export const SUB_HARMONIC_RATIOS = [0.5000, 0.6667, 0.7500, 0.8889];
+
+/**
+ * Aerodynamic non-linear velocity damping for modal SVF states.
+ * Models quadratic drag (F_drag \propto v^2) beyond threshold to eliminate
+ * runaway feedback blowouts while preserving linear dynamics for small/medium signals.
+ * Clamps state strictly within [-maxState, +maxState].
+ */
+export function applyNonLinearVelocityDamping(s, threshold = 4.0, maxState = 6.0) {
+  if (!Number.isFinite(s)) return 0.0;
+  const absS = Math.abs(s);
+  if (absS <= threshold) return s;
+  const sign = s > 0 ? 1.0 : -1.0;
+  const excess = absS - threshold;
+  const span = maxState - threshold;
+  const dampedExcess = span * (excess / (span + excess));
+  return sign * Math.min(maxState, threshold + dampedExcess);
+}
+
+/**
+ * Generate 1024-point Float32Array Hermite / Tanh Soft Limiter transfer curve.
+ * Adheres to Dieter Rams' "Weniger, aber besser" philosophy and physical acoustic bounds:
+ * 1. Exact linear small-signal transparency below knee (|x| <= 0.72).
+ * 2. C1 continuous cubic Hermite curve for knee < |x| < ceiling.
+ * 3. Strict True Brickwall ceiling clamp at exactly 1.00 (0.0 dBFS), eliminating DAW limiter dependencies.
+ */
+export function generateHermiteCurve(samples = 1024, knee = 0.72, ceiling = 1.00) {
   const curve = new Float32Array(samples);
+  const delta = Math.max(1e-5, ceiling - knee);
+  const invDelta = 1.0 / delta;
   for (let i = 0; i < samples; i++) {
     const x = (i / (samples - 1)) * 4 - 2; // [-2, +2]
     const absX = Math.abs(x);
-    if (absX <= 0.72) {
+    if (absX <= knee) {
       curve[i] = x;
-    } else if (absX < 1.05) {
-      const u = (absX - 0.72) / 0.33;
-      const y = 0.72 + 0.33 * (u * (1 + u * (1 - u)));
-      curve[i] = Math.sign(x) * y;
+    } else if (absX < ceiling) {
+      const u = (absX - knee) * invDelta;
+      const poly = u * (1 + u * (1 - u));
+      const y = knee + delta * poly;
+      curve[i] = Math.sign(x) * Math.min(ceiling, y);
     } else {
-      curve[i] = Math.sign(x) * 1.05;
+      curve[i] = Math.sign(x) * ceiling;
     }
   }
   return curve;
@@ -144,6 +178,7 @@ export class Mr16WebEngine {
       material_profile: 2, // 0: Wood, 1: Glass, 2: Steel, 3: Brass, 4: Nylon
       modal_coupling: 0.40,
       modal_spread: 1.00,
+      bipolar_spread: false,
       modal_q: 85.0,
 
       // Deck 03
@@ -165,15 +200,21 @@ export class Mr16WebEngine {
       golden_pan_spread: 85.0,
       vactrol_lpg_cutoff: 14000.0,
       drive_saturation: 25.0,
+      saturator_knee: 0.72,
+      saturator_ceiling: 1.00,
       master_trim_db: 0.0,
       dry_wet_mix: 65.0,
       soft_limiter: true,
       power_state: false
     };
 
+    // Bipolar modal overtone dispersion mode
+    this.bipolarSpread = false;
+
     // Telemetry storage
     this.modalEnergies = new Float32Array(16);
     this.modalFreqs = new Float32Array(16);
+    this.modalQNorms = new Float32Array(16);
     this.timeData = new Float32Array(512);
     this.transientKick = 0;
 
@@ -262,9 +303,9 @@ export class Mr16WebEngine {
     this.dcBlocker.frequency.setValueAtTime(35, ctx.currentTime);
     this.dcBlocker.Q.setValueAtTime(0.707, ctx.currentTime);
 
-    // Hermite Saturator
+    // Hermite Saturator (Strict True Brickwall 1.00 / 0.0 dBFS)
     this.saturator = ctx.createWaveShaper();
-    this.saturator.curve = generateHermiteCurve(1024);
+    this.saturator.curve = generateHermiteCurve(1024, 0.72, 1.00);
     this.saturator.oversample = '2x';
 
     // Buchla 292 Dynamic LPG Filter
@@ -277,6 +318,35 @@ export class Mr16WebEngine {
     this.wetGain = ctx.createGain();
     this.dryGain = ctx.createGain();
     this.exciterBus = ctx.createGain();
+
+    // External Audio Conditioning Filter & Drive (Deck 01)
+    // 2-pole HPF (~35 Hz) and 2-pole LPF (~15 kHz) to eliminate sub-rumble and supersonic spikes
+    this.extInputNode = ctx.createGain();
+    this.extHpf = ctx.createBiquadFilter();
+    this.extHpf.type = 'highpass';
+    this.extHpf.frequency.setValueAtTime(35, ctx.currentTime);
+    this.extHpf.Q.setValueAtTime(0.707, ctx.currentTime);
+
+    this.extLpf = ctx.createBiquadFilter();
+    this.extLpf.type = 'lowpass';
+    this.extLpf.frequency.setValueAtTime(15000, ctx.currentTime);
+    this.extLpf.Q.setValueAtTime(0.707, ctx.currentTime);
+
+    this.extInputGain = ctx.createGain();
+    const initExtGain = this.params.ext_input_gain > 1.0
+      ? this.params.ext_input_gain / 100.0
+      : (this.params.ext_input_gain || 0.0);
+    this.extInputGain.gain.setValueAtTime(initExtGain, ctx.currentTime);
+
+    this.extInputNode.connect(this.extHpf);
+    this.extHpf.connect(this.extLpf);
+    this.extLpf.connect(this.extInputGain);
+    this.extInputGain.connect(this.exciterBus);
+
+    this.extInputMeter = ctx.createAnalyser();
+    this.extInputMeter.fftSize = 64;
+    this.extInputGain.connect(this.extInputMeter);
+
     this.resonatorBusL = ctx.createGain();
     this.resonatorBusR = ctx.createGain();
     this.resonatorBusL.gain.setValueAtTime(0.5, ctx.currentTime);
@@ -527,6 +597,10 @@ export class Mr16WebEngine {
         this.updateModalFrequencies();
         break;
 
+      case 'bipolar_spread':
+        this.setBipolarSpread(Boolean(val));
+        break;
+
       case 'material_profile':
         this.updateModalFrequencies();
         this.updateModalDamping();
@@ -585,6 +659,24 @@ export class Mr16WebEngine {
         this.updateFrictionParams();
         break;
 
+      case 'ext_input_gain': {
+        const normGain = val > 1.0 ? val / 100 : val;
+        if (this.extInputGain) {
+          this.extInputGain.gain.setTargetAtTime(normGain, now, 0.02);
+        }
+        break;
+      }
+
+      case 'saturator_ceiling':
+      case 'saturator_knee': {
+        const knee = this.params.saturator_knee ?? 0.72;
+        const ceiling = this.params.saturator_ceiling ?? 1.00;
+        if (this.saturator) {
+          this.saturator.curve = generateHermiteCurve(1024, knee, ceiling);
+        }
+        break;
+      }
+
       case 'poisson_density':
         this.setPoissonDensity(val);
         break;
@@ -607,6 +699,7 @@ export class Mr16WebEngine {
       case 1: ratios = MANIFOLD_RATIOS.BEAM; break;
       case 2: ratios = MANIFOLD_RATIOS.VOCAL; break;
       case 3: ratios = MANIFOLD_RATIOS.HORN; break;
+      case 4: ratios = MANIFOLD_RATIOS.DIFFUSE; break;
       default: ratios = MANIFOLD_RATIOS.CHLADNI; break;
     }
 
@@ -623,14 +716,22 @@ export class Mr16WebEngine {
     const clusterDetune = profile ? (profile.clusterDetune || 0.0) : 0.0;
 
     for (let i = 0; i < 16; i++) {
-      const rm = ratios[i] || (1 + i);
-      // Inharmonic stiffness dispersion and cluster beating doublet splitting:
-      // r_m' = r_m * sqrt(1 + B * m^2) * [1 + D * sin(m * pi / 2.5)]
-      const dispersion = Math.sqrt(1.0 + stiffnessB * i * i);
-      const beating = 1.0 + clusterDetune * Math.sin((i * Math.PI) / 2.5);
-      const rmPrime = rm * dispersion * beating;
+      let fm;
+      if (this.bipolarSpread && i < 4) {
+        // Modes 0..3 anchor sub-harmonics / undertones below f0
+        const subR = SUB_HARMONIC_RATIOS[i] || 0.5;
+        const effectiveRatio = Math.max(0.05, 1.0 - (1.0 - subR) * spread);
+        fm = f0 * effectiveRatio;
+      } else {
+        const rm = ratios[i] || (1 + i);
+        // Inharmonic stiffness dispersion and cluster beating doublet splitting:
+        // r_m' = r_m * sqrt(1 + B * m^2) * [1 + D * sin(m * pi / 2.5)]
+        const dispersion = Math.sqrt(1.0 + stiffnessB * i * i);
+        const beating = 1.0 + clusterDetune * Math.sin((i * Math.PI) / 2.5);
+        const rmPrime = rm * dispersion * beating;
+        fm = f0 * (1 + (rmPrime - 1) * spread);
+      }
 
-      const fm = f0 * (1 + (rmPrime - 1) * spread);
       const maxNyquist = (this.ctx && this.ctx.sampleRate) ? (this.ctx.sampleRate * 0.49) : 22000;
       const clampedFm = Math.max(20, Math.min(maxNyquist, fm));
       this.modalFreqs[i] = clampedFm;
@@ -672,13 +773,19 @@ export class Mr16WebEngine {
 
       const weight = modeWeights[i] !== undefined ? modeWeights[i] : 1.0;
 
+      // Q-dependent energy normalization matching C++ (scaling excitation by 1.0 / sqrt(1.0 + 0.05 * Q))
+      // Preserves nominal unity level around default Steel Q ~ 200 (sqrt(1.0 + 0.05 * 200) = sqrt(11.0))
+      const rawQNorm = 1.0 / Math.sqrt(1.0 + 0.05 * clampedQ);
+      this.modalQNorms[i] = rawQNorm;
+      const qNorm = rawQNorm * Math.sqrt(11.0);
+
       // Equalized octave loudness curve:
       // Bandpass peak response is proportional to fm/fs; compensating with (fm/220)^0.58 balances octaves
       const makeupGain = Math.min(
         32.0,
         3.2 * Math.sqrt((clampedQ * fs) / Math.max(20.0, fm)) *
           Math.pow(Math.max(100.0, fm) / 220.0, 0.58)
-      ) * weight;
+      ) * weight * qNorm;
 
       if (immediate) {
         this.modes[i].Q.setValueAtTime(clampedQ, now);
@@ -827,6 +934,41 @@ export class Mr16WebEngine {
     if (typeof this.onPowerStateChanged === 'function') {
       this.onPowerStateChanged(this.isPowered);
     }
+  }
+
+  setBipolarSpread(enabled) {
+    this.bipolarSpread = Boolean(enabled);
+    this.params.bipolar_spread = this.bipolarSpread;
+    this.updateModalFrequencies();
+  }
+
+  setExternalInput(sourceNode) {
+    if (!this.ctx || !sourceNode || !this.extInputNode) return;
+    try {
+      sourceNode.connect(this.extInputNode);
+    } catch (err) {
+      console.warn('Failed to connect external input source:', err);
+    }
+  }
+
+  setExternalInputGain(gainVal) {
+    this.setParam('ext_input_gain', gainVal);
+  }
+
+  getQNormalizationFactors() {
+    return this.modalQNorms;
+  }
+
+  getExternalInputLevel() {
+    if (!this.extInputMeter) return 0.0;
+    if (!this._extMeterBuf) this._extMeterBuf = new Float32Array(this.extInputMeter.fftSize);
+    this.extInputMeter.getFloatTimeDomainData(this._extMeterBuf);
+    let peak = 0.0;
+    for (let i = 0; i < this._extMeterBuf.length; i++) {
+      const a = Math.abs(this._extMeterBuf[i]);
+      if (a > peak) peak = a;
+    }
+    return peak;
   }
 
   // --- Deck 03: Chaotic Lorenz Modulation & Tri-Phase Chorus Sweep Loop ---

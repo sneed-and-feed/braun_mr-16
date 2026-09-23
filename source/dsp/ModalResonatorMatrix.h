@@ -11,7 +11,8 @@ enum class ManifoldType : int {
     ChladniPlate = 0, // Biharmonic 2D square free plate (Nabla^4)
     StiffBeam    = 1, // Euler-Bernoulli bar with undercut arch
     VocalFormant = 2, // Fant tube acoustic vowel formant series
-    PoincareHorn = 3  // Negative-curvature hyperbolic horn flare
+    PoincareHorn = 3, // Negative-curvature hyperbolic horn flare
+    DiffusePlate = 4  // Widebody EMT 140 diffuse acoustic plate
 };
 
 enum class MaterialType : int {
@@ -67,6 +68,18 @@ public:
         6.0867f, 6.5914f, 7.0980f, 7.6062f
     };
 
+    static inline constexpr std::array<float, kNumModes> kDiffusePlateRatios = {
+        1.0000f, 1.1892f, 1.4142f, 1.6818f,
+        2.0000f, 2.3784f, 2.8284f, 3.3636f,
+        4.0000f, 4.7568f, 5.6569f, 6.7272f,
+        8.0000f, 9.5137f, 11.3137f, 13.4543f
+    };
+
+    // Sub-harmonic undertone ratios for modes 0..3 (1/2, 2/3, 3/4, 8/9)
+    static inline constexpr std::array<float, 4> kSubHarmonicRatios = {
+        0.5000f, 0.6667f, 0.7500f, 0.8889f
+    };
+
     ModalResonatorMatrix() noexcept = default;
 
     void prepare(double sampleRate) noexcept;
@@ -80,6 +93,7 @@ public:
     void setOvertoneSpread(float spread) noexcept;
     void setCouplingDepth(float coupling) noexcept;
     void setStereoWidth(float width) noexcept;
+    void setBipolarSpread(bool enabled) noexcept;
 
     // Real-time chaotic modulation inputs
     void applyModulation(const std::array<float, kNumModes>& freqMultipliers,
@@ -101,9 +115,14 @@ public:
         return mCurrentFrequencies;
     }
 
+    [[nodiscard]] const std::array<float, kNumModes>& getQNormalizationFactors() const noexcept {
+        return mQNorm;
+    }
+
     [[nodiscard]] float getFundamentalHz() const noexcept { return mFundamentalHz; }
     [[nodiscard]] float getQScale() const noexcept { return mQScale; }
     [[nodiscard]] float getOvertoneSpread() const noexcept { return mOvertoneSpread; }
+    [[nodiscard]] bool  getBipolarSpread() const noexcept { return mBipolarSpread; }
     [[nodiscard]] ManifoldType getManifoldType() const noexcept { return mManifold; }
     [[nodiscard]] MaterialType getMaterialType() const noexcept { return mMaterial; }
     [[nodiscard]] float getStiffnessB() const noexcept { return mStiffnessB; }
@@ -158,6 +177,8 @@ private:
     std::array<float, kNumModes> mBaseRatios { 1.0f };
     std::array<float, kNumModes> mBaseQ { 50.0f };
     std::array<float, kNumModes> mCurrentFrequencies { 220.0f };
+    std::array<float, kNumModes> mQNorm { 1.0f };
+    bool mBipolarSpread { false };
 
     // Modulation states
     std::array<float, kNumModes> mModFreqMultipliers { 1.0f };

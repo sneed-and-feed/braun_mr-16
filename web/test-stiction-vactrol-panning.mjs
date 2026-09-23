@@ -378,13 +378,13 @@ describe('4. Modal Resonator Hard Limiter & Anti-Runaway Safeguards', () => {
     }
   });
 
-  it('verifies Hermite curve strictly clamps at ceiling 1.05 for inputs |x| >= 1.05', () => {
+  it('verifies Hermite curve strictly clamps at ceiling 1.00 for inputs |x| >= 1.00', () => {
     for (let i = 0; i < curve.length; i++) {
       const x = (i / 1023) * 4 - 2;
-      if (x >= 1.05) {
-        assert.ok(Math.abs(curve[i] - 1.05) < 1e-4, `Positive ceiling must be exactly 1.05`);
-      } else if (x <= -1.05) {
-        assert.ok(Math.abs(curve[i] - (-1.05)) < 1e-4, `Negative ceiling must be exactly -1.05`);
+      if (x >= 1.00) {
+        assert.ok(Math.abs(curve[i] - 1.00) < 1e-4, `Positive ceiling must be exactly 1.00`);
+      } else if (x <= -1.00) {
+        assert.ok(Math.abs(curve[i] - (-1.00)) < 1e-4, `Negative ceiling must be exactly -1.00`);
       }
     }
   });

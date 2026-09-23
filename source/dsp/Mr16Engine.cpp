@@ -422,6 +422,7 @@ void Mr16Engine::applyParametersToDsp() noexcept {
     mModalMatrix.setStereoWidth(mParams.stereoWidth);
     mModalMatrix.setQScale(mParams.modalQScale);
     mModalMatrix.setOvertoneSpread(mParams.overtoneSpread);
+    mModalMatrix.setBipolarSpread(mParams.bipolarSpread);
 
     // Deck 03: 3D Lorenz Attractor
     mLorenz.setRateHz(mParams.chaosRateHz);
@@ -625,9 +626,9 @@ void Mr16Engine::processBlock(const float* inL, const float* inR,
             finalR = dryMix * sampleInR + wetMix * finalR;
         }
 
-        // Master hard brickwall safety clamp guarding the master output bus (ceiling = 1.05)
-        finalL = std::clamp(finalL, -1.05f, +1.05f);
-        finalR = std::clamp(finalR, -1.05f, +1.05f);
+        // Master hard brickwall safety clamp guarding the master output bus (ceiling = 1.00 / 0.0 dBFS)
+        finalL = std::clamp(finalL, -mParams.saturatorCeiling, +mParams.saturatorCeiling);
+        finalR = std::clamp(finalR, -mParams.saturatorCeiling, +mParams.saturatorCeiling);
 
         outL[i] = finalL;
         outR[i] = finalR;

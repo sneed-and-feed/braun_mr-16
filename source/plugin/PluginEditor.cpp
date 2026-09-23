@@ -195,13 +195,13 @@ const paramsMeta = [
   { id: 'friction_force', webId: 'frictionForce', name: 'Friction Force', deck: 1, min: 0, max: 1, def: 0.35, unit: '%' },
   { id: 'friction_speed', webId: 'frictionSpeed', name: 'Friction Speed', deck: 1, min: 0, max: 1, def: 0.4, unit: '%' },
   { id: 'vactrol_sag', webId: 'vactrolSag', name: 'Vactrol Sag', deck: 1, min: 0, max: 1, def: 0.6, unit: '%' },
-  { id: 'ext_input_gain', webId: 'extInputGain', name: 'Ext Input Gain', deck: 1, min: -24, max: 12, def: 0, unit: 'dB' },
+  { id: 'ext_input_gain', webId: 'extInputGain', name: 'Ext Input Drive', deck: 1, min: -24, max: 12, def: 0, unit: 'dB' },
   { id: 'poisson_density', webId: 'poissonDensity', name: 'Poisson Density', deck: 1, min: 0, max: 25, def: 0, unit: 'Hz' },
   { id: 'euclidean_pulses', webId: 'euclideanPulses', name: 'Euclidean Pulses', deck: 1, min: 0, max: 32, def: 4, unit: '' },
   { id: 'euclidean_steps', webId: 'euclideanSteps', name: 'Euclidean Steps', deck: 1, min: 1, max: 32, def: 16, unit: '' },
 
   // Deck 02
-  { id: 'manifold_type', webId: 'manifoldType', name: 'Manifold', deck: 2, min: 0, max: 3, def: 0, isChoice: true, choices: ['Chladni', 'Beam', 'Formant', 'Poincare'] },
+  { id: 'manifold_type', webId: 'manifoldType', name: 'Manifold', deck: 2, min: 0, max: 4, def: 0, isChoice: true, choices: ['Chladni', 'Beam', 'Formant', 'Poincare', 'Diffuse'] },
   { id: 'modal_frequency', webId: 'modalFrequency', name: 'Fundamental', deck: 2, min: 20, max: 5000, def: 440, unit: 'Hz' },
   { id: 'modal_damping', webId: 'modalDamping', name: 'Damping', deck: 2, min: 0.05, max: 10, def: 1.80, unit: 's' },
   { id: 'material_profile', webId: 'materialProfile', name: 'Material', deck: 2, min: 0, max: 4, def: 0, isChoice: true, choices: ['Wood', 'Glass', 'Steel', 'Brass', 'Nylon'] },

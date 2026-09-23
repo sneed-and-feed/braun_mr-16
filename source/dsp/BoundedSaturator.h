@@ -8,19 +8,22 @@
 namespace braun::mr16 {
 
 /**
- * BoundedSaturator: C1 Hermite soft-knee acoustic saturator and feedback limiter.
+ * BoundedSaturator: Warm analog soft-knee saturator and True Brickwall limiter.
  *
- * Guarantees:
- * 1. Exact unity gain (0 dBFS, slope = 1.0) below knee (|x| <= 0.72).
- * 2. C1 continuous cubic Hermite curve for 0.72 < |x| < 1.05.
- * 3. Strict physical resonance saturation bound: |y| <= 1.05 for all real inputs.
- * 4. Zero derivative at |x| = 1.05, preventing sharp clipping corners.
- * 5. Branchless NaN / denormal protection.
+ * Adheres to Dieter Rams' "Weniger, aber besser" philosophy and C++20 real-time standards:
+ * 1. Warm analog soft-saturation curve (Germanium diode / analog tape style) with C1 continuous
+ *    transition below the clipping threshold.
+ * 2. Strict mathematical True Brickwall ceiling clamp at exactly 1.00 (0.0 dBFS) or configured ceiling
+ *    with C1 smooth transition, guaranteeing zero signal overshoots (|y| <= ceiling) even under
+ *    extreme feedback, high-Q resonance, or input overdrive.
+ * 3. Exact linear small-signal transparency (|x| <= knee, unity gain slope = 1.0).
+ * 4. Zero derivative at |x| = ceiling, preventing harsh clipping corners and aliasing hash.
+ * 5. Branchless IEEE 754 NaN / denormal protection, zero heap allocations.
  */
 class BoundedSaturator {
 public:
     static constexpr float kDefaultKnee = 0.72f;
-    static constexpr float kDefaultCeiling = 1.05f;
+    static constexpr float kDefaultCeiling = 1.00f; // Exactly 0.0 dBFS True Brickwall
 
     constexpr BoundedSaturator() noexcept
         : mKnee(kDefaultKnee), mCeiling(kDefaultCeiling),
@@ -45,7 +48,7 @@ public:
     [[nodiscard]] float getCeiling() const noexcept { return mCeiling; }
 
     /**
-     * Process a single audio sample (inlined for real-time performance).
+     * Process a single audio sample (inlined for hard real-time performance).
      */
     [[nodiscard]] inline float processSample(float x) const noexcept {
         if (!std::isfinite(x)) [[unlikely]] {
@@ -57,23 +60,28 @@ public:
             return 0.0f;
         }
 
-        // Region 1: Linear unity-gain zone
+        // Region 1: Linear unity-gain transparency below knee (|x| <= mKnee)
         if (absX <= mKnee) [[likely]] {
             return x;
         }
 
         const float sign = (x > 0.0f) ? 1.0f : -1.0f;
 
-        // Region 3: Clamped saturation ceiling
+        // Region 3: Clamped saturation ceiling (Strict True Brickwall clamp at configured ceiling)
         if (absX >= mCeiling) [[unlikely]] {
             return sign * mCeiling;
         }
 
-        // Region 2: C1 Hermite cubic soft knee (k < |x| < M)
+        // Region 2: C1 Hermite warm analog soft-saturation curve (Germanium diode / tape style)
+        // Satisfies C1 continuity:
+        //   poly(0) = 0, poly'(0) = 1 (smooth unity-gain derivative match at knee threshold)
+        //   poly(1) = 1, poly'(1) = 0 (smooth horizontal derivative match at ceiling)
         const float u = (absX - mKnee) * mInvDelta;
         // Horner evaluation of u + u^2 - u^3 = u * (1.0 + u * (1.0 - u))
         const float poly = u * (1.0f + u * (1.0f - u));
-        return flushDenormal(sign * (mKnee + mDelta * poly));
+        const float y = sign * (mKnee + mDelta * poly);
+        // Guaranteed zero overshoot: strictly clamp output to [-mCeiling, +mCeiling]
+        return flushDenormal(std::clamp(y, -mCeiling, mCeiling));
     }
 
     /**

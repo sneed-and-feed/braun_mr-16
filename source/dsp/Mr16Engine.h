@@ -49,6 +49,7 @@ struct Mr16Parameters {
     float stereoWidth           { 0.85f };
     float modalQScale           { 1.0f };
     float overtoneSpread        { 1.0f };
+    bool  bipolarSpread         { false };
 
     // Deck 03: 3D Chaotic Lorenz Attractor
     float chaosRateHz           { 1.0f };
@@ -71,7 +72,7 @@ struct Mr16Parameters {
     float driveSaturation       { 0.25f };
     float dryWetMix             { 0.65f };
     float saturatorKnee         { 0.72f };
-    float saturatorCeiling      { 1.05f };
+    float saturatorCeiling      { 1.00f };
 
     // Deck 07: Master Utilities
     float masterVolumeDb        { 0.0f };

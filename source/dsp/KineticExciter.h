@@ -97,11 +97,81 @@ private:
     // 3. Buchla 292 Optical Vactrol Dynamic Pluck
     VactrolGate mVactrolPluck;
 
-    // 4. External Audio Input Direct Resonator Injection
+    // 2-pole TPT Highpass Filter (~35 Hz anti-rumble)
+    class TptHighpass2Pole {
+    public:
+        void prepare(float sampleRate, float cutoffHz = 35.0f, float q = 0.7071f) noexcept {
+            const float fs = (sampleRate > 100.0f) ? sampleRate : 48000.0f;
+            const float fc = std::clamp(cutoffHz, 10.0f, fs * 0.45f);
+            mG = std::tan(kPi * fc / fs);
+            mK = 1.0f / std::max(0.1f, q);
+            mA1 = 1.0f / (1.0f + mG * (mG + mK));
+            reset();
+        }
+
+        void reset() noexcept {
+            mS1 = 0.0f;
+            mS2 = 0.0f;
+        }
+
+        [[nodiscard]] inline float process(float x) noexcept {
+            const float vHp = mA1 * (x - (mK + mG) * mS1 - mS2);
+            const float vBp = mG * vHp + mS1;
+            const float vLp = mG * vBp + mS2;
+            mS1 = flushDenormal(2.0f * vBp - mS1);
+            mS2 = flushDenormal(2.0f * vLp - mS2);
+            return flushDenormal(vHp);
+        }
+
+    private:
+        float mG { 0.0f };
+        float mK { 1.4142f };
+        float mA1 { 1.0f };
+        float mS1 { 0.0f };
+        float mS2 { 0.0f };
+    };
+
+    // 2-pole TPT Lowpass Filter (~15 kHz anti-hash)
+    class TptLowpass2Pole {
+    public:
+        void prepare(float sampleRate, float cutoffHz = 15000.0f, float q = 0.7071f) noexcept {
+            const float fs = (sampleRate > 100.0f) ? sampleRate : 48000.0f;
+            const float fc = std::clamp(cutoffHz, 1000.0f, fs * 0.45f);
+            mG = std::tan(kPi * fc / fs);
+            mK = 1.0f / std::max(0.1f, q);
+            mA1 = 1.0f / (1.0f + mG * (mG + mK));
+            reset();
+        }
+
+        void reset() noexcept {
+            mS1 = 0.0f;
+            mS2 = 0.0f;
+        }
+
+        [[nodiscard]] inline float process(float x) noexcept {
+            const float vHp = mA1 * (x - (mK + mG) * mS1 - mS2);
+            const float vBp = mG * vHp + mS1;
+            const float vLp = mG * vBp + mS2;
+            mS1 = flushDenormal(2.0f * vBp - mS1);
+            mS2 = flushDenormal(2.0f * vLp - mS2);
+            return flushDenormal(vLp);
+        }
+
+    private:
+        float mG { 0.0f };
+        float mK { 1.4142f };
+        float mA1 { 1.0f };
+        float mS1 { 0.0f };
+        float mS2 { 0.0f };
+    };
+
+    // 4. External Audio Input Conditioning & Direct Resonator Injection
     bool  mExtEnable { false };
     float mExtSensitivity { 1.0f };
     float mExtDirectMix { 0.35f };
     OnePoleSmoother mExtGainSmoother;
+    TptHighpass2Pole mExtAntiRumbleHpf;
+    TptLowpass2Pole  mExtAntiHashLpf;
     float mDcStateX { 0.0f };
     float mDcStateY { 0.0f };
     float mDcR { 0.998f };

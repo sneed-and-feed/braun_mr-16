@@ -122,7 +122,8 @@ inline const juce::StringArray& getManifoldTypeChoices() {
         "Biharmonic Chladni Plate",
         "Stiff Struck Beam",
         "Vocal Formant Tract",
-        "Poincaré Hyperbolic Horn"
+        "Poincaré Hyperbolic Horn",
+        "Diffuse Acoustic Plate"
     };
     return choices;
 }
@@ -168,6 +169,7 @@ inline ManifoldType manifoldTypeFromIndex(int index) noexcept {
         case 1: return ManifoldType::StiffBeam;
         case 2: return ManifoldType::VocalFormant;
         case 3: return ManifoldType::PoincareHorn;
+        case 4: return ManifoldType::DiffusePlate;
         default: return ManifoldType::ChladniPlate;
     }
 }
@@ -229,13 +231,13 @@ inline const std::array<ParameterMetadata, 33>& getParameterMetadataTable() {
         { 1, "friction_force",    "frictionForce",   "Friction Force",      "%",    0.0f,    1.0f,     0.35f,   false, false },
         { 1, "friction_speed",    "frictionSpeed",   "Friction Speed",      "%",    0.0f,    1.0f,     0.40f,   false, false },
         { 1, "vactrol_sag",       "vactrolSag",      "Vactrol Sag",         "%",    0.0f,    1.0f,     0.60f,   false, false },
-        { 1, "ext_input_gain",    "extInputGain",    "Ext Input Gain",      "dB",   -24.0f,  12.0f,    0.0f,    false, false },
+        { 1, "ext_input_gain",    "extInputGain",    "Ext Input Drive",     "dB",   -24.0f,  12.0f,    0.0f,    false, false },
         { 1, "poisson_density",   "poissonDensity",  "Poisson Density",     "Hz",   0.0f,    25.0f,    0.0f,    false, false },
         { 1, "euclidean_pulses",  "euclideanPulses", "Euclidean Pulses",    "",     0.0f,    32.0f,    4.0f,    false, false },
         { 1, "euclidean_steps",   "euclideanSteps",  "Euclidean Steps",     "",     1.0f,    32.0f,    16.0f,   false, false },
 
         // Deck 02: 16-Pole Modal Resonator Matrix
-        { 2, "manifold_type",     "manifoldType",    "Resonant Manifold",   "",     0.0f,    3.0f,     0.0f,    false, true  },
+        { 2, "manifold_type",     "manifoldType",    "Resonant Manifold",   "",     0.0f,    4.0f,     0.0f,    false, true  },
         { 2, "modal_frequency",   "modalFrequency",  "Fundamental Freq",    "Hz",   20.0f,   5000.0f,  440.0f,  false, false },
         { 2, "modal_damping",     "modalDamping",    "Modal Damping RT60",  "s",    0.05f,   10.0f,    1.80f,   false, false },
         { 2, "material_profile",  "materialProfile", "Material Profile",    "",     0.0f,    4.0f,     0.0f,    false, true  },
@@ -601,7 +603,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::extInputGain,
-        "Ext Input Gain",
+        "Ext Input Drive",
         juce::NormalisableRange<float>(-24.0f, 12.0f, 0.1f, 1.0f),
         -24.0f,
         juce::AudioParameterFloatAttributes().withLabel("dB")

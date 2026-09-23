@@ -325,7 +325,7 @@ describe('BRAUN MR-16 Headless Acoustic Levels & Dynamic Range Audit', () => {
         maxSustainJump < 0.05,
         `Max sustain sample jump |ds| (${maxSustainJump.toFixed(5)}) must be < 0.05 (zero zipper noise during morphing)`
       );
-      assert.ok(res.peak <= 1.0501, `Output peak must be strictly bounded below saturator ceiling: ${res.peak}`);
+      assert.ok(res.peak <= 1.0001, `Output peak must be strictly bounded below saturator ceiling: ${res.peak}`);
     });
   });
 

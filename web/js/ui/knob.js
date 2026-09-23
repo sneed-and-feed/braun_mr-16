@@ -28,6 +28,7 @@ export class BraunKnob {
     this.onChange = options.onChange || null;
     this.onDragEnd = options.onDragEnd || null;
     this.paramId = options.paramId || this.id;
+    this.title = options.title || (container && container.getAttribute && container.getAttribute('title')) || '';
     this.onContextMenu = options.onContextMenu || null;
 
     this.isDragging = false;
@@ -68,6 +69,9 @@ export class BraunKnob {
     this.element.setAttribute('aria-valuemin', this.min);
     this.element.setAttribute('aria-valuemax', this.max);
     this.element.setAttribute('aria-valuenow', this.value);
+    if (this.title) {
+      this.element.title = this.title;
+    }
 
     this.element.innerHTML = `
       <div class="braun-knob-label">${this.label}</div>

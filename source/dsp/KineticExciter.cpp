@@ -26,6 +26,10 @@ void KineticExciter::prepare(double sampleRate) noexcept {
     mDcR = 1.0f - (kTwoPi * 15.0f / mSampleRate);
     mExtPulseDecayCoeff = std::exp(-1.0f / (mSampleRate * 0.025f));
 
+    // 2-pole input conditioning filters (~35 Hz HPF anti-rumble, ~15 kHz LPF anti-hash)
+    mExtAntiRumbleHpf.prepare(mSampleRate, 35.0f);
+    mExtAntiHashLpf.prepare(mSampleRate, 15000.0f);
+
     reset();
 }
 
@@ -43,6 +47,8 @@ void KineticExciter::reset() noexcept {
     mVactrolPluck.reset();
 
     mExtGainSmoother.reset(mExtEnable ? 1.0f : 0.0f);
+    mExtAntiRumbleHpf.reset();
+    mExtAntiHashLpf.reset();
     mDcStateX = 0.0f;
     mDcStateY = 0.0f;
     mExtPulseEnv = 0.0f;
@@ -343,16 +349,22 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
     // ------------------------------------------------------------------------
     // 5. External Audio Direct Resonator Injection
     // ------------------------------------------------------------------------
-    // Continuous 15 Hz DC blocking filter maintains primed state to prevent step jumps
+    // Clean and condition incoming external audio with 2-pole anti-rumble HPF (~35 Hz)
+    // and gentle anti-hash LPF (~15 kHz) to eliminate sub-bass drum spikes and ultrasonic hash
     const float cleanIn = flushDenormal(externalAudioIn);
-    const float dcY = cleanIn - mDcStateX + mDcR * mDcStateY;
-    mDcStateX = cleanIn;
+    const float conditionedIn = mExtAntiHashLpf.process(mExtAntiRumbleHpf.process(cleanIn));
+
+    // Continuous DC blocking filter maintains primed state to prevent step jumps
+    const float dcY = conditionedIn - mDcStateX + mDcR * mDcStateY;
+    mDcStateX = conditionedIn;
     mDcStateY = flushDenormal(dcY);
 
     mExtPulseEnv = flushDenormal(mExtPulseEnv * mExtPulseDecayCoeff);
     const float currentExtGain = mExtGainSmoother.next();
     if (currentExtGain > 1.0e-5f) {
-        const float extScale = mExtSensitivity * currentExtGain;
+        // Calibrated smooth, musically intuitive drive curve (audio taper: S^1.25)
+        const float calibratedSens = (mExtSensitivity > 0.0f) ? std::pow(mExtSensitivity, 1.25f) : 0.0f;
+        const float extScale = calibratedSens * currentExtGain;
         const float continuousExt = dcY * (extScale * mExtDirectMix);
         const float pulseExt = dcY * (mExtPulseEnv * extScale * 0.20f);
         exciterSum += continuousExt + pulseExt;

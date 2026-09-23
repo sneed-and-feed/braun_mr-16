@@ -221,7 +221,7 @@ describe('BRAUN MR-16 Verification Suite', () => {
 
   //----------------------------------------------------------------------------
   describe('5. Web Audio DSP Mathematical Constants & Transfer Curves', () => {
-    it('verifies 4 acoustic manifolds contain 16 monotonic ratios', async () => {
+    it('verifies 5 acoustic manifolds contain 16 monotonic ratios', async () => {
       const engineModule = await import('./js/audio/mr16_web_engine.js');
       const ratios = engineModule.MANIFOLD_RATIOS;
 
@@ -229,8 +229,9 @@ describe('BRAUN MR-16 Verification Suite', () => {
       assert.ok(ratios.BEAM.length === 16, 'BEAM must have 16 modes');
       assert.ok(ratios.VOCAL.length === 16, 'VOCAL must have 16 modes');
       assert.ok(ratios.HORN.length === 16, 'HORN must have 16 modes');
+      assert.ok(ratios.DIFFUSE.length === 16, 'DIFFUSE must have 16 modes');
 
-      for (const key of ['CHLADNI', 'BEAM', 'VOCAL', 'HORN']) {
+      for (const key of ['CHLADNI', 'BEAM', 'VOCAL', 'HORN', 'DIFFUSE']) {
         const arr = ratios[key];
         assert.strictEqual(arr[0], 1.0, `${key} fundamental mode ratio must be 1.0`);
         for (let i = 1; i < arr.length; i++) {
@@ -248,7 +249,7 @@ describe('BRAUN MR-16 Verification Suite', () => {
 
       for (let i = 1; i < curve.length; i++) {
         assert.ok(curve[i] >= curve[i - 1] - 1e-6, `Hermite curve must be monotonically non-decreasing at index ${i}`);
-        assert.ok(Math.abs(curve[i]) <= 1.06, `Hermite curve must be bounded within [-1.06, 1.06] at index ${i}`);
+        assert.ok(Math.abs(curve[i]) <= 1.0001, `Hermite curve must be bounded within [-1.0001, 1.0001] at index ${i}`);
       }
     });
   });

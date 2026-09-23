@@ -618,7 +618,8 @@ class BraunMr16App {
       min: 0.0, max: 1.0, step: 0.01, value: 0.50, unit: '%', precision: 2
     });
     create('knob-ext-input-gain', {
-      label: 'EXT IN GAIN',
+      label: 'EXT IN DRIVE',
+      title: 'External Audio Excitation Drive with 35 Hz HPF & 15 kHz LPF pre-conditioning (drives modal matrix; not an output trim)',
       paramId: 'ext_input_gain',
       min: -24.0, max: 12.0, step: 0.5, value: 0.0, unit: 'dB', precision: 1
     });
@@ -777,6 +778,24 @@ class BraunMr16App {
         const telemetry = this.engine.getTelemetry();
         this.crt.updateTelemetry(telemetry);
       }
+
+      // Minimalist Dieter Rams Optical LED for External Input Headroom
+      const extLed = document.getElementById('led-ext-level');
+      if (extLed && this.engine.isInitialized) {
+        const level = (typeof this.engine.getExternalInputLevel === 'function')
+          ? this.engine.getExternalInputLevel()
+          : 0.0;
+        if (level > 0.95) {
+          extLed.className = 'braun-led is-recording';
+        } else if (level > 0.25) {
+          extLed.className = 'braun-led is-active-orange';
+        } else if (level > 0.01) {
+          extLed.className = 'braun-led is-active-green';
+        } else {
+          extLed.className = 'braun-led';
+        }
+      }
+
       this.telemetryRafId = requestAnimationFrame(telemetryLoop);
     };
     this.telemetryRafId = requestAnimationFrame(telemetryLoop);
