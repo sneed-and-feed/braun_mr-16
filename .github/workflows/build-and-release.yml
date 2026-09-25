@@ -44,38 +44,6 @@ jobs:
       - name: Run Web Audio Verification Suite
         run: npm test
 
-      - name: Package Web Showcase Bundle
-        run: |
-          VERSION=$(node -p "require('./package.json').version || '1.0.0'")
-          mkdir -p dist/web staging/web
-          cp -r web server.js start.bat package.json LICENSE README.md staging/web/
-          cat << 'EOF' > staging/web/INSTALL.txt
-          BRAUN MR-16 MODAL RESONATOR & KINETIC SYNTHESIZER
-          WEB SHOWCASE BUNDLE (CROSS-PLATFORM ZERO-INSTALL)
-          Standard: DIN 1451 Technical Specification
-
-          1. EXECUTION:
-             Windows: Double-click 'start.bat'
-             macOS/Linux: Run 'node server.js' or 'npm start'
-
-          2. BROWSER ACCESS:
-             Navigate to http://localhost:3816/
-             Requires modern browser with Web Audio API support.
-
-          3. SPECIFICATION:
-             100% Client-side DSP, zero remote network calls, offline capable.
-          EOF
-          cd staging/web && zip -r ../../dist/web/BRAUN_MR16_v${VERSION}_Web_Showcase.zip .
-          cd ../..
-          sha256sum dist/web/BRAUN_MR16_v${VERSION}_Web_Showcase.zip > dist/web/BRAUN_MR16_v${VERSION}_Web_Showcase.zip.sha256
-
-      - name: Upload Web Showcase Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: BRAUN_MR16_Web_Showcase
-          path: dist/web/*
-          retention-days: 14
-
   # ==============================================================================
   # 2. macOS Dedicated Build & Universal Packaging (Apple Silicon & Intel x86_64)
   # ==============================================================================
@@ -172,7 +140,7 @@ jobs:
              Minimum macOS target: 10.15 (Catalina) through macOS 14+ (Sonoma).
           EOF
 
-          ZIP_NAME="BRAUN_MR16_v${VERSION}_macOS_Universal.zip"
+          ZIP_NAME="BRAUN_MR16-v${VERSION}-macOS-Universal.zip"
           cd staging/macos && zip -r -y "../../${DIST_DIR}/${ZIP_NAME}" "BRAUN_MR16_v${VERSION}_macOS"
           cd ../..
 
@@ -228,10 +196,8 @@ jobs:
         shell: pwsh
         run: |
           python scripts/package_release.py
-          .\scripts\package-release.ps1 -SkipTests
-          if (Test-Path "releases") {
-            Copy-Item -Path "releases\*.zip" -Destination "dist\windows\" -Force
-          }
+          New-Item -ItemType Directory -Path "dist\windows" -Force | Out-Null
+          Copy-Item -Path "releases\*.zip" -Destination "dist\windows\" -Force
 
       - name: Upload Windows Distribution Artifacts
         uses: actions/upload-artifact@v4
@@ -327,7 +293,7 @@ jobs:
              Launch with ALSA or JACK audio server active.
           EOF
 
-          ARCHIVE_NAME="BRAUN_MR16_v${VERSION}_Linux_x64.tar.gz"
+          ARCHIVE_NAME="BRAUN_MR16-v${VERSION}-Linux-x64.tar.gz"
           tar -czvf "${DIST_DIR}/${ARCHIVE_NAME}" -C staging/linux "BRAUN_MR16_v${VERSION}_Linux_x64"
 
           sha256sum "${DIST_DIR}/${ARCHIVE_NAME}" > "${DIST_DIR}/${ARCHIVE_NAME}.sha256"
@@ -351,12 +317,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Download Web Showcase
-        uses: actions/download-artifact@v4
-        with:
-          name: BRAUN_MR16_Web_Showcase
-          path: release_staging/web
 
       - name: Download macOS Universal
         uses: actions/download-artifact@v4

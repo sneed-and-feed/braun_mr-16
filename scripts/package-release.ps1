@@ -183,159 +183,18 @@ $LicenseFile = Join-Path $RootDir "LICENSE"
 $ReadmeFile = Join-Path $RootDir "README.md"
 
 # ------------------------------------------------------------------------------
-# Package 1: Standalone Application (Windows x64)
-# ------------------------------------------------------------------------------
-$StageStandalone = Join-Path $StagingBase "standalone"
-New-Item -ItemType Directory -Path $StageStandalone -Force | Out-Null
-Copy-Item -Path $StandaloneBin -Destination (Join-Path $StageStandalone "BRAUN_MR16.exe")
-Copy-Item -Path $LicenseFile -Destination (Join-Path $StageStandalone "LICENSE")
-Copy-Item -Path $ReadmeFile -Destination (Join-Path $StageStandalone "README.md")
-
-$StandaloneInstallGuide = @"
-BRAUN MR-16 MODAL RESONATOR & KINETIC SYNTHESIZER
-STANDALONE APPLICATION (WIN64) INSTALLATION & EXECUTION GUIDE
-Standard: DIN 1451 Technical Specification
-
-LEGAL NOTICE:
-Not affiliated with Braun GmbH. Dieter Rams inspired design homage.
-Manufacturer: Sneed's Feed & Seed Ltd.
-
-1. EXECUTION:
-   Launch BRAUN_MR16.exe directly. No administrative elevation required.
-
-2. AUDIO CONFIGURATION:
-   Navigate to Audio Settings inside the top title bar to select ASIO or WASAPI drivers.
-   Recommended buffer size: 128 or 256 samples @ 44.1 kHz, 48.0 kHz, or 96.0 kHz.
-
-3. PERSISTENCE & USER PRESETS:
-   Preset and state configurations are stored in RFC 8259 JSON format.
-"@
-Set-Content -Path (Join-Path $StageStandalone "INSTALL.txt") -Value $StandaloneInstallGuide -Encoding UTF8
-
-$StandaloneZipPath = Join-Path $DistWinDir "BRAUN_MR16_v${Version}_Standalone_Win64.zip"
-Create-ZipArchive -SourceDirectory $StageStandalone -DestinationZipPath $StandaloneZipPath
-
-# ------------------------------------------------------------------------------
-# Package 2: VST3 Plugin Bundle (Windows x64)
-# ------------------------------------------------------------------------------
-$StageVst3 = Join-Path $StagingBase "vst3"
-New-Item -ItemType Directory -Path $StageVst3 -Force | Out-Null
-Copy-Item -Path $Vst3Dir -Destination (Join-Path $StageVst3 "BRAUN_MR16.vst3") -Recurse
-Copy-Item -Path $LicenseFile -Destination (Join-Path $StageVst3 "LICENSE")
-Copy-Item -Path $ReadmeFile -Destination (Join-Path $StageVst3 "README.md")
-
-$Vst3InstallGuide = @"
-BRAUN MR-16 MODAL RESONATOR & KINETIC SYNTHESIZER
-VST3 PLUGIN BUNDLE (WIN64) INSTALLATION GUIDE
-Standard: DIN 1451 Technical Specification
-
-LEGAL NOTICE:
-Not affiliated with Braun GmbH. Dieter Rams inspired design homage.
-
-1. INSTALLATION DIRECTORY:
-   Copy the directory 'BRAUN_MR16.vst3' into your system VST3 directory:
-   %CommonProgramFiles%\VST3\
-   (Default path: C:\Program Files\Common Files\VST3\BRAUN_MR16.vst3)
-
-2. DAW RESCAN:
-   Perform a plugin rescan in your Digital Audio Workstation (Cubase, Ableton Live, FL Studio, Reaper, Bitwig).
-
-3. INSTRUMENT CLASSIFICATION:
-   Category: Synthesizer / Physical Modelling / Resonator / Spatial FX.
-   Manufacturer: Sneed's Feed & Seed Ltd.
-"@
-Set-Content -Path (Join-Path $StageVst3 "INSTALL.txt") -Value $Vst3InstallGuide -Encoding UTF8
-
-$Vst3ZipPath = Join-Path $DistWinDir "BRAUN_MR16_v${Version}_VST3_Win64.zip"
-Create-ZipArchive -SourceDirectory $StageVst3 -DestinationZipPath $Vst3ZipPath
-
-# ------------------------------------------------------------------------------
-# Package 3: CLAP Plugin (Windows x64)
-# ------------------------------------------------------------------------------
-if (Test-Path $ClapBin) {
-    $StageClap = Join-Path $StagingBase "clap"
-    New-Item -ItemType Directory -Path $StageClap -Force | Out-Null
-    Copy-Item -Path $ClapBin -Destination (Join-Path $StageClap "BRAUN_MR16.clap")
-    Copy-Item -Path $LicenseFile -Destination (Join-Path $StageClap "LICENSE")
-    Copy-Item -Path $ReadmeFile -Destination (Join-Path $StageClap "README.md")
-
-    $ClapInstallGuide = @"
-BRAUN MR-16 MODAL RESONATOR & KINETIC SYNTHESIZER
-CLAP PLUGIN (WIN64) INSTALLATION GUIDE
-Standard: DIN 1451 Technical Specification / CLAP 1.0+ Standard
-
-LEGAL NOTICE:
-Not affiliated with Braun GmbH. Dieter Rams inspired design homage.
-Manufacturer: Sneed's Feed & Seed Ltd.
-
-1. INSTALLATION DIRECTORY:
-   Copy 'BRAUN_MR16.clap' into your system CLAP directory:
-   %CommonProgramFiles%\CLAP\
-   (Default path: C:\Program Files\Common Files\CLAP\BRAUN_MR16.clap)
-
-2. DAW RESCAN:
-   Rescan plugins in your CLAP-compatible host (Bitwig Studio, Reaper, FL Studio).
-
-3. FEATURES:
-   Non-destructive polyphonic parameter modulation, sample-accurate automation.
-"@
-    Set-Content -Path (Join-Path $StageClap "INSTALL.txt") -Value $ClapInstallGuide -Encoding UTF8
-
-    $ClapZipPath = Join-Path $DistWinDir "BRAUN_MR16_v${Version}_CLAP_Win64.zip"
-    Create-ZipArchive -SourceDirectory $StageClap -DestinationZipPath $ClapZipPath
-} else {
-    Write-Host "[INFO] CLAP plugin binary not found; skipping CLAP package generation."
-}
-
-# ------------------------------------------------------------------------------
-# Package 4: Web Showcase Bundle (Cross-Platform Zero-Install)
-# ------------------------------------------------------------------------------
-$StageWeb = Join-Path $StagingBase "web"
-New-Item -ItemType Directory -Path $StageWeb -Force | Out-Null
-Copy-Item -Path (Join-Path $RootDir "web") -Destination (Join-Path $StageWeb "web") -Recurse
-Copy-Item -Path (Join-Path $RootDir "server.js") -Destination (Join-Path $StageWeb "server.js")
-Copy-Item -Path (Join-Path $RootDir "start.bat") -Destination (Join-Path $StageWeb "start.bat")
-Copy-Item -Path (Join-Path $RootDir "package.json") -Destination (Join-Path $StageWeb "package.json")
-Copy-Item -Path $LicenseFile -Destination (Join-Path $StageWeb "LICENSE")
-Copy-Item -Path $ReadmeFile -Destination (Join-Path $StageWeb "README.md")
-
-$WebInstallGuide = @"
-BRAUN MR-16 MODAL RESONATOR & KINETIC SYNTHESIZER
-WEB SHOWCASE BUNDLE (CROSS-PLATFORM ZERO-INSTALL)
-Standard: DIN 1451 Technical Specification
-
-LEGAL NOTICE:
-Not affiliated with Braun GmbH. Dieter Rams inspired design homage.
-Manufacturer: Sneed's Feed & Seed Ltd.
-
-1. EXECUTION:
-   Windows: Double-click 'start.bat'
-   macOS/Linux: Run 'node server.js' or 'npm start'
-
-2. BROWSER ACCESS:
-   Navigate to http://localhost:3816/
-   Chrome, Edge, Firefox, or Safari with Web Audio API support.
-
-3. NO EXTERNAL DEPENDENCIES:
-   100% client-side DSP, zero remote network calls, offline capable.
-"@
-Set-Content -Path (Join-Path $StageWeb "INSTALL.txt") -Value $WebInstallGuide -Encoding UTF8
-
-$WebZipPath = Join-Path $DistWebDir "BRAUN_MR16_v${Version}_Web_Showcase.zip"
-Create-ZipArchive -SourceDirectory $StageWeb -DestinationZipPath $WebZipPath
-
-# ------------------------------------------------------------------------------
-# Package 5: Root Releases (Standalone + VST3 bundles)
+# Package: Standard Consolidated Windows Release Bundles
 # ------------------------------------------------------------------------------
 $ReleasePy = Join-Path $RootDir "scripts\package_release.py"
 if (Test-Path $ReleasePy) {
-    Write-Host "[INFO] Generating root releases/ bundles via package_release.py..."
+    Write-Host "[INFO] Generating clean releases/ bundles via package_release.py..."
     python $ReleasePy
     $ReleaseZips = Get-ChildItem -Path (Join-Path $RootDir "releases") -Filter "BRAUN_MR16-v${Version}-*.zip"
     foreach ($RZip in $ReleaseZips) {
         Copy-Item $RZip.FullName -Destination $DistWinDir -Force
     }
 }
+
 
 # ------------------------------------------------------------------------------
 # 5. Cryptographic Verification Checksum Generation (SHA-256)
