@@ -1,7 +1,7 @@
 # BRAUN MR-16 · Modaler Resonator & Kinetischer Impulssynthesizer
 
 [![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(207%2F207%20C%2B%2B%20%7C%20206%2F206%20Web)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
-[![Version: 1.0.11](https://img.shields.io/badge/Version-1.0.11-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_mr-16/releases/tag/v1.0.11)
+[![Version: 1.0.12](https://img.shields.io/badge/Version-1.0.12-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_mr-16/releases/tag/v1.0.12)
 [![CI](https://github.com/sneed-and-feed/braun_mr-16/actions/workflows/build-and-release.yml/badge.svg)](https://github.com/sneed-and-feed/braun_mr-16/actions)
 [![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](#4-daw-setup--installation-paths)
 [![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](#4-daw-setup--installation-paths)
@@ -53,14 +53,14 @@ Open `http://localhost:3816/` in Chrome, Edge, Firefox, or Safari for the full 1
 
 ---
 
-## 3. Distributable Release Packages (v1.0.11)
+## 3. Distributable Release Packages (v1.0.12)
 
-Pre-compiled binary packages and cryptographic manifests published under [GitHub Releases v1.0.11](https://github.com/sneed-and-feed/braun_mr-16/releases/tag/v1.0.11):
+Pre-compiled binary packages and cryptographic manifests published under [GitHub Releases v1.0.12](https://github.com/sneed-and-feed/braun_mr-16/releases/tag/v1.0.12):
 
 | Platform | Format | Architecture | Distribution Package Archive | Verification Manifest |
 |:---|:---|:---|:---|:---|
-| **Windows** | Complete Bundle (Standalone, VST3, CLAP) | x86_64 | [`BRAUN_MR16-v1.0.11-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.11/BRAUN_MR16-v1.0.11-Windows-x64.zip) | `releases/SHA256SUMS.txt` |
-| **Windows** | VST3 Plugin Only | x86_64 | [`BRAUN_MR16-v1.0.11-VST3-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.11/BRAUN_MR16-v1.0.11-VST3-Windows-x64.zip) | `releases/SHA256SUMS.txt` |
+| **Windows** | Complete Bundle (Standalone, VST3, CLAP) | x86_64 | [`BRAUN_MR16-v1.0.12-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.12/BRAUN_MR16-v1.0.12-Windows-x64.zip) | `releases/SHA256SUMS.txt` |
+| **Windows** | VST3 Plugin Only | x86_64 | [`BRAUN_MR16-v1.0.12-VST3-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.12/BRAUN_MR16-v1.0.12-VST3-Windows-x64.zip) | `releases/SHA256SUMS.txt` |
 
 Verify cryptographic archive integrity:
 

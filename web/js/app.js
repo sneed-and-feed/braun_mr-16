@@ -537,6 +537,126 @@ class BraunMr16App {
     this._emitJuceExciter({ type: 'vactrol', vel });
   }
 
+  _syncInitialDiscreteState() {
+    if (typeof window === 'undefined' || !window.__JUCE_INITIAL_PARAMS__) return;
+    const p = window.__JUCE_INITIAL_PARAMS__;
+
+    // 1. Power State
+    const powerVal = typeof p.power_state === 'number' ? p.power_state : p.powerState;
+    if (typeof powerVal === 'number') {
+      const isPowered = powerVal > 0.5;
+      if (this.engine.isPowered !== isPowered) {
+        this.engine.setPower(isPowered);
+      }
+      if (this.dom.btnPower) {
+        this.dom.btnPower.classList.toggle('is-active', isPowered);
+        const statusText = this.dom.btnPower.querySelector('.braun-status-text');
+        const led = this.dom.btnPower.querySelector('.braun-led');
+        if (statusText) statusText.textContent = isPowered ? 'ACTIVE' : 'STANDBY';
+        if (led) led.classList.toggle('is-active-green', isPowered);
+      }
+      if (this.crt) this.crt.setPower(isPowered);
+    }
+
+    // 2. Scope Source
+    const scopeVal = typeof p.scope_source === 'number' ? p.scope_source : p.scopeSource;
+    if (typeof scopeVal === 'number') {
+      const isInput = scopeVal > 0.5;
+      const src = isInput ? 'IN' : 'OUT';
+      this.scopeSource = src;
+      const group = document.getElementById('group-scope-source');
+      const btn = group?.querySelector(`button[data-val="${src}"]`);
+      if (btn) this._updateSegmentActive('group-scope-source', btn);
+      if (this.crt) this.crt.setScopeSource(src);
+    }
+
+    // 3. Exciter Type
+    const exciterVal = typeof p.exciter_type === 'number' ? p.exciter_type : p.exciterType;
+    if (typeof exciterVal === 'number') {
+      const modeVal = parseInt(exciterVal, 10);
+      this.engine.params.exciter_type = modeVal;
+      const group = document.getElementById('group-exciter-mode');
+      const btn = group?.querySelector(`button[data-val="${modeVal}"]`);
+      if (btn) this._updateSegmentActive('group-exciter-mode', btn);
+      this._updateExciterControls(modeVal);
+    }
+
+    // 4. Manifold Type
+    const manifoldVal = typeof p.manifold_type === 'number' ? p.manifold_type : p.manifoldType;
+    if (typeof manifoldVal === 'number') {
+      const mVal = parseInt(manifoldVal, 10);
+      this.engine.params.manifold_type = mVal;
+      const group = document.getElementById('group-manifold');
+      const btn = group?.querySelector(`button[data-val="${mVal}"]`);
+      if (btn) this._updateSegmentActive('group-manifold', btn);
+    }
+
+    // 5. Material Profile
+    const materialVal = typeof p.material_profile === 'number' ? p.material_profile : p.materialProfile;
+    if (typeof materialVal === 'number') {
+      const mVal = parseInt(materialVal, 10);
+      this.engine.params.material_profile = mVal;
+      const group = document.getElementById('group-material');
+      const btn = group?.querySelector(`button[data-val="${mVal}"]`);
+      if (btn) this._updateSegmentActive('group-material', btn);
+    }
+
+    // 6. Chorus Enable
+    const chorusEnVal = typeof p.chorus_enable === 'number' ? p.chorus_enable : p.chorusEnable;
+    if (typeof chorusEnVal === 'number') {
+      const active = chorusEnVal > 0.5;
+      this.engine.params.chorus_enable = active;
+      if (this.dom.btnChorusEnable) {
+        this.dom.btnChorusEnable.classList.toggle('is-active', active);
+        const text = this.dom.btnChorusEnable.querySelector('span:last-child');
+        if (text) text.textContent = active ? 'CHORUS ACTIVE' : 'CHORUS BYPASS';
+        const led = this.dom.btnChorusEnable.querySelector('.braun-led');
+        if (led) led.classList.toggle('is-active-orange', active);
+      }
+    }
+
+    // 7. Chorus Dimension
+    const dimVal = typeof p.chorus_dimension === 'number' ? p.chorus_dimension : p.chorusDimension;
+    if (typeof dimVal === 'number') {
+      const dim = dimVal <= 1.0 ? dimVal * 100 : dimVal;
+      let modeVal = 2;
+      if (dim <= 45) modeVal = 1;
+      else if (dim <= 75) modeVal = 2;
+      else if (dim <= 90) modeVal = 3;
+      else modeVal = 4;
+      const group = document.getElementById('group-dimension-mode');
+      const btn = group?.querySelector(`button[data-val="${modeVal}"]`);
+      if (btn) this._updateSegmentActive('group-dimension-mode', btn);
+    }
+
+    // 8. Vector Display Mode
+    const displayVal = typeof p.display_mode === 'number' ? p.display_mode : p.displayMode;
+    if (typeof displayVal === 'number') {
+      const dVal = parseInt(displayVal, 10);
+      const mode = dVal === 0 ? 'CHLADNI' : (dVal === 1 ? 'ATTRACTOR' : 'FFT');
+      const group = document.getElementById('group-crt-mode');
+      const btn = group?.querySelector(`button[data-val="${mode}"]`);
+      if (btn) this._updateSegmentActive('group-crt-mode', btn);
+      if (this.crt) this.crt.setMode(mode);
+    }
+
+    // 9. Poisson Density indicator
+    const poissonVal = typeof p.poisson_density === 'number' ? p.poisson_density : p.poissonDensity;
+    if (typeof poissonVal === 'number') {
+      const pBtn = document.getElementById('btn-poisson-rain');
+      if (pBtn) pBtn.classList.toggle('is-active', poissonVal > 0.1);
+    }
+
+    // 10. Current Program / Preset
+    const progVal = typeof p.currentProgram === 'number' ? p.currentProgram : p.preset;
+    if (typeof progVal === 'number') {
+      const progIdx = Math.round(progVal);
+      if (this.dom.selectPreset && this.dom.selectPreset.options && progIdx >= 0 && progIdx < this.dom.selectPreset.options.length) {
+        this.dom.selectPreset.selectedIndex = progIdx;
+      }
+    }
+  }
+
   async init() {
     if (typeof window !== 'undefined') {
       window.__MR16__ = this;
@@ -545,15 +665,19 @@ class BraunMr16App {
     this._initCrtDisplay();
     this._initPerformanceStrip();
     this._initEventListeners();
+    this._syncInitialDiscreteState();
+    this._initJuceBridge();
     await this._loadPresets();
     this._initTheme();
-    this._initJuceBridge();
 
     if (this.isJuce) {
       this._emitJuceParam('requestSync', 0);
       setTimeout(() => {
         this._emitJuceParam('requestSync', 0);
-      }, 200);
+      }, 100);
+      setTimeout(() => {
+        this._emitJuceParam('requestSync', 0);
+      }, 300);
     }
 
     // Snapshot Initial Buffer A & B
@@ -640,11 +764,37 @@ class BraunMr16App {
   }
 
   _initKnobs() {
+    const isPercentKnob = (id) => [
+      'chorus_mix', 'chorusMix',
+      'modal_coupling', 'modalCoupling',
+      'chorus_dimension', 'chorusDimension',
+      'golden_pan_spread', 'goldenPanSpread',
+      'drive_saturation', 'driveSaturation',
+      'lorenz_freq_mod', 'lorenzFreqMod',
+      'lorenz_q_mod', 'lorenzQMod',
+      'dry_wet_mix', 'dryWetMix'
+    ].includes(id);
+
+    const getInitialParamValue = (paramId, defaultVal, maxVal) => {
+      if (typeof window !== 'undefined' && window.__JUCE_INITIAL_PARAMS__) {
+        const val = window.__JUCE_INITIAL_PARAMS__[paramId];
+        if (typeof val === 'number') {
+          if (isPercentKnob(paramId) && val <= 1.0 && maxVal > 1.0) {
+            return val * 100;
+          }
+          return val;
+        }
+      }
+      return defaultVal;
+    };
+
     const create = (id, options) => {
       const container = document.getElementById(id);
       if (!container) return;
+      const initialValue = getInitialParamValue(options.paramId, options.value, options.max);
       const knob = new BraunKnob(container, {
         ...options,
+        value: initialValue,
         onChange: (val) => {
           this.engine.setParam(options.paramId, val);
           this._emitJuceParam(options.paramId, val);
@@ -664,6 +814,9 @@ class BraunMr16App {
         }
       });
       this.knobs[options.paramId] = knob;
+      if (this.engine && this.engine.params && typeof this.engine.params[options.paramId] !== 'undefined') {
+        this.engine.params[options.paramId] = initialValue;
+      }
     };
 
     // --- Deck 01: Kinetic Exciter Knobs ---
@@ -1875,10 +2028,23 @@ class BraunMr16App {
   }
 }
 
-// Instantiate and start app on DOM ready
-if (typeof window !== 'undefined') {
-  window.addEventListener('DOMContentLoaded', () => {
-    window.braunMr16App = new BraunMr16App();
-    window.braunMr16App.init();
+// ============================================================================
+// Web App Lifecycle Guard: Fix DOMContentLoaded Race Condition
+// ============================================================================
+function bootstrapMr16() {
+  if (window.__MR16_INITIALIZED__) return;
+  window.__MR16_INITIALIZED__ = true;
+
+  window.braunMr16App = new BraunMr16App();
+  window.braunMr16App.init().catch((err) => {
+    console.error('[BRAUN MR-16] Fatal Initialization Error:', err);
   });
+}
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'interactive' || document.readyState === 'complete') {
+    bootstrapMr16();
+  } else {
+    document.addEventListener('DOMContentLoaded', bootstrapMr16, { once: true });
+  }
 }

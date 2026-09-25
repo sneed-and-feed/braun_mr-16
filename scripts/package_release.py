@@ -14,7 +14,7 @@ os.makedirs(release_dir, exist_ok=True)
 # Extract version from package.json
 with open(os.path.join(root_dir, "package.json"), "r", encoding="utf-8") as f:
     pkg = json.load(f)
-version = pkg.get("version", "1.0.11")
+version = pkg.get("version", "1.0.12")
 
 install_guide = """BRAUN MR-16 MODAL RESONATOR & KINETIC SYNTHESIZER
 Standard: DIN 1451 Technical Specification

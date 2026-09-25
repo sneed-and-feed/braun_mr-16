@@ -557,6 +557,12 @@ describe('BRAUN MR-16 UI Layout & CRT Display Audit Suite', () => {
       assert.ok(appJs.includes('isContentEditable'), 'Spacebar handler must ignore contentEditable elements');
       assert.ok(appJs.includes("e.target.tagName === 'BUTTON'"), 'Spacebar handler must ignore focused buttons to allow standard keyboard activation');
     });
+
+    it('verifies initial state injection and discrete state synchronization on window reopen', () => {
+      assert.ok(appJs.includes('window.__JUCE_INITIAL_PARAMS__'), 'Must read initial parameters from window.__JUCE_INITIAL_PARAMS__');
+      assert.ok(appJs.includes('_syncInitialDiscreteState'), 'Must implement _syncInitialDiscreteState method');
+      assert.ok(appJs.includes('bootstrapMr16'), 'Must use robust DOMContentLoaded lifecycle guard to prevent race conditions');
+    });
   });
 
 });

@@ -8,7 +8,7 @@
 
 **Document ID**: `MR16-VERIFY-CHECKLIST-001`  
 **Product**: BRAUN MR-16 Modaler Resonator & Kinetischer Impulssynthesizer  
-**Target Release**: `v1.0.11`  
+**Target Release**: `v1.0.12`  
 **Targets**: C++20 VST3 / CLAP / AU / Standalone Core & Zero-Install Web Audio Showcase (`web/`)  
 **Status**: **100% PASS (207/207 C++ Tests, 206/206 Web Audio Tests, 0 Leaks, 0 Denormals, 0 NaNs)**  
 **Verification Engineer**: MR-16 Lead Verification Specialist  
@@ -177,7 +177,7 @@ Scalar central summing bus gain is strictly $-\frac{2}{16} \cdot \text{coupling}
 
 ## 5. Conclusion & Acceptance Sign-off
 
-The BRAUN MR-16 (Target Release v1.0.11) has satisfied all technical criteria and operational requirements. All 207 headless DSP C++ tests (Tier 1: 39 cases, Tier 2: 8 cases, Tier 3: 160 cases) and 206 automated Web Audio verification tests pass with a 100% success rate, zero memory leaks, zero denormals, zero NaNs, and complete adherence to Dieter Rams functionalist austerity.
+The BRAUN MR-16 (Target Release v1.0.12) has satisfied all technical criteria and operational requirements. All 207 headless DSP C++ tests (Tier 1: 39 cases, Tier 2: 8 cases, Tier 3: 160 cases) and 206 automated Web Audio verification tests pass with a 100% success rate, zero memory leaks, zero denormals, zero NaNs, and complete adherence to Dieter Rams functionalist austerity.
 
 For architectural diagrams, complete mathematical formulations, and APVTS specifications, see [ARCHITECTURE.md](ARCHITECTURE.md).
 

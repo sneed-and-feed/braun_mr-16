@@ -580,6 +580,33 @@ juce::WebBrowserComponent::Options BRAUN_MR16AudioProcessorEditor::createWebOpti
     );
 #endif
 
+    juce::String initialParamsJson = "{\n";
+    const auto& table = mr16::getParameterMetadataTable();
+    for (size_t i = 0; i < table.size(); ++i)
+    {
+        const auto& meta = table[i];
+        if (auto* rawVal = editor.processorRef.getAPVTS().getRawParameterValue(meta.apvtsId))
+        {
+            const float val = rawVal->load(std::memory_order_relaxed);
+            initialParamsJson += "  \"" + juce::String(meta.apvtsId) + "\": " + juce::String(val, 6) + ",\n";
+            if (juce::String(meta.webId) != juce::String(meta.apvtsId))
+            {
+                initialParamsJson += "  \"" + juce::String(meta.webId) + "\": " + juce::String(val, 6) + ",\n";
+            }
+        }
+    }
+    initialParamsJson += "  \"power_state\": " + juce::String(editor.processorRef.isPower() ? 1.0f : 0.0f) + ",\n";
+    initialParamsJson += "  \"powerState\": " + juce::String(editor.processorRef.isPower() ? 1.0f : 0.0f) + ",\n";
+    initialParamsJson += "  \"scope_source\": " + juce::String(editor.processorRef.isMonitoringInput() ? 1.0f : 0.0f) + ",\n";
+    initialParamsJson += "  \"scopeSource\": " + juce::String(editor.processorRef.isMonitoringInput() ? 1.0f : 0.0f) + ",\n";
+    initialParamsJson += "  \"currentProgram\": " + juce::String(editor.processorRef.getCurrentProgram()) + "\n";
+    initialParamsJson += "}";
+
+    const juce::String userScript =
+        "window.__IS_JUCE__ = true;\n"
+        "window.__JUCE_INITIAL_PARAMS__ = " + initialParamsJson + ";\n"
+        "window.addEventListener('contextmenu', function(e) { if (!e.defaultPrevented) e.preventDefault(); }, false);";
+
     auto options = juce::WebBrowserComponent::Options{}
 #if JUCE_WINDOWS
         .withBackend(juce::WebBrowserComponent::Options::Backend::webview2)
@@ -588,7 +615,7 @@ juce::WebBrowserComponent::Options BRAUN_MR16AudioProcessorEditor::createWebOpti
                 .withUserDataFolder(juce::File::getSpecialLocation(juce::File::SpecialLocationType::tempDirectory).getChildFile("BraunMR16_WebView2"))
                 .withBackgroundColour(juce::Colour(0xff141517)))
 #endif
-        .withUserScript("window.__IS_JUCE__ = true; window.addEventListener('contextmenu', function(e) { if (!e.defaultPrevented) e.preventDefault(); }, false);")
+        .withUserScript(userScript)
         .withNativeIntegrationEnabled()
         .withResourceProvider([&editor](const juce::String& url) {
             return editor.getResource(url);
