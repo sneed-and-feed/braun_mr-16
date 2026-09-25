@@ -719,6 +719,7 @@ void BRAUN_MR16AudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     state.setProperty("currentProgram", mCurrentProgram, nullptr);
+    state.setProperty("scopeSource", mScopeSource.load(std::memory_order_relaxed), nullptr);
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     copyXmlToBinary(*xml, destData);
 }
@@ -731,6 +732,8 @@ void BRAUN_MR16AudioProcessor::setStateInformation(const void* data, int sizeInB
         auto vt = juce::ValueTree::fromXml(*xmlState);
         if (vt.hasProperty("currentProgram"))
             mCurrentProgram = static_cast<int>(vt.getProperty("currentProgram"));
+        if (vt.hasProperty("scopeSource"))
+            mScopeSource.store(static_cast<int>(vt.getProperty("scopeSource")), std::memory_order_relaxed);
         apvts.replaceState(vt);
     }
 }

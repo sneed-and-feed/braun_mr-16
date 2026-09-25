@@ -207,6 +207,7 @@ const paramsMeta = [
   { id: 'material_profile', webId: 'materialProfile', name: 'Material', deck: 2, min: 0, max: 4, def: 0, isChoice: true, choices: ['Wood', 'Glass', 'Steel', 'Brass', 'Nylon'] },
   { id: 'modal_coupling', webId: 'modalCoupling', name: 'Coupling', deck: 2, min: 0, max: 1, def: 0.25, unit: '%' },
   { id: 'modal_spread', webId: 'modalSpread', name: 'Harmonic Spread', deck: 2, min: 0.2, max: 3, def: 1.0, unit: 'x' },
+  { id: 'modal_q', webId: 'modalQ', name: 'Resonance Q', deck: 2, min: 5, max: 500, def: 50, unit: 'Q' },
 
   // Deck 03
   { id: 'lorenz_rate', webId: 'lorenzRate', name: 'Chaos Rate', deck: 3, min: 0.01, max: 10, def: 0.5, unit: 'Hz' },
@@ -226,7 +227,10 @@ const paramsMeta = [
   { id: 'vactrol_lpg_cutoff', webId: 'vactrolLpgCutoff', name: 'LPG Cutoff', deck: 5, min: 100, max: 20000, def: 12000, unit: 'Hz' },
   { id: 'drive_saturation', webId: 'driveSaturation', name: 'Drive Saturation', deck: 5, min: 0, max: 1, def: 0.25, unit: '%' },
   { id: 'master_trim_db', webId: 'masterTrimDb', name: 'Master Trim', deck: 5, min: -24, max: 12, def: 0, unit: 'dB' },
-  { id: 'dry_wet_mix', webId: 'dryWetMix', name: 'Dry / Wet', deck: 5, min: 0, max: 1, def: 0.65, unit: '%' }
+  { id: 'dry_wet_mix', webId: 'dryWetMix', name: 'Dry / Wet', deck: 5, min: 0, max: 1, def: 0.65, unit: '%' },
+
+  // Deck 06
+  { id: 'display_mode', webId: 'displayMode', name: 'Vector Display', deck: 3, min: 0, max: 2, def: 0, isChoice: true, choices: ['Chladni', 'Attractor', 'Modal FFT'] }
 ];
 
 const deckNames = {
@@ -431,6 +435,10 @@ if (window.__JUCE__ && window.__JUCE__.backend) {
       }
     }
   });
+
+  try {
+    window.__JUCE__.backend.emitEvent('paramChange', { id: 'requestSync', value: 0 });
+  } catch (_) {}
 }
 </script>
 </body>
@@ -536,7 +544,7 @@ void BRAUN_MR16AudioProcessorEditor::parameterChanged(const juce::String& parame
 {
 #if JUCE_WEB_BROWSER
     const auto& table = mr16::getParameterMetadataTable();
-    for (size_t i = 0; i < table.size(); ++i)
+    for (size_t i = 0; i < table.size() && i < kNumParams; ++i)
     {
         if (parameterID == table[i].apvtsId)
         {
@@ -792,6 +800,12 @@ void BRAUN_MR16AudioProcessorEditor::handleParamChangeFromWeb(const juce::var& d
 
     if (id.isEmpty()) return;
 
+    if (id.equalsIgnoreCase("requestSync") || id.equalsIgnoreCase("requestState"))
+    {
+        syncAllParametersToWeb();
+        return;
+    }
+
     // Handle switching to native JUCE UI
     if (id.equalsIgnoreCase("toggleNativeUI") ||
         id.equalsIgnoreCase("nativeUI") ||
@@ -940,6 +954,8 @@ void BRAUN_MR16AudioProcessorEditor::syncAllParametersToWeb()
         }
     }
     sendParameterUpdateToWeb("power_state", "powerState", processorRef.isPower() ? 1.0f : 0.0f);
+    sendParameterUpdateToWeb("scope_source", "scopeSource", processorRef.isMonitoringInput() ? 1.0f : 0.0f);
+    sendParameterUpdateToWeb("currentProgram", "preset", static_cast<float>(processorRef.getCurrentProgram()));
     sendRecordingStateUpdateToWeb(processorRef.isRecording());
 }
 
@@ -1030,7 +1046,7 @@ void BRAUN_MR16AudioProcessorEditor::timerCallback()
         }
 
         const auto& table = mr16::getParameterMetadataTable();
-        for (size_t i = 0; i < table.size(); ++i)
+        for (size_t i = 0; i < table.size() && i < kNumParams; ++i)
         {
             if (paramDirty[i].exchange(false, std::memory_order_acq_rel))
             {
@@ -1055,6 +1071,13 @@ void BRAUN_MR16AudioProcessorEditor::timerCallback()
         recordButton.setColour(juce::TextButton::buttonColourId,
                                processorRef.isRecording() ? findColour(mr16::BraunColours::braunOrangeColourId)
                                                           : findColour(mr16::BraunColours::bgPanelInsetColourId));
+
+        if (auto* p = processorRef.getAPVTS().getRawParameterValue(mr16::ParamIDs::poissonDensity.getParamID()))
+        {
+            const bool poissonActive = (p->load(std::memory_order_relaxed) > 0.1f);
+            if (poissonTriggerBtn.getToggleState() != poissonActive)
+                poissonTriggerBtn.setToggleState(poissonActive, juce::dontSendNotification);
+        }
 
         const int currentProg = processorRef.getCurrentProgram();
         if (presetComboBox.getSelectedId() != currentProg + 1)
@@ -1166,6 +1189,8 @@ void BRAUN_MR16AudioProcessorEditor::setupNativeControls()
 
     poissonTriggerBtn.setButtonText("POISSON RAIN");
     poissonTriggerBtn.setClickingTogglesState(true);
+    if (auto* p = processorRef.getAPVTS().getRawParameterValue(mr16::ParamIDs::poissonDensity.getParamID()))
+        poissonTriggerBtn.setToggleState(p->load(std::memory_order_relaxed) > 0.1f, juce::dontSendNotification);
     poissonTriggerBtn.onClick = [this] {
         if (auto* p = processorRef.getAPVTS().getParameter(mr16::ParamIDs::poissonDensity.getParamID()))
             p->setValueNotifyingHost(poissonTriggerBtn.getToggleState() ? 0.35f : 0.0f);

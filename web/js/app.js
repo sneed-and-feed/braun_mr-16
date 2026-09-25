@@ -302,6 +302,7 @@ class BraunMr16App {
           if (!data || typeof data !== 'object') return;
           const { id, webId, value } = data;
           const targetId = id || webId;
+
           if (targetId === 'power_state' || targetId === 'power' || targetId === 'powerState') {
             const isPowered = (value > 0.5);
             if (this.engine.isPowered !== isPowered) {
@@ -318,8 +319,30 @@ class BraunMr16App {
             return;
           }
 
+          if (targetId === 'scope_source' || targetId === 'scopeSource') {
+            const isInput = (value > 0.5);
+            const src = isInput ? 'IN' : 'OUT';
+            this.scopeSource = src;
+            const group = document.getElementById('group-scope-source');
+            const btn = group?.querySelector(`button[data-val="${src}"]`);
+            if (btn) this._updateSegmentActive('group-scope-source', btn);
+            if (this.crt) this.crt.setScopeSource(src);
+            return;
+          }
+
+          if (targetId === 'currentProgram' || targetId === 'preset') {
+            const progIdx = Math.round(value);
+            if (this.dom.selectPreset && this.dom.selectPreset.options && progIdx >= 0 && progIdx < this.dom.selectPreset.options.length) {
+              this.dom.selectPreset.selectedIndex = progIdx;
+            }
+            return;
+          }
+
           if (typeof this.engine.params[targetId] !== 'undefined') {
             this.engine.params[targetId] = value;
+          }
+          if (this.activeBuffer === 'A' && this.bufferA && typeof this.bufferA[targetId] !== 'undefined') {
+            this.bufferA[targetId] = value;
           }
 
           const isPercentKnob = [
@@ -352,6 +375,45 @@ class BraunMr16App {
             const btn = group?.querySelector(`button[data-val="${modeVal}"]`);
             if (btn) this._updateSegmentActive('group-exciter-mode', btn);
             this._updateExciterControls(modeVal);
+          } else if (targetId === 'manifold_type' || targetId === 'manifoldType') {
+            const mVal = parseInt(value, 10);
+            const group = document.getElementById('group-manifold');
+            const btn = group?.querySelector(`button[data-val="${mVal}"]`);
+            if (btn) this._updateSegmentActive('group-manifold', btn);
+          } else if (targetId === 'material_profile' || targetId === 'materialProfile') {
+            const mVal = parseInt(value, 10);
+            const group = document.getElementById('group-material');
+            const btn = group?.querySelector(`button[data-val="${mVal}"]`);
+            if (btn) this._updateSegmentActive('group-material', btn);
+          } else if (targetId === 'chorus_enable' || targetId === 'chorusEnable') {
+            const active = (value > 0.5);
+            if (this.dom.btnChorusEnable) {
+              this.dom.btnChorusEnable.classList.toggle('is-active', active);
+              const text = this.dom.btnChorusEnable.querySelector('span:last-child');
+              if (text) text.textContent = active ? 'CHORUS ACTIVE' : 'CHORUS BYPASS';
+              const led = this.dom.btnChorusEnable.querySelector('.braun-led');
+              if (led) led.classList.toggle('is-active-orange', active);
+            }
+          } else if (targetId === 'chorus_dimension' || targetId === 'chorusDimension') {
+            const dim = value <= 1.0 ? value * 100 : value;
+            let modeVal = 2;
+            if (dim <= 45) modeVal = 1;
+            else if (dim <= 75) modeVal = 2;
+            else if (dim <= 90) modeVal = 3;
+            else modeVal = 4;
+            const group = document.getElementById('group-dimension-mode');
+            const btn = group?.querySelector(`button[data-val="${modeVal}"]`);
+            if (btn) this._updateSegmentActive('group-dimension-mode', btn);
+          } else if (targetId === 'display_mode' || targetId === 'displayMode') {
+            const dVal = parseInt(value, 10);
+            const mode = dVal === 0 ? 'CHLADNI' : (dVal === 1 ? 'ATTRACTOR' : 'FFT');
+            const group = document.getElementById('group-crt-mode');
+            const btn = group?.querySelector(`button[data-val="${mode}"]`);
+            if (btn) this._updateSegmentActive('group-crt-mode', btn);
+            if (this.crt) this.crt.setMode(mode);
+          } else if (targetId === 'poisson_density' || targetId === 'poissonDensity') {
+            const pBtn = document.getElementById('btn-poisson-rain');
+            if (pBtn) pBtn.classList.toggle('is-active', value > 0.1);
           }
         });
 
@@ -424,6 +486,12 @@ class BraunMr16App {
           }
         };
       }
+      // 5. Request full parameter synchronization from C++ backend
+      try {
+        backend.emitEvent('paramChange', { id: 'requestSync', value: 0 });
+      } catch (err) {
+        console.warn('[JUCE] emitEvent requestSync error:', err);
+      }
     };
 
     if (window.__JUCE__?.backend) {
@@ -435,10 +503,10 @@ class BraunMr16App {
         if (window.__JUCE__?.backend) {
           clearInterval(poll);
           setupBackend();
-        } else if (attempts >= 50) {
+        } else if (attempts >= 100) {
           clearInterval(poll);
         }
-      }, 100);
+      }, 50);
       if (typeof poll.unref === 'function') {
         poll.unref();
       }
@@ -480,6 +548,13 @@ class BraunMr16App {
     await this._loadPresets();
     this._initTheme();
     this._initJuceBridge();
+
+    if (this.isJuce) {
+      this._emitJuceParam('requestSync', 0);
+      setTimeout(() => {
+        this._emitJuceParam('requestSync', 0);
+      }, 200);
+    }
 
     // Snapshot Initial Buffer A & B
     this.bufferA = JSON.parse(JSON.stringify(this.engine.params));
