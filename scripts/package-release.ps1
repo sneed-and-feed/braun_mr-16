@@ -36,7 +36,7 @@ Write-Host "====================================================================
 
 # 1. Version Resolution
 $PackageJsonPath = Join-Path $RootDir "package.json"
-$Version = "1.0.12"
+$Version = "1.0.13"
 if (Test-Path $PackageJsonPath) {
     try {
         $Pkg = Get-Content $PackageJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json

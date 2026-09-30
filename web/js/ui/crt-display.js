@@ -31,6 +31,8 @@ export class BraunCrtDisplay {
     this.isPowered = options.isPowered ?? true;
     this.isRunning = false;
     this.animationFrameId = null;
+    this._lastRenderTime = 0;
+    this._lastActiveTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
 
     // Color definitions
     this.updatePhosphorColors();
@@ -118,20 +120,34 @@ export class BraunCrtDisplay {
 
   setIntensity(val) {
     this.intensity = Math.max(0, Math.min(100, val));
+    this._lastActiveTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   }
 
   setMode(mode) {
     if (mode === 'CHLADNI' || mode === 'ATTRACTOR' || mode === 'MODAL_FFT') {
       this.mode = mode;
+      this._lastActiveTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     }
   }
 
   setScopeSource(source) {
     this.scopeSource = (source === 'IN' ? 'IN' : 'OUT');
+    this._lastActiveTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   }
 
   setPower(powered) {
+    const wasPowered = this.isPowered;
     this.isPowered = Boolean(powered);
+    if (!this.isPowered) {
+      this.stop();
+      if (this.canvas && this.ctx) {
+        const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        this.draw(now);
+      }
+    } else if (!wasPowered) {
+      this._lastActiveTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      this.start();
+    }
   }
 
   _initParticles() {
@@ -145,6 +161,7 @@ export class BraunCrtDisplay {
   }
 
   kickParticles(intensity = 1.0) {
+    this._lastActiveTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     for (let i = 0; i < this.numParticles; i++) {
       const idx = i * 4;
       const angle = Math.random() * Math.PI * 2;
@@ -278,12 +295,35 @@ export class BraunCrtDisplay {
     }
   }
 
+  _getTargetFrameInterval(now) {
+    if (!this.isPowered) return 500;
+    const idleMs = now - this._lastActiveTime;
+    if (idleMs < 1000) {
+      // Active audio / user interaction: ~60 FPS (16ms)
+      return 16;
+    } else if (idleMs < 4000) {
+      // Idle audio: ~15 FPS (66ms)
+      return 66;
+    } else {
+      // Deep idle: ~5 FPS (200ms)
+      return 200;
+    }
+  }
+
   start() {
     if (this.isRunning) return;
     this.isRunning = true;
+    this._lastRenderTime = 0;
     const loop = (timestamp) => {
       if (!this.isRunning) return;
-      this.draw(timestamp);
+      const now = timestamp || ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now());
+      const targetInterval = this._getTargetFrameInterval(now);
+      const elapsed = now - this._lastRenderTime;
+
+      if (elapsed >= targetInterval - 2) {
+        this._lastRenderTime = now;
+        this.draw(now);
+      }
       this.animationFrameId = requestAnimationFrame(loop);
     };
     this.animationFrameId = requestAnimationFrame(loop);
@@ -316,10 +356,13 @@ export class BraunCrtDisplay {
 
   updateTelemetry(telemetry) {
     if (!telemetry) return;
+    let hasSignal = false;
     if (telemetry.modalEnergies) {
       const len = Math.min(16, telemetry.modalEnergies.length);
       for (let i = 0; i < len; i++) {
-        this.modalEnergies[i] = telemetry.modalEnergies[i];
+        const e = telemetry.modalEnergies[i];
+        this.modalEnergies[i] = e;
+        if (e > 0.001) hasSignal = true;
       }
     }
     if (telemetry.modalFreqs) {
@@ -338,11 +381,18 @@ export class BraunCrtDisplay {
     if (telemetry.timeData) {
       const len = Math.min(512, telemetry.timeData.length);
       for (let i = 0; i < len; i++) {
-        this.timeData[i] = telemetry.timeData[i];
+        const s = telemetry.timeData[i];
+        this.timeData[i] = s;
+        if (Math.abs(s) > 0.005) hasSignal = true;
       }
     }
     if (telemetry.transientKick) {
       this.kickParticles(telemetry.transientKick);
+      hasSignal = true;
+    }
+
+    if (hasSignal) {
+      this._lastActiveTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     }
   }
 

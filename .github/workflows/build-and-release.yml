@@ -109,6 +109,21 @@ jobs:
           if [ -f "${CLAP_SRC}" ] || [ -d "${CLAP_SRC}" ]; then cp -R "${CLAP_SRC}" "${STAGE_DIR}/"; fi
           if [ -d "${AU_SRC}" ]; then cp -R "${AU_SRC}" "${STAGE_DIR}/"; fi
 
+          # Ad-hoc sign and remove quarantine flags on all macOS bundles before zipping (Gatekeeper bypass on Apple Silicon)
+          for BUNDLE in "${STAGE_DIR}"/*.app "${STAGE_DIR}"/*.vst3 "${STAGE_DIR}"/*.component "${STAGE_DIR}"/*.clap; do
+            if [ -e "$BUNDLE" ]; then
+              echo "Gatekeeper signing & unquarantine: $BUNDLE"
+              xattr -cr "$BUNDLE" 2>/dev/null || true
+              codesign --force --deep --sign - "$BUNDLE" 2>/dev/null || true
+            fi
+          done
+
+          # Copy macOS installer and launcher scripts
+          if [ -d "scripts/macos" ]; then
+            cp scripts/macos/*.command "${STAGE_DIR}/" 2>/dev/null || true
+            chmod +x "${STAGE_DIR}"/*.command 2>/dev/null || true
+          fi
+
           cp LICENSE "${STAGE_DIR}/"
           cp README.md "${STAGE_DIR}/"
 
@@ -117,6 +132,11 @@ jobs:
           MACOS UNIVERSAL (ARM64 & X86_64) INSTALLATION GUIDE
           Standard: DIN 1451 Technical Specification
 
+          EASY INSTALLATION:
+          Double-click 'Install.command' to automatically install AU, VST3, CLAP,
+          and Standalone application, and clear Gatekeeper security flags.
+
+          MANUAL INSTALLATION:
           1. VST3 PLUGIN INSTALLATION:
              Copy 'BRAUN_MR16.vst3' into:
              /Library/Audio/Plug-Ins/VST3/
@@ -135,7 +155,12 @@ jobs:
           4. STANDALONE APPLICATION:
              Move 'BRAUN_MR16.app' to /Applications.
 
-          5. ARCHITECTURE SUPPORT:
+          5. GATEKEEPER NOTE (APPLE SILICON & INTEL):
+             If macOS displays a security prompt, run in Terminal:
+               xattr -cr /path/to/BRAUN_MR16.*
+               codesign --force --deep --sign - /path/to/BRAUN_MR16.*
+
+          6. ARCHITECTURE SUPPORT:
              Universal Binary supporting Apple Silicon (M1/M2/M3/M4) and Intel x86_64.
              Minimum macOS target: 10.15 (Catalina) through macOS 14+ (Sonoma).
           EOF

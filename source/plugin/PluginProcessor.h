@@ -58,10 +58,16 @@ public:
 
     // Power lifecycle control
     void setPower(bool powered) noexcept {
-        isPoweredOn.store(powered, std::memory_order_relaxed);
-        mPendingEngineReset.store(true, std::memory_order_release);
+        const bool prev = isPoweredOn.exchange(powered, std::memory_order_relaxed);
+        if (!powered && prev)
+            mPendingEngineReset.store(true, std::memory_order_release);
         if (auto* p = apvts.getParameter(mr16::ParamIDs::powerState.getParamID()))
-            p->setValueNotifyingHost(powered ? 1.0f : 0.0f);
+        {
+            if (auto* pBool = dynamic_cast<juce::AudioParameterBool*>(p))
+                *pBool = powered;
+            else
+                p->setValueNotifyingHost(powered ? 1.0f : 0.0f);
+        }
     }
     bool isPower() const noexcept { return isPoweredOn.load(std::memory_order_relaxed); }
 

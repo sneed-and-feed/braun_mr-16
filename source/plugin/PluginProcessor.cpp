@@ -363,11 +363,12 @@ void BRAUN_MR16AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         if (paramPower != currentPower)
         {
             isPoweredOn.store(paramPower, std::memory_order_relaxed);
-            mPendingEngineReset.store(true, std::memory_order_release);
+            if (!paramPower)
+                mPendingEngineReset.store(true, std::memory_order_release);
         }
     }
 
-    // Process any explicitly queued engine resets (e.g. from setPower or power parameter changes)
+    // Process any explicitly queued engine resets (e.g. from powering down)
     if (mPendingEngineReset.exchange(false, std::memory_order_acq_rel))
     {
 #if MR16_HAS_DSP_ENGINE
@@ -375,7 +376,8 @@ void BRAUN_MR16AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 #endif
     }
 
-    // Standby Power Gating: If powered down, output clean silence unless smoothly awakened by MIDI Note-On
+    // Standby Power Gating: If powered down, output clean silence unless smoothly awakened
+    // by MIDI Note-On, incoming audio energy, or queued exciter triggers
     if (!isPoweredOn.load(std::memory_order_relaxed))
     {
         bool hasNoteOn = false;
@@ -392,15 +394,30 @@ void BRAUN_MR16AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
             }
         }
 
-        if (hasNoteOn)
+        // Detect incoming audio energy to wake up the plugin
+        bool hasAudioInput = false;
+        const auto* mainInputBus = getBus(true, 0);
+        if (mainInputBus != nullptr && mainInputBus->isEnabled() && getTotalNumInputChannels() > 0)
         {
-            // Smoothly wake the synthesizer from standby
-            isPoweredOn.store(true, std::memory_order_relaxed);
+            const float mag0 = buffer.getMagnitude(0, 0, numSamples);
+            const float mag1 = (numChannels > 1) ? buffer.getMagnitude(1, 0, numSamples) : 0.0f;
+            if (std::max(mag0, mag1) > 0.0005f) // -66 dB threshold
+            {
+                hasAudioInput = true;
+            }
+        }
+
+        // Check if there are queued exciter events in mr16Engine
+        bool hasQueuedTriggers = false;
 #if MR16_HAS_DSP_ENGINE
-            mr16Engine.reset();
+        if (mr16Engine.hasPendingEvents())
+            hasQueuedTriggers = true;
 #endif
-            if (auto* p = apvts.getParameter(mr16::ParamIDs::powerState.getParamID()))
-                p->setValueNotifyingHost(1.0f);
+
+        if (hasNoteOn || hasAudioInput || hasQueuedTriggers)
+        {
+            // Smoothly wake the synthesizer / resonator from standby
+            setPower(true);
         }
         else
         {
@@ -450,6 +467,8 @@ void BRAUN_MR16AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 #if MR16_HAS_DSP_ENGINE
     auto dspParams = snapshot.toDspParams();
     dspParams.euclideanEnable = mEuclideanEnable.load(std::memory_order_relaxed);
+    // Guarantee that DSP engine mute state strictly tracks isPoweredOn
+    dspParams.outputMute = !isPoweredOn.load(std::memory_order_relaxed);
     mr16Engine.setParameters(dspParams);
 
     // Clean audio input handling:
@@ -720,6 +739,7 @@ void BRAUN_MR16AudioProcessor::getStateInformation(juce::MemoryBlock& destData)
     auto state = apvts.copyState();
     state.setProperty("currentProgram", mCurrentProgram, nullptr);
     state.setProperty("scopeSource", mScopeSource.load(std::memory_order_relaxed), nullptr);
+    state.setProperty("isPoweredOn", isPoweredOn.load(std::memory_order_relaxed), nullptr);
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     copyXmlToBinary(*xml, destData);
 }
@@ -734,7 +754,21 @@ void BRAUN_MR16AudioProcessor::setStateInformation(const void* data, int sizeInB
             mCurrentProgram = static_cast<int>(vt.getProperty("currentProgram"));
         if (vt.hasProperty("scopeSource"))
             mScopeSource.store(static_cast<int>(vt.getProperty("scopeSource")), std::memory_order_relaxed);
+
+        bool restoredPower = true;
+        if (vt.hasProperty("isPoweredOn"))
+        {
+            restoredPower = static_cast<bool>(vt.getProperty("isPoweredOn"));
+        }
+        else if (auto* p = apvts.getRawParameterValue(mr16::ParamIDs::powerState.getParamID()))
+        {
+            restoredPower = (p->load(std::memory_order_relaxed) > 0.5f);
+        }
+
         apvts.replaceState(vt);
+
+        // Explicitly sync power state
+        setPower(restoredPower);
     }
 }
 

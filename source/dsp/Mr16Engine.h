@@ -157,6 +157,9 @@ public:
     bool enqueueTriggerButton(int buttonIndex, float velocity = 1.0f) noexcept;
     bool enqueueTriggerChime(int keyIndex, float velocity = 1.0f) noexcept;
     bool enqueueMidiNoteOn(int midiNote, float velocity) noexcept;
+    [[nodiscard]] bool hasPendingEvents() const noexcept {
+        return mQueueReadHead != mQueueWriteHead.load(std::memory_order_acquire);
+    }
 
     // Hard real-time audio block processing
     // Strictly ZERO heap allocations, 1 ScopedNoDenormals per block, lock-free

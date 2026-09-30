@@ -10,12 +10,10 @@ cmake_minimum_required(VERSION 3.22)
 # Configure Apple deployment targets before project()
 if(APPLE)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum macOS deployment target")
-    if(NOT CMAKE_OSX_ARCHITECTURES)
-        set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Universal macOS binary architectures")
-    endif()
+    set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "")
 endif()
 
-project(BRAUN_MR16_PROJECT VERSION 1.0.12 LANGUAGES C CXX)
+project(BRAUN_MR16_PROJECT VERSION 1.0.13 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -277,7 +275,7 @@ juce_add_plugin(BRAUN_MR16
     PLUGIN_CODE Mr16
     FORMATS ${MR16_FORMATS}
     PRODUCT_NAME "BRAUN_MR16"
-    VERSION "1.0.12"
+    VERSION "1.0.13"
     ${MR16_EXTRA_PLUGIN_ARGS}
 )
 

@@ -424,8 +424,19 @@ class BraunMr16App {
           const scope = data.scopeL || data.scopeSamplesL;
           if (this.crt) {
             const telemetry = {};
-            if (scope && Array.isArray(scope)) {
-              telemetry.timeData = scope;
+            if (scope) {
+              if (typeof scope === 'string') {
+                const bin = atob(scope);
+                const decoded = new Float32Array(bin.length);
+                for (let i = 0; i < bin.length; ++i) {
+                  let b = bin.charCodeAt(i);
+                  if (b > 127) b -= 256;
+                  decoded[i] = b / 127.0;
+                }
+                telemetry.timeData = decoded;
+              } else if (Array.isArray(scope)) {
+                telemetry.timeData = scope;
+              }
             }
             if (data.modalEnergies && Array.isArray(data.modalEnergies)) {
               telemetry.modalEnergies = data.modalEnergies;
@@ -435,8 +446,8 @@ class BraunMr16App {
                 x: data.lorenzX,
                 y: data.lorenzY || 0,
                 z: data.lorenzZ || 0,
-                rate: this.engine.params.lorenz_rate || 0.85,
-                chaos: (this.engine.params.lorenz_chaos || 0.5) * 28.0
+                rate: this.engine?.params?.lorenz_rate || 0.85,
+                chaos: (this.engine?.params?.lorenz_chaos || 0.5) * 28.0
               };
             }
             if (typeof data.exciterActivity === 'number' && data.exciterActivity > 0.05) {
@@ -446,12 +457,31 @@ class BraunMr16App {
           }
 
           if (data.modalEnergies && Array.isArray(data.modalEnergies)) {
+            const energies = data.modalEnergies;
             for (let i = 0; i < 16; i++) {
-              const bar = document.getElementById(`meter_${i}`);
+              const bar = this.meterElements ? this.meterElements[i] : document.getElementById(`meter_${i}`);
               if (bar) {
-                const energy = data.modalEnergies[i] || 0;
-                bar.style.width = `${Math.min(100, Math.max(0, energy * 100))}%`;
+                const energy = energies[i] || 0;
+                if (!this.prevMeterEnergies || Math.abs(energy - this.prevMeterEnergies[i]) > 0.01) {
+                  if (this.prevMeterEnergies) this.prevMeterEnergies[i] = energy;
+                  const pct = Math.min(100, Math.max(0, energy * 100));
+                  bar.style.width = `${pct}%`;
+                }
               }
+            }
+          }
+
+          const extLed = document.getElementById('led-ext-level');
+          if (extLed) {
+            const level = typeof data.exciterActivity === 'number' ? data.exciterActivity : 0.0;
+            if (level > 0.95) {
+              extLed.className = 'braun-led is-recording';
+            } else if (level > 0.25) {
+              extLed.className = 'braun-led is-active-orange';
+            } else if (level > 0.01) {
+              extLed.className = 'braun-led is-active-green';
+            } else {
+              extLed.className = 'braun-led';
             }
           }
         });
@@ -514,24 +544,40 @@ class BraunMr16App {
   }
 
   triggerDirac() {
+    if (this.isJuce) {
+      this._emitJuceExciter({ type: 'strike', vel: 1.0, hard: 1.0 });
+      return;
+    }
     this._ensureActiveAudio();
     this.engine.triggerDirac();
     this._emitJuceExciter({ type: 'strike', vel: 1.0, hard: 1.0 });
   }
 
   triggerFeltHammer() {
+    if (this.isJuce) {
+      this._emitJuceExciter({ type: 'strike', vel: 0.8, hard: 0.65 });
+      return;
+    }
     this._ensureActiveAudio();
     this.engine.triggerFeltHammer();
     this._emitJuceExciter({ type: 'strike', vel: 0.8, hard: 0.65 });
   }
 
   triggerStickSlip(speed = 0.6, force = 0.5) {
+    if (this.isJuce) {
+      this._emitJuceExciter({ type: 'friction', speed, force });
+      return;
+    }
     this._ensureActiveAudio();
     this.engine.triggerBowedFriction(speed);
     this._emitJuceExciter({ type: 'friction', speed, force });
   }
 
   triggerAirJet(vel = 0.8) {
+    if (this.isJuce) {
+      this._emitJuceExciter({ type: 'vactrol', vel });
+      return;
+    }
     this._ensureActiveAudio();
     this.engine.triggerAirJet(0.45);
     this._emitJuceExciter({ type: 'vactrol', vel });
@@ -716,6 +762,7 @@ class BraunMr16App {
   }
 
   async _ensureActiveAudio() {
+    if (this.isJuce) return;
     if (!this.engine.isInitialized) {
       await this.engine.init();
     }
@@ -761,6 +808,14 @@ class BraunMr16App {
       btnLoadSample: document.getElementById('btn-load-sample'),
       inputLoadSample: document.getElementById('input-load-sample')
     };
+
+    // Cache 16 modal energy meter bar elements and previous values to avoid DOM query storms
+    this.meterElements = [];
+    this.prevMeterEnergies = new Float32Array(16);
+    this.prevMeterEnergies.fill(-1);
+    for (let i = 0; i < 16; i++) {
+      this.meterElements.push(document.getElementById(`meter_${i}`));
+    }
   }
 
   _initKnobs() {
@@ -999,6 +1054,11 @@ class BraunMr16App {
       intensity: 85.0,
       isPowered: true
     });
+    this.crt.start();
+
+    // In JUCE mode, telemetry is already delivered via IPC events ('telemetryFrame').
+    // Only launch local polling loop in standalone web mode.
+    if (this.isJuce) return;
 
     // CRT 60 FPS Telemetry Update Loop
     const telemetryLoop = () => {
@@ -1093,6 +1153,17 @@ class BraunMr16App {
 
   triggerChimeKey(index, velocity = 0.8) {
     if (index < 0 || index >= 16) return;
+    if (this.isJuce) {
+      this._emitJuceExciter({ type: 'chime', key: index, vel: velocity });
+      if (this.dom.chimeStrip) {
+        const keys = this.dom.chimeStrip.children;
+        if (keys[index]) {
+          keys[index].classList.add('is-active');
+          setTimeout(() => keys[index].classList.remove('is-active'), 120);
+        }
+      }
+      return;
+    }
     this._ensureActiveAudio();
     const freq = this.chimePitches[index];
     this.engine.triggerStrike(this.engine.params.strike_hardness, velocity, freq);
@@ -1480,8 +1551,7 @@ class BraunMr16App {
           document.activeElement.blur();
         }
         if (e.code === 'Space') {
-          this._ensureActiveAudio();
-          this.engine.triggerDirac();
+          this.triggerDirac();
         } else {
           const idx = CHIME_HOTKEYS.indexOf(keyLower);
           if (idx !== -1) {
@@ -1593,6 +1663,15 @@ class BraunMr16App {
       this.dom.selectTheme.blur();
       if (document.activeElement && typeof document.activeElement.blur === 'function') {
         document.activeElement.blur();
+      }
+    });
+
+    // --- Visibility State Synchronization ---
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        if (this.crt) this.crt.stop();
+      } else {
+        if (this.crt && this.crt.isPowered) this.crt.start();
       }
     });
   }

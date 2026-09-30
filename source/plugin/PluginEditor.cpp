@@ -233,7 +233,8 @@ const paramsMeta = [
   { id: 'display_mode', webId: 'displayMode', name: 'Vector Display', deck: 3, min: 0, max: 2, def: 0, isChoice: true, choices: ['Chladni', 'Attractor', 'Modal FFT'] }
 ];
 
-const deckNames = {
+)html"
+R"html(const deckNames = {
   1: 'Deck 01 · Kinetic Exciter',
   2: 'Deck 02 · 16-Pole Modal Matrix',
   3: 'Deck 03 · 3D Lorenz Attractor',
@@ -420,17 +421,38 @@ if (window.__JUCE__ && window.__JUCE__.backend) {
     }
   });
 
+  const meterElements = [];
+  const prevEnergies = new Float32Array(16);
+  prevEnergies.fill(-1);
+  for (let i = 0; i < 16; ++i) {
+    meterElements.push(document.getElementById('meter_' + i));
+  }
+
   window.__JUCE__.backend.addEventListener('telemetryFrame', (data) => {
     if (!data) return;
-    if (data.scopeL && data.scopeL.length > 0) {
-      scopeData = new Float32Array(data.scopeL);
+    if (data.scopeL) {
+      if (typeof data.scopeL === 'string') {
+        const bin = atob(data.scopeL);
+        scopeData = new Float32Array(bin.length);
+        for (let i = 0; i < bin.length; ++i) {
+          let b = bin.charCodeAt(i);
+          if (b > 127) b -= 256;
+          scopeData[i] = b / 127.0;
+        }
+      } else if (data.scopeL.length > 0) {
+        scopeData = new Float32Array(data.scopeL);
+      }
     }
     if (data.modalEnergies && data.modalEnergies.length >= 16) {
       for (let i = 0; i < 16; ++i) {
-        const m = document.getElementById('meter_' + i);
-        if (m) {
-          const pct = Math.min(100, Math.max(0, data.modalEnergies[i] * 120));
-          m.style.width = pct + '%';
+        const energy = data.modalEnergies[i] || 0;
+        if (Math.abs(energy - prevEnergies[i]) > 0.01) {
+          prevEnergies[i] = energy;
+          const m = meterElements[i];
+          if (m) {
+            const pct = Math.min(100, Math.max(0, energy * 120));
+            m.style.width = pct + '%';
+          }
         }
       }
     }
@@ -573,9 +595,6 @@ juce::WebBrowserComponent::Options BRAUN_MR16AudioProcessorEditor::createWebOpti
         L"--mute-audio "
         L"--disable-audio-output "
         L"--disable-web-midi "
-        L"--disable-background-timer-throttling "
-        L"--disable-backgrounding-occluded-windows "
-        L"--disable-renderer-backgrounding "
         L"--disable-features=Translate,OptimizationHints,MediaRouter,InterestFeedContentSuggestions,CalculateNativeWinOcclusion"
     );
 #endif
@@ -988,7 +1007,40 @@ void BRAUN_MR16AudioProcessorEditor::syncAllParametersToWeb()
 
 void BRAUN_MR16AudioProcessorEditor::sendTelemetryToWeb()
 {
-    if (!webComponent) return;
+    if (!processorRef.isPower() || !webComponent || !webComponent->isVisible()) return;
+
+    // Check signal amplitude in scopeSamplesL and modalEnergies
+    float maxAmp = 0.0f;
+    for (size_t i = 0; i < 256; ++i)
+    {
+        const float a = std::abs(latestTelemetryFrame.scopeSamplesL[i]);
+        if (a > maxAmp) maxAmp = a;
+    }
+    for (size_t i = 0; i < 16; ++i)
+    {
+        const float a = std::abs(latestTelemetryFrame.modalEnergies[i]);
+        if (a > maxAmp) maxAmp = a;
+    }
+
+    const bool isSilent = (maxAmp < 0.0005f);
+    if (isSilent)
+    {
+        silentFrameCounter++;
+    }
+    else
+    {
+        silentFrameCounter = 0;
+        silentTelemetryCounter = 0;
+    }
+
+    // If silent for > 6 frames (~100 ms), throttle IPC dispatch to 2 Hz (every 30 frames at 60 Hz timer)
+    if (silentFrameCounter > 6)
+    {
+        silentTelemetryCounter++;
+        if (silentTelemetryCounter < 30)
+            return;
+        silentTelemetryCounter = 0;
+    }
 
     juce::DynamicObject::Ptr obj = new juce::DynamicObject();
     juce::Array<juce::var> energies;
@@ -1001,10 +1053,14 @@ void BRAUN_MR16AudioProcessorEditor::sendTelemetryToWeb()
     obj->setProperty("lorenzZ", latestTelemetryFrame.lorenzZ);
     obj->setProperty("exciterActivity", latestTelemetryFrame.exciterActivity);
 
-    juce::Array<juce::var> samples;
+    // Quantize 256 samples into int8 (-128..127) and encode to Base64 to eliminate JSON string churn
+    int8_t quantizedSamples[256];
     for (size_t i = 0; i < 256; ++i)
-        samples.add(latestTelemetryFrame.scopeSamplesL[i]);
-    obj->setProperty("scopeL", samples);
+    {
+        const float s = std::clamp(latestTelemetryFrame.scopeSamplesL[i], -1.0f, 1.0f);
+        quantizedSamples[i] = static_cast<int8_t>(std::round(s * 127.0f));
+    }
+    obj->setProperty("scopeL", juce::Base64::toBase64(quantizedSamples, sizeof(quantizedSamples)));
 
     webComponent->emitEventIfBrowserIsVisible("telemetryFrame", juce::var(obj.get()));
 }
