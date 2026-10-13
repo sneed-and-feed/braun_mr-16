@@ -35,13 +35,31 @@ void LorenzAttractor::setRateHz(float rateHz) noexcept {
 
 void LorenzAttractor::setDepth(float depth) noexcept {
     const float cleanDepth = std::isfinite(depth) ? depth : 0.5f;
-    mDepth = std::clamp(cleanDepth, 0.0f, 1.0f);
+    const float clamped = std::clamp(cleanDepth, 0.0f, 1.0f);
+    if (std::abs(clamped - mDepth) < 1.0e-6f) {
+        return;
+    }
+    mDepth = clamped;
     updateNormalizedOutputs();
 }
 
 void LorenzAttractor::setDetuneMaxCents(float cents) noexcept {
     const float cleanCents = std::isfinite(cents) ? cents : 50.0f;
-    mMaxDetuneCents = std::clamp(cleanCents, 0.0f, 200.0f);
+    const float clamped = std::clamp(cleanCents, 0.0f, 200.0f);
+    if (std::abs(clamped - mMaxDetuneCents) < 1.0e-5f) {
+        return;
+    }
+    mMaxDetuneCents = clamped;
+    updateNormalizedOutputs();
+}
+
+void LorenzAttractor::setQModDepth(float qMod) noexcept {
+    const float cleanQMod = std::isfinite(qMod) ? qMod : 0.65f;
+    const float clamped = std::clamp(cleanQMod, 0.0f, 1.0f);
+    if (std::abs(clamped - mQModDepth) < 1.0e-6f) {
+        return;
+    }
+    mQModDepth = clamped;
     updateNormalizedOutputs();
 }
 
@@ -89,17 +107,21 @@ void LorenzAttractor::updateNormalizedOutputs() noexcept {
 
     // Frequency detune across 16 modes: odd modes pitch up, even modes pitch down
     const float baseDetuneCents = mNormX * mDepth * mMaxDetuneCents;
-    for (size_t i = 0; i < kNumModes; ++i) {
-        const float sign = (i % 2 == 1) ? 1.0f : -1.0f;
-        // Mode-dependent dispersion coefficient
-        const float modeSpread = 1.0f + 0.03f * static_cast<float>(i);
-        const float cents = sign * baseDetuneCents * modeSpread;
-        // 2^(cents / 1200)
-        mFreqMultipliers[i] = std::pow(2.0f, cents * (1.0f / 1200.0f));
+    if (std::abs(baseDetuneCents) <= 1.0e-5f) {
+        mFreqMultipliers.fill(1.0f);
+    } else {
+        for (size_t i = 0; i < kNumModes; ++i) {
+            const float sign = (i % 2 == 1) ? 1.0f : -1.0f;
+            // Mode-dependent dispersion coefficient
+            const float modeSpread = 1.0f + 0.03f * static_cast<float>(i);
+            const float cents = sign * baseDetuneCents * modeSpread;
+            // 2^(cents / 1200)
+            mFreqMultipliers[i] = std::pow(2.0f, cents * (1.0f / 1200.0f));
+        }
     }
 
     // Modal Q-factor spread (skews damping between low and high modes)
-    mQSpread = 1.0f + mNormY * mDepth * 0.65f;
+    mQSpread = 1.0f + mNormY * mDepth * mQModDepth;
 
     // Spatial panning wobble offset in radians
     mPanOffsetRad = mNormX * mDepth * 0.35f;

@@ -18,7 +18,7 @@ if len(sys.argv) > 1 and sys.argv[1].strip():
 else:
     with open(os.path.join(root_dir, "package.json"), "r", encoding="utf-8") as f:
         pkg = json.load(f)
-    version = pkg.get("version", "1.0.13")
+    version = pkg.get("version", "1.0.14")
 
 install_guide = """BRAUN MR-16 MODAL RESONATOR & KINETIC SYNTHESIZER
 Standard: DIN 1451 Technical Specification

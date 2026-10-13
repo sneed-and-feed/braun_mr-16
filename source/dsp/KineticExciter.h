@@ -168,6 +168,7 @@ private:
     // 4. External Audio Input Conditioning & Direct Resonator Injection
     bool  mExtEnable { false };
     float mExtSensitivity { 1.0f };
+    float mCalibratedExtSensitivity { 1.0f };
     float mExtDirectMix { 0.35f };
     OnePoleSmoother mExtGainSmoother;
     TptHighpass2Pole mExtAntiRumbleHpf;

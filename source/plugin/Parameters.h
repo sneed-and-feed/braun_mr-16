@@ -366,6 +366,7 @@ struct alignas(64) Mr16ParameterSnapshot {
         p.chaosRateHz           = lorenzRate;
         p.chaosDepth            = lorenzChaos;
         p.chaosDetuneCents      = lorenzFreqMod * 300.0f;
+        p.chaosQMod             = lorenzQMod;
 
         p.chorusEnable          = chorusEnable;
         p.chorusRateHz          = chorusRateHz;

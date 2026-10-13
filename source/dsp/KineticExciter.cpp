@@ -124,30 +124,50 @@ void KineticExciter::setFriction(float bowVelocity, float bowPressure) noexcept 
 }
 
 void KineticExciter::setPoissonRain(bool enable, float epm, float humanize) noexcept {
+    const bool wasEnabled = mPoissonEnable;
+    const float prevEpm = mPoissonEpm;
     mPoissonEnable = enable;
     mPoissonEpm = std::clamp(epm, 1.0f, 1200.0f);
     mPoissonHumanize = std::clamp(humanize, 0.0f, 1.0f);
-    updatePoissonCountdown();
+    if (mPoissonEnable) {
+        if (!wasEnabled || mPoissonCountdown <= 0 || std::abs(mPoissonEpm - prevEpm) > 0.01f) {
+            updatePoissonCountdown();
+        }
+    } else {
+        mPoissonCountdown = 0;
+    }
 }
 
 void KineticExciter::setEuclidean(bool enable, int pulses, int steps, float bpm) noexcept {
+    const int clampedSteps = std::clamp(steps, 2, 32);
+    const int clampedPulses = std::clamp(pulses, 0, clampedSteps);
+    const float clampedBpm = std::clamp(bpm, 20.0f, 300.0f);
+    const bool bpmChanged = std::abs(clampedBpm - mEuclideanBpm) > 0.01f;
     mEuclideanEnable = enable;
-    mEuclideanSteps = std::clamp(steps, 2, 32);
-    mEuclideanPulses = std::clamp(pulses, 0, mEuclideanSteps);
-    mEuclideanBpm = std::clamp(bpm, 20.0f, 300.0f);
-    updateEuclideanRhythm();
+    mEuclideanSteps = clampedSteps;
+    mEuclideanPulses = clampedPulses;
+    mEuclideanBpm = clampedBpm;
+    if (bpmChanged || mEuclideanClockSamples <= 0) {
+        updateEuclideanRhythm();
+    }
 }
 
 void KineticExciter::setExternalInput(bool enable, float sensitivity, float directMix) noexcept {
     mExtEnable = enable;
-    mExtSensitivity = std::clamp(sensitivity, 0.0f, 5.0f);
+    const float clampedSens = std::clamp(sensitivity, 0.0f, 5.0f);
+    if (std::abs(clampedSens - mExtSensitivity) > 1.0e-6f) {
+        mExtSensitivity = clampedSens;
+        mCalibratedExtSensitivity = (mExtSensitivity > 0.0f) ? std::pow(mExtSensitivity, 1.25f) : 0.0f;
+    }
     mExtDirectMix = std::clamp(directMix, 0.0f, 1.0f);
     mExtGainSmoother.setTarget(enable ? 1.0f : 0.0f);
 }
 
 void KineticExciter::setMicrotonalScale(MicrotonalScale scale) noexcept {
-    mScale = scale;
-    computeScaleRatios();
+    if (mScale != scale) {
+        mScale = scale;
+        computeScaleRatios();
+    }
 }
 
 void KineticExciter::setChimeRootHz(float rootHz) noexcept {
@@ -363,8 +383,7 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
     const float currentExtGain = mExtGainSmoother.next();
     if (currentExtGain > 1.0e-5f) {
         // Calibrated smooth, musically intuitive drive curve (audio taper: S^1.25)
-        const float calibratedSens = (mExtSensitivity > 0.0f) ? std::pow(mExtSensitivity, 1.25f) : 0.0f;
-        const float extScale = calibratedSens * currentExtGain;
+        const float extScale = mCalibratedExtSensitivity * currentExtGain;
         const float continuousExt = dcY * (extScale * mExtDirectMix);
         const float pulseExt = dcY * (mExtPulseEnv * extScale * 0.20f);
         exciterSum += continuousExt + pulseExt;

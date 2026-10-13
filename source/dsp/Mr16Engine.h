@@ -55,6 +55,7 @@ struct Mr16Parameters {
     float chaosRateHz           { 1.0f };
     float chaosDepth            { 0.50f };
     float chaosDetuneCents      { 50.0f };
+    float chaosQMod             { 0.65f };
 
     // Deck 04: Tri-Phase Spatial BBD Chorus
     bool  chorusEnable          { true };

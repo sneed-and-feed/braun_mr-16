@@ -852,7 +852,8 @@ class BraunMr16App {
         value: initialValue,
         onChange: (val) => {
           this.engine.setParam(options.paramId, val);
-          this._emitJuceParam(options.paramId, val);
+          const juceVal = (isPercentKnob(options.paramId) && options.max === 100.0) ? (val * 0.01) : val;
+          this._emitJuceParam(options.paramId, juceVal);
         },
         onContextMenu: (e) => {
           if (this.isJuce && typeof window !== 'undefined' && window.__JUCE__?.backend) {

@@ -82,21 +82,23 @@ export class BraunCrtDisplay {
     if (typeof window !== 'undefined') {
       window.addEventListener('resize', this._resizeHandler);
     }
-    if (typeof ResizeObserver !== 'undefined' && this.canvas && this.canvas.parentElement) {
+    if (typeof ResizeObserver !== 'undefined' && this.canvas) {
       this._resizeObserver = new ResizeObserver(this._resizeHandler);
-      this._resizeObserver.observe(this.canvas.parentElement);
+      this._resizeObserver.observe(this.canvas);
+      if (this.canvas.parentElement) {
+        this._resizeObserver.observe(this.canvas.parentElement);
+      }
     }
   }
 
   _requestResize() {
+    this._resize();
     if (this._resizeRafId) return;
     if (typeof requestAnimationFrame === 'function') {
       this._resizeRafId = requestAnimationFrame(() => {
         this._resizeRafId = null;
         this._resize();
       });
-    } else {
-      this._resize();
     }
   }
 
@@ -175,8 +177,8 @@ export class BraunCrtDisplay {
     if (!this.canvas || !this.ctx) return;
     const rect = this.canvas.getBoundingClientRect();
     const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) ? Math.max(2, window.devicePixelRatio) : 2;
-    const w = Math.round(rect.width || this.canvas.clientWidth || 580);
-    const h = Math.round(rect.height || this.canvas.clientHeight || 260);
+    const w = this.canvas.clientWidth || Math.round(rect.width) || 580;
+    const h = this.canvas.clientHeight || Math.round(rect.height) || 260;
 
     const targetW = Math.floor(w * dpr);
     const targetH = Math.floor(h * dpr);

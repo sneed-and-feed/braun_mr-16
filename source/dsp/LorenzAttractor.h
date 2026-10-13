@@ -36,6 +36,7 @@ public:
     void setRateHz(float rateHz) noexcept;
     void setDepth(float depth) noexcept; // 0.0 to 1.0 overall chaos depth
     void setDetuneMaxCents(float cents) noexcept; // Typically 0 to 120 cents
+    void setQModDepth(float qMod) noexcept; // 0.0 to 1.0 Q spread modulation depth
 
     // Advances the chaotic attractor state by one sample
     void step() noexcept;
@@ -83,6 +84,7 @@ private:
     float mDt { 0.005f };
     float mDepth { 0.50f };
     float mMaxDetuneCents { 50.0f };
+    float mQModDepth { 0.65f };
 
     // Attractor physical state
     float mX { 0.10f };

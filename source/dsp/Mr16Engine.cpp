@@ -428,6 +428,7 @@ void Mr16Engine::applyParametersToDsp() noexcept {
     mLorenz.setRateHz(mParams.chaosRateHz);
     mLorenz.setDepth(mParams.chaosDepth);
     mLorenz.setDetuneMaxCents(mParams.chaosDetuneCents);
+    mLorenz.setQModDepth(mParams.chaosQMod);
 
     // Deck 04: Spatial Chorus
     mChorus.setEnabled(mParams.chorusEnable);

@@ -1133,6 +1133,40 @@ inline void registerTier1Tests() {
         return test::gCurrentTestAssertFailures == 0;
     });
 
+    registerTest("Tier 1", "T1_DYN_12", "Mr16Engine - Per-Block setParameters() Preserves Poisson Rain Countdown & Lorenz Q Modulation", []() {
+        mr16::Mr16Engine engine;
+        engine.prepare(48000.0, 256);
+        engine.reset();
+
+        mr16::Mr16Parameters p;
+        p.poissonEnable = true;
+        p.poissonEpm = 60.0f; // 1 Hz nominal inter-arrival (>> 1 audio block)
+        p.poissonHumanize = 0.25f;
+        p.euclideanEnable = false;
+        p.externalAudioEnable = false;
+        p.chaosDepth = 0.80f;
+        p.chaosQMod = 0.50f;
+        p.outputMute = false;
+
+        constexpr int blockSize = 256;
+        constexpr int numBlocks = (48000 * 4) / blockSize; // 4 seconds
+        std::vector<float> outL(blockSize, 0.0f), outR(blockSize, 0.0f);
+
+        float maxPeak = 0.0f;
+        for (int b = 0; b < numBlocks; ++b) {
+            // Simulate PluginProcessor::processBlock calling setParameters every block
+            engine.setParameters(p);
+            engine.processBlock(nullptr, nullptr, outL.data(), outR.data(), blockSize);
+            for (int s = 0; s < blockSize; ++s) {
+                maxPeak = std::max(maxPeak, std::max(std::abs(outL[s]), std::abs(outR[s])));
+            }
+        }
+
+        TEST_ASSERT(maxPeak > 0.01f, "Poisson rain must trigger strikes even when setParameters() is called on every audio block");
+        TEST_ASSERT(maxPeak <= 1.05f, "Poisson rain output must remain bounded below saturator ceiling");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
 }
 
 } // namespace test

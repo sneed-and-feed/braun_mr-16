@@ -26,14 +26,19 @@ void ModalResonatorMatrix::reset() noexcept {
     mOvertoneSpread = 1.0f;
     mQNorm.fill(1.0f);
 
+    mInitialized = false;
     updateMaterialParameters();
     setManifold(mManifold, mManifoldMorph);
     calculateDampingAndQ();
     updateFilterCoefficients();
     calculateSpatialPanning();
+    mInitialized = true;
 }
 
 void ModalResonatorMatrix::setBipolarSpread(bool enabled) noexcept {
+    if (mInitialized && mBipolarSpread == enabled) {
+        return;
+    }
     mBipolarSpread = enabled;
     calculateDampingAndQ();
     updateFilterCoefficients();
@@ -85,14 +90,22 @@ void ModalResonatorMatrix::updateMaterialParameters() noexcept {
 }
 
 void ModalResonatorMatrix::setFundamentalHz(float f0Hz) noexcept {
-    mFundamentalHz = std::clamp(f0Hz, 20.0f, 4000.0f);
+    const float clamped = std::clamp(f0Hz, 20.0f, 4000.0f);
+    if (mInitialized && std::abs(clamped - mFundamentalHz) < 1.0e-5f) {
+        return;
+    }
+    mFundamentalHz = clamped;
     calculateDampingAndQ();
     updateFilterCoefficients();
 }
 
 void ModalResonatorMatrix::setManifold(ManifoldType type, float morph) noexcept {
+    const float clampedMorph = std::clamp(morph, 0.0f, 1.0f);
+    if (mInitialized && mManifold == type && std::abs(clampedMorph - mManifoldMorph) < 1.0e-6f) {
+        return;
+    }
     mManifold = type;
-    mManifoldMorph = std::clamp(morph, 0.0f, 1.0f);
+    mManifoldMorph = clampedMorph;
 
     const auto& currentRatios = [&]() -> const std::array<float, kNumModes>& {
         switch (type) {
@@ -125,6 +138,9 @@ void ModalResonatorMatrix::setManifold(ManifoldType type, float morph) noexcept 
 }
 
 void ModalResonatorMatrix::setMaterial(MaterialType material) noexcept {
+    if (mInitialized && mMaterial == material) {
+        return;
+    }
     mMaterial = material;
     updateMaterialParameters();
     calculateDampingAndQ();
@@ -132,19 +148,31 @@ void ModalResonatorMatrix::setMaterial(MaterialType material) noexcept {
 }
 
 void ModalResonatorMatrix::setDecayScale(float decayScale) noexcept {
-    mDecayScale = std::clamp(decayScale, 0.05f, 20.0f);
+    const float clamped = std::clamp(decayScale, 0.05f, 20.0f);
+    if (mInitialized && std::abs(clamped - mDecayScale) < 1.0e-5f) {
+        return;
+    }
+    mDecayScale = clamped;
     calculateDampingAndQ();
     updateFilterCoefficients();
 }
 
 void ModalResonatorMatrix::setQScale(float qScale) noexcept {
-    mQScale = std::clamp(qScale, 0.05f, 20.0f);
+    const float clamped = std::clamp(qScale, 0.05f, 20.0f);
+    if (mInitialized && std::abs(clamped - mQScale) < 1.0e-5f) {
+        return;
+    }
+    mQScale = clamped;
     calculateDampingAndQ();
     updateFilterCoefficients();
 }
 
 void ModalResonatorMatrix::setOvertoneSpread(float spread) noexcept {
-    mOvertoneSpread = std::clamp(spread, 0.2f, 3.0f);
+    const float clamped = std::clamp(spread, 0.2f, 3.0f);
+    if (mInitialized && std::abs(clamped - mOvertoneSpread) < 1.0e-5f) {
+        return;
+    }
+    mOvertoneSpread = clamped;
     updateFilterCoefficients();
 }
 
@@ -153,7 +181,11 @@ void ModalResonatorMatrix::setCouplingDepth(float coupling) noexcept {
 }
 
 void ModalResonatorMatrix::setStereoWidth(float width) noexcept {
-    mStereoWidth = std::clamp(width, 0.0f, 1.5f);
+    const float clamped = std::clamp(width, 0.0f, 1.5f);
+    if (mInitialized && std::abs(clamped - mStereoWidth) < 1.0e-5f) {
+        return;
+    }
+    mStereoWidth = clamped;
     calculateSpatialPanning();
 }
 
@@ -208,6 +240,8 @@ void ModalResonatorMatrix::calculateDampingAndQ() noexcept {
             effectiveRatio = mBaseRatios[i] * dispersion * beating;
         }
 
+        mEffectiveUnspreadRatios[i] = effectiveRatio;
+
         const float cleanF0 = std::isfinite(mFundamentalHz) ? mFundamentalHz : 220.0f;
         const float f = std::clamp(cleanF0 * effectiveRatio, 20.0f, nyquist);
         const float fKhz = f * 0.001f;
@@ -216,6 +250,7 @@ void ModalResonatorMatrix::calculateDampingAndQ() noexcept {
         const float cleanBaseQ = std::isfinite(baseQ) ? baseQ : 50.0f;
         const float cleanDecay = std::isfinite(mDecayScale) ? mDecayScale : 1.0f;
         mBaseQ[i] = std::clamp(cleanBaseQ * cleanDecay * mQScale, 0.5f, 4000.0f);
+        mCouplingQDamping[i] = 1.0f / std::sqrt(1.0f + mBaseQ[i] * 0.05f);
     }
 }
 
@@ -224,33 +259,22 @@ void ModalResonatorMatrix::updateFilterCoefficients() noexcept {
     const float spreadFactor = std::clamp(mOvertoneSpread, 0.2f, 3.0f);
 
     for (size_t i = 0; i < kNumModes; ++i) {
+        const float unspreadRatio = mEffectiveUnspreadRatios[i];
         float effectiveRatio = 1.0f;
         if (mBipolarSpread) {
             if (i < 4) {
                 // Modes 0..3: Sub-harmonic / undertone support with lower dispersion
-                const float m = static_cast<float>(i);
-                const float dispersion = std::sqrt(1.0f + (mStiffnessB * 0.20f) * m * m);
-                const float beating = 1.0f + (mClusterDetune * 0.40f) * std::sin(m * kPi / 2.5f);
-                const float baseSub = kSubHarmonicRatios[i] * dispersion * beating;
                 // Bipolar spread: spreads downward from 1.0 as spreadFactor increases
-                effectiveRatio = std::clamp(1.0f - (1.0f - baseSub) * spreadFactor, 0.15f, 0.98f);
+                effectiveRatio = std::clamp(1.0f - (1.0f - unspreadRatio) * spreadFactor, 0.15f, 0.98f);
             } else if (i == 4) {
                 // Mode 4: Fundamental anchor (f0)
                 effectiveRatio = 1.0f;
             } else {
                 // Modes 5..15: Upward harmonic / inharmonic dispersion from manifold
-                const size_t mIdx = i - 4;
-                const float m = static_cast<float>(mIdx);
-                const float dispersion = std::sqrt(1.0f + mStiffnessB * m * m);
-                const float beating = 1.0f + mClusterDetune * std::sin(m * kPi / 2.5f);
-                const float ratio = mBaseRatios[mIdx] * dispersion * beating;
-                effectiveRatio = 1.0f + (ratio - 1.0f) * spreadFactor;
+                effectiveRatio = 1.0f + (unspreadRatio - 1.0f) * spreadFactor;
             }
         } else {
-            const float m = static_cast<float>(i);
-            const float dispersion = std::sqrt(1.0f + mStiffnessB * m * m);
-            const float beating = 1.0f + mClusterDetune * std::sin(m * kPi / 2.5f);
-            effectiveRatio = 1.0f + (mBaseRatios[i] * dispersion * beating - 1.0f) * spreadFactor;
+            effectiveRatio = 1.0f + (unspreadRatio - 1.0f) * spreadFactor;
         }
 
         // Effective modulated center frequency
@@ -302,12 +326,26 @@ void ModalResonatorMatrix::calculateSpatialPanning() noexcept {
 void ModalResonatorMatrix::applyModulation(const std::array<float, kNumModes>& freqMultipliers,
                                           float qSpreadFactor,
                                           float panOffsetRad) noexcept {
-    mModFreqMultipliers = freqMultipliers;
-    mModQSpread = qSpreadFactor;
-    mModPanOffset = panOffsetRad;
+    bool filterChanged = std::abs(qSpreadFactor - mModQSpread) > 1.0e-6f;
+    if (!filterChanged) {
+        for (size_t i = 0; i < kNumModes; ++i) {
+            if (std::abs(freqMultipliers[i] - mModFreqMultipliers[i]) > 1.0e-6f) {
+                filterChanged = true;
+                break;
+            }
+        }
+    }
+    const bool panChanged = std::abs(panOffsetRad - mModPanOffset) > 1.0e-6f;
 
-    updateFilterCoefficients();
-    calculateSpatialPanning();
+    if (filterChanged) {
+        mModFreqMultipliers = freqMultipliers;
+        mModQSpread = qSpreadFactor;
+        updateFilterCoefficients();
+    }
+    if (panChanged) {
+        mModPanOffset = panOffsetRad;
+        calculateSpatialPanning();
+    }
 }
 
 void ModalResonatorMatrix::processSample(float exciterInput, float& outL, float& outR) noexcept {
@@ -375,8 +413,7 @@ void ModalResonatorMatrix::processSample(float exciterInput, float& outL, float&
         const size_t prev = (i + kNumModes - 1) % kNumModes;
         const size_t next = (i + 1) % kNumModes;
         const float diff = 0.5f * (modeOutputs[prev] + modeOutputs[next]) - modeOutputs[i];
-        const float qDamping = 1.0f / std::sqrt(1.0f + mBaseQ[i] * 0.05f);
-        const float coupledV = diff * (couplingScale * qDamping);
+        const float coupledV = diff * (couplingScale * mCouplingQDamping[i]);
         // Bounded soft saturation ensures loop gain strictly < 1.0 (no runaway feedback)
         mCoupledFeedback[i] = flushDenormal(std::tanh(coupledV * 0.5f));
     }

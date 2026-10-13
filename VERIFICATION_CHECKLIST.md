@@ -1,6 +1,6 @@
 # BRAUN MR-16 Verification Checklist & Automated Validation Harness
 
-[![Verification Status: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(207%2F207%20C%2B%2B%20%7C%20206%2F206%20Web)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
+[![Verification Status: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(208%2F208%20C%2B%2B%20%7C%20221%2F221%20Web)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
 [![Zero Leaks](https://img.shields.io/badge/Memory%20Leaks-0-blue?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
 [![Zero Denormals](https://img.shields.io/badge/Denormals-0-blue?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
 [![Zero NaNs](https://img.shields.io/badge/NaN%20%2F%20Inf-0-blue?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
@@ -8,9 +8,9 @@
 
 **Document ID**: `MR16-VERIFY-CHECKLIST-001`  
 **Product**: BRAUN MR-16 Modaler Resonator & Kinetischer Impulssynthesizer  
-**Target Release**: `v1.0.12`  
+**Target Release**: `v1.0.14`  
 **Targets**: C++20 VST3 / CLAP / AU / Standalone Core & Zero-Install Web Audio Showcase (`web/`)  
-**Status**: **100% PASS (207/207 C++ Tests, 206/206 Web Audio Tests, 0 Leaks, 0 Denormals, 0 NaNs)**  
+**Status**: **100% PASS (208/208 C++ Tests, 221/221 Web Audio Tests, 0 Leaks, 0 Denormals, 0 NaNs)**  
 **Verification Engineer**: MR-16 Lead Verification Specialist  
 **Manufacturer**: Sneed's Feed & Seed Ltd.  
 **Legal Homage**: Not affiliated with Braun GmbH. Dieter Rams inspired design homage.  
@@ -38,7 +38,7 @@ node web/test-stiction-vactrol-panning.mjs
 cmake -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release --target mr16_headless_dsp_tests
 
-# Execute the native standalone DSP verification binary (207 tests)
+# Execute the native standalone DSP verification binary (208 tests)
 .\build\source\tests\Release\mr16_headless_dsp_tests.exe
 ```
 
@@ -48,14 +48,14 @@ cmake --build build --config Release --target mr16_headless_dsp_tests
 
 | Verification Category | Target Scope | Assertions / Cases | Execution Time | Status |
 |:---|:---|:---:|:---:|:---:|
-| **Native DSP Tier 1 (Features)** | Exciters, Manifolds, Materials, Lorenz, BBD Chorus | 39 / 39 Cases | < 500 ms | **PASS** |
+| **Native DSP Tier 1 (Features)** | Exciters, Manifolds, Materials, Lorenz, BBD Chorus | 40 / 40 Cases | < 500 ms | **PASS** |
 | **Native DSP Tier 2 (Boundaries)**| Multi-rate, buffer sizes (1-2048), denormals, overload | 8 / 8 Cases | < 600 ms | **PASS** |
-| **Native DSP Tier 3 (Physical Acoustics)**| Karnopp stiction, vactrol decay, golden panning, anti-runaway limiters | 160 / 160 Cases | ~10.0 s | **PASS** |
-| **Total C++ Headless Verification**| Complete DSP verification test runner | 207 / 207 Cases | ~11.1 s | **PASS** |
+| **Native DSP Tier 3 (Physical Acoustics)**| Karnopp stiction, vactrol decay, golden panning, anti-runaway limiters | 160 / 160 Cases | ~2.5 s | **PASS** |
+| **Total C++ Headless Verification**| Complete DSP verification test runner | 208 / 208 Cases | ~3.5 s | **PASS** |
 | **Web UI & Architecture** | `web/verify.mjs` (token parity, Rams rules, WAV rec) | 15 / 15 Cases | ~30 ms | **PASS** |
 | **Checklist Validation** | `web/test-checklist.mjs` (coefficients, immunity, presets) | 16 / 16 Cases | ~50 ms | **PASS** |
 | **Physical Dynamics Suite** | `web/test-stiction-vactrol-panning.mjs` (stiction, vactrol, panning, limiter) | 106 / 106 Cases | ~35 ms | **PASS** |
-| **Complete Web Audio API Suite** | `npm test` (all 6 test suites) | 206 / 206 Tests | ~11.5 s | **PASS** |
+| **Complete Web Audio API Suite** | `npm test` (all 7 test suites) | 221 / 221 Tests | ~17.5 s | **PASS** |
 | **Memory Leak Audit** | Intercepted `operator new/delete` over 100 blocks | 0 Allocations | Continuous | **0 LEAKS** |
 | **Denormal Immunity** | Hardware FTZ/DAZ + Software `flushDenormal()` | 100% Flush | Continuous | **0 DENORMALS** |
 | **Numerical Stability** | +40 dBFS input bursts, infinite feedback | 0 NaNs / 0 Infs | Continuous | **0 NaNs** |

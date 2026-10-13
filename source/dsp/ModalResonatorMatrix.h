@@ -175,10 +175,13 @@ private:
 
     // Frequencies & Qs
     std::array<float, kNumModes> mBaseRatios { 1.0f };
+    std::array<float, kNumModes> mEffectiveUnspreadRatios { 1.0f };
     std::array<float, kNumModes> mBaseQ { 50.0f };
+    std::array<float, kNumModes> mCouplingQDamping { 1.0f };
     std::array<float, kNumModes> mCurrentFrequencies { 220.0f };
     std::array<float, kNumModes> mQNorm { 1.0f };
     bool mBipolarSpread { false };
+    bool mInitialized { false };
 
     // Modulation states
     std::array<float, kNumModes> mModFreqMultipliers { 1.0f };

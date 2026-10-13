@@ -1816,8 +1816,9 @@ void BRAUN_MR16AudioProcessorEditor::layoutNativeControls()
     // Deck 02 (Modal Matrix)
     layoutComboInArea(findCombo(mr16::ParamIDs::manifoldType), deck2Area.removeFromTop(38).reduced(4, 2));
     layoutComboInArea(findCombo(mr16::ParamIDs::materialProfile), deck2Area.removeFromTop(38).reduced(4, 2));
-    layout2Knobs(findKnob(mr16::ParamIDs::modalFrequency), findKnob(mr16::ParamIDs::modalDamping), deck2Area, 75);
-    layout2Knobs(findKnob(mr16::ParamIDs::modalCoupling), findKnob(mr16::ParamIDs::modalSpread), deck2Area, 75);
+    layout2Knobs(findKnob(mr16::ParamIDs::modalFrequency), findKnob(mr16::ParamIDs::modalDamping), deck2Area, 72);
+    layout2Knobs(findKnob(mr16::ParamIDs::modalCoupling), findKnob(mr16::ParamIDs::modalSpread), deck2Area, 72);
+    layout1Knob(findKnob(mr16::ParamIDs::modalQ), deck2Area, 72);
 
     // Deck 03 (Lorenz Attractor)
     layout2Knobs(findKnob(mr16::ParamIDs::lorenzRate), findKnob(mr16::ParamIDs::lorenzChaos), deck3Area, 80);
