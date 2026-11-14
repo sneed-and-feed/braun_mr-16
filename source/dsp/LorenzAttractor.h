@@ -42,9 +42,9 @@ public:
     void step() noexcept;
 
     // Direct state coordinates
-    [[nodiscard]] float getX() const noexcept { return mX; }
-    [[nodiscard]] float getY() const noexcept { return mY; }
-    [[nodiscard]] float getZ() const noexcept { return mZ; }
+    [[nodiscard]] float getX() const noexcept { return static_cast<float>(mX); }
+    [[nodiscard]] float getY() const noexcept { return static_cast<float>(mY); }
+    [[nodiscard]] float getZ() const noexcept { return static_cast<float>(mZ); }
 
     // Normalized coordinates in [-1, +1] (or [0, 1] for Z)
     [[nodiscard]] float getNormalizedX() const noexcept { return mNormX; }
@@ -63,33 +63,37 @@ public:
     [[nodiscard]] float getSpatialPanOffset() const noexcept { return mPanOffsetRad; }
 
 private:
+    static constexpr double kSigmaD = 10.0;
+    static constexpr double kRhoD   = 28.0;
+    static constexpr double kBetaD  = 8.0 / 3.0;
+
     struct StateDeriv {
-        float dx { 0.0f };
-        float dy { 0.0f };
-        float dz { 0.0f };
+        double dx { 0.0 };
+        double dy { 0.0 };
+        double dz { 0.0 };
     };
 
-    [[nodiscard]] static inline StateDeriv evaluateDeriv(float x, float y, float z) noexcept {
+    [[nodiscard]] static inline StateDeriv evaluateDeriv(double x, double y, double z) noexcept {
         return {
-            kSigma * (y - x),
-            x * (kRho - z) - y,
-            x * y - kBeta * z
+            kSigmaD * (y - x),
+            x * (kRhoD - z) - y,
+            x * y - kBetaD * z
         };
     }
 
     void updateNormalizedOutputs() noexcept;
 
-    float mSampleRate { 48000.0f };
+    double mSampleRate { 48000.0 };
     float mRateHz { 1.0f };
-    float mDt { 0.005f };
+    double mDt { 0.005 };
     float mDepth { 0.50f };
     float mMaxDetuneCents { 50.0f };
     float mQModDepth { 0.65f };
 
-    // Attractor physical state
-    float mX { 0.10f };
-    float mY { 0.0f };
-    float mZ { 0.0f };
+    // Attractor physical state (double precision prevents float32 ULP stagnation at 192 kHz & low rates)
+    double mX { 0.10 };
+    double mY { 0.0 };
+    double mZ { 0.0 };
 
     // Normalized outputs
     float mNormX { 0.0f };

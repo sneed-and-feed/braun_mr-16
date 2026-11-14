@@ -45,7 +45,7 @@ public:
     // Direct performance triggers
     void triggerStrike(float velocity, float hardness = 0.65f) noexcept;
     void triggerStrikeButton(int buttonIndex, float velocity = 1.0f) noexcept;
-    void triggerChimeKey(int keyIndex, float velocity = 1.0f) noexcept;
+    void triggerChimeKey(int keyIndex, float velocity = 1.0f, float freqOverrideHz = 0.0f) noexcept;
 
     // Continuous friction / bow excitation
     void setFriction(float bowVelocity, float bowPressure) noexcept;
@@ -92,6 +92,7 @@ private:
     // 2. Karnopp Stick-Slip Friction (Bowed Metal / Glass)
     OnePoleSmoother mBowVelocitySmoother;
     OnePoleSmoother mBowPressureSmoother;
+    OnePoleLowpass  mRosinGrainFilter;
     float mFrictionState { 0.0f };
 
     // 3. Buchla 292 Optical Vactrol Dynamic Pluck
@@ -201,8 +202,9 @@ private:
     bool  mNewChimeTriggered { false };
     std::array<float, kNumChimeKeys> mScaleRatios { 1.0f };
 
-    // Output activity indicator
+    // Output activity indicator (sample-rate invariant envelope pole)
     float mExciterActivity { 0.0f };
+    float mActivityDecayCoeff { 0.992f };
 };
 
 } // namespace braun::mr16

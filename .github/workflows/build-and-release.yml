@@ -49,7 +49,7 @@ jobs:
   # ==============================================================================
   build-macos:
     name: macOS Universal (VST3, AU, CLAP, Standalone)
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4

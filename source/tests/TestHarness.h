@@ -256,7 +256,7 @@ inline std::vector<float> computeAutocorrelation(const std::vector<float>& signa
 
 inline bool hasNaNOrInf(const std::vector<float>& signal) {
     for (float v : signal) {
-        if (!std::isfinite(v)) return true;
+        if (!mr16::isFinite(v)) return true;
     }
     return false;
 }

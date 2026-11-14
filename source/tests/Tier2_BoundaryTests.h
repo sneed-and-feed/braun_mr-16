@@ -217,9 +217,97 @@ inline void registerTier2Tests() {
             engine.processBlock(inL.data(), inR.data(), outL.data(), outR.data(), bs);
 
             for (int s = 0; s < bs; ++s) {
-                TEST_ASSERT(std::isfinite(outL[s]) && std::isfinite(outR[s]), "Block size processing must produce finite samples");
+                TEST_ASSERT(mr16::isFinite(outL[s]) && mr16::isFinite(outR[s]), "Block size processing must produce finite samples");
             }
         }
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    registerTest("Tier 2", "T2_TOX_03", "Toxic Immunity - Bitwise IEEE-754 isFinite & safeClamp Under /fp:fast", []() {
+        volatile uint32_t rawQNaN32 = 0x7FC00001u;
+        volatile uint32_t rawSNaN32 = 0x7F800001u;
+        volatile uint32_t rawPosInf32 = 0x7F800000u;
+        volatile uint32_t rawNegInf32 = 0xFF800000u;
+
+        float qnan32 = 0.0f, snan32 = 0.0f, posInf32 = 0.0f, negInf32 = 0.0f;
+        uint32_t tmp32 = rawQNaN32;   std::memcpy(&qnan32, &tmp32, sizeof(float));
+        tmp32 = rawSNaN32;            std::memcpy(&snan32, &tmp32, sizeof(float));
+        tmp32 = rawPosInf32;          std::memcpy(&posInf32, &tmp32, sizeof(float));
+        tmp32 = rawNegInf32;          std::memcpy(&negInf32, &tmp32, sizeof(float));
+
+        TEST_ASSERT(!mr16::isFinite(qnan32), "Bitwise float qNaN must be detected under /fp:fast");
+        TEST_ASSERT(!mr16::isFinite(snan32), "Bitwise float sNaN must be detected under /fp:fast");
+        TEST_ASSERT(!mr16::isFinite(posInf32), "Bitwise float +Inf must be detected under /fp:fast");
+        TEST_ASSERT(!mr16::isFinite(negInf32), "Bitwise float -Inf must be detected under /fp:fast");
+        TEST_ASSERT(mr16::isFinite(0.0f) && mr16::isFinite(-1.0f) && mr16::isFinite(12345.67f),
+                    "Finite float values must return true");
+
+        volatile uint64_t rawQNaN64 = 0x7FF8000000000001ULL;
+        volatile uint64_t rawPosInf64 = 0x7FF0000000000000ULL;
+        double qnan64 = 0.0, posInf64 = 0.0;
+        uint64_t tmp64 = rawQNaN64;   std::memcpy(&qnan64, &tmp64, sizeof(double));
+        tmp64 = rawPosInf64;          std::memcpy(&posInf64, &tmp64, sizeof(double));
+
+        TEST_ASSERT(!mr16::isFinite(qnan64), "Bitwise double qNaN must be detected under /fp:fast");
+        TEST_ASSERT(!mr16::isFinite(posInf64), "Bitwise double +Inf must be detected under /fp:fast");
+        TEST_ASSERT(mr16::isFinite(48000.0) && mr16::isFinite(-0.001), "Finite double values must return true");
+
+        const float clampedNaN = mr16::safeClamp(qnan32, -1.0f, 1.0f);
+        const float clampedInf = mr16::safeClamp(posInf32, -1.0f, 1.0f);
+        TEST_ASSERT(mr16::isFinite(clampedNaN) && clampedNaN >= -1.0f && clampedNaN <= 1.0f,
+                    "safeClamp(NaN) must neutralize to finite fallback within [lo, hi]");
+        TEST_ASSERT(mr16::isFinite(clampedInf) && clampedInf >= -1.0f && clampedInf <= 1.0f,
+                    "safeClamp(+Inf) must neutralize to finite fallback within [lo, hi]");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    registerTest("Tier 2", "T2_RATE_03", "Block Size Edge Cases (0, 1, 4096) Zero-Alloc Safety & Live 256-Sample Scope Telemetry", []() {
+        mr16::Mr16Engine engine;
+        engine.prepare(48000.0, 4096);
+        engine.reset();
+
+        std::vector<float> inL(4096, 0.0f), inR(4096, 0.0f);
+        std::vector<float> outL(4096, 0.0f), outR(4096, 0.0f);
+
+        // Warm up
+        engine.processBlock(inL.data(), inR.data(), outL.data(), outR.data(), 64);
+        engine.enqueueTriggerStrike(0.85f, 0.75f);
+
+        gAllocationCount = 0;
+        gBytesAllocated = 0;
+        gTrackAllocations = true;
+
+        // 0-sample degenerate block
+        engine.processBlock(inL.data(), inR.data(), outL.data(), outR.data(), 0);
+
+        // 1-sample ultra-short blocks
+        for (int i = 0; i < 64; ++i) {
+            engine.processBlock(inL.data(), inR.data(), outL.data(), outR.data(), 1);
+        }
+
+        // 4096-sample large host buffer (> 2048 legacy cap)
+        engine.processBlock(inL.data(), inR.data(), outL.data(), outR.data(), 4096);
+
+        gTrackAllocations = false;
+
+        TEST_ASSERT(gAllocationCount == 0, "Edge-case block sizes (0, 1, 4096) must make ZERO heap allocations");
+        TEST_ASSERT(gBytesAllocated == 0, "Edge-case block sizes (0, 1, 4096) must allocate ZERO bytes");
+        TEST_ASSERT(test_utils::isSignalFinite(outL) && test_utils::isSignalFinite(outR),
+                    "4096-sample block output must be 100% finite");
+
+        const auto viz = engine.getVisualizerFrame();
+        TEST_ASSERT(viz.scopeSamplesL.size() == 256 && viz.scopeSamplesR.size() == 256,
+                    "VisualizerFrame must publish full 256-sample scope window");
+        float scopePeak = 0.0f;
+        bool scopeFinite = true;
+        for (size_t i = 0; i < 256; ++i) {
+            if (!mr16::isFinite(viz.scopeSamplesL[i]) || !mr16::isFinite(viz.scopeSamplesR[i])) {
+                scopeFinite = false;
+            }
+            scopePeak = std::max(scopePeak, std::max(std::abs(viz.scopeSamplesL[i]), std::abs(viz.scopeSamplesR[i])));
+        }
+        TEST_ASSERT(scopeFinite, "VisualizerFrame scope ring samples must be strictly finite");
+        TEST_ASSERT(scopePeak > 1.0e-5f, "VisualizerFrame scope ring must capture non-zero live audio waveform");
         return test::gCurrentTestAssertFailures == 0;
     });
 

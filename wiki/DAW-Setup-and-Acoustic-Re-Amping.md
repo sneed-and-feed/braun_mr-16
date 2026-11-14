@@ -64,7 +64,7 @@ The MR-16 is distributed as 64-bit native plugins with **0 samples algorithmic l
 
 Bitwig offers native hosting for the **CLAP** format with advanced non-destructive modulation:
 1. Drag the CLAP version onto an instrument or audio track.
-2. The MR-16 exposes all 33 APVTS parameters to Bitwig's internal macro modulators, LFOs, and voice stacks.
+2. The MR-16 exposes all 37 APVTS parameters to Bitwig's internal macro modulators, LFOs, and voice stacks.
 3. Bitwig Note Expression (micro-pitch, timbre, and pressure) maps seamlessly to `modal_frequency` and `strike_velocity`.
 
 ---
@@ -151,7 +151,7 @@ In JUCE 8, all rotary knobs and discrete buttons maintain total host context men
 - **Host Parameter Encoders:** Parameter IDs (`modal_frequency`, `modal_damping`, etc.) map directly to motorized console faders and DAW automation lanes.
 
 ### Total Session Recall & State Persistence
-The MR-16 serializes all 33 APVTS parameters, discrete switch states (`power_state`, `scope_source`, `exciter_type`, `manifold_type`, `material_profile`, `chorus_enable`, `chorus_dimension`, `display_mode`, `poisson_density`), and the active program name directly into the DAW project XML state tree.
+The MR-16 serializes all 37 APVTS parameters, discrete switch states (`power_state`, `scope_source`, `exciter_type`, `euclidean_enable`, `manifold_type`, `material_profile`, `chorus_enable`, `chorus_dimension`, `soft_limiter`, `display_mode`, `poisson_density`), and the active program name directly into the DAW project XML state tree.
 
 ### Zero-Latency Editor Lifecycle
 Thanks to JUCE 8 `withUserScript(window.__JUCE_INITIAL_PARAMS__)` technology introduced in `v1.0.12`, closing and reopening the MR-16 plugin GUI in any host (even during high-CPU audio playback) **never resets knob positions or causes audio dropouts**. All parameters are injected synchronously before the interface evaluates, guaranteeing 100% session stability.

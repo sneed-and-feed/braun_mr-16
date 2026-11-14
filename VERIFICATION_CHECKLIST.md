@@ -1,6 +1,6 @@
 # BRAUN MR-16 Verification Checklist & Automated Validation Harness
 
-[![Verification Status: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(208%2F208%20C%2B%2B%20%7C%20221%2F221%20Web)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
+[![Verification Status: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(216%2F216%20C%2B%2B%20%7C%20230%2F230%20Web)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
 [![Zero Leaks](https://img.shields.io/badge/Memory%20Leaks-0-blue?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
 [![Zero Denormals](https://img.shields.io/badge/Denormals-0-blue?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
 [![Zero NaNs](https://img.shields.io/badge/NaN%20%2F%20Inf-0-blue?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
@@ -8,9 +8,9 @@
 
 **Document ID**: `MR16-VERIFY-CHECKLIST-001`  
 **Product**: BRAUN MR-16 Modaler Resonator & Kinetischer Impulssynthesizer  
-**Target Release**: `v1.0.14`  
+**Target Release**: `v1.1.0`  
 **Targets**: C++20 VST3 / CLAP / AU / Standalone Core & Zero-Install Web Audio Showcase (`web/`)  
-**Status**: **100% PASS (208/208 C++ Tests, 221/221 Web Audio Tests, 0 Leaks, 0 Denormals, 0 NaNs)**  
+**Status**: **100% PASS (216/216 C++ Tests + 6/6 Core Invariants, 230/230 Web Audio Tests, 0 Leaks, 0 Denormals, 0 NaNs)**  
 **Verification Engineer**: MR-16 Lead Verification Specialist  
 **Manufacturer**: Sneed's Feed & Seed Ltd.  
 **Legal Homage**: Not affiliated with Braun GmbH. Dieter Rams inspired design homage.  
@@ -38,8 +38,9 @@ node web/test-stiction-vactrol-panning.mjs
 cmake -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release --target mr16_headless_dsp_tests
 
-# Execute the native standalone DSP verification binary (208 tests)
+# Execute the native standalone DSP verification binary (216 tests)
 .\build\source\tests\Release\mr16_headless_dsp_tests.exe
+ctest --test-dir build -C Release --output-on-failure
 ```
 
 ---
@@ -48,14 +49,14 @@ cmake --build build --config Release --target mr16_headless_dsp_tests
 
 | Verification Category | Target Scope | Assertions / Cases | Execution Time | Status |
 |:---|:---|:---:|:---:|:---:|
-| **Native DSP Tier 1 (Features)** | Exciters, Manifolds, Materials, Lorenz, BBD Chorus | 40 / 40 Cases | < 500 ms | **PASS** |
-| **Native DSP Tier 2 (Boundaries)**| Multi-rate, buffer sizes (1-2048), denormals, overload | 8 / 8 Cases | < 600 ms | **PASS** |
-| **Native DSP Tier 3 (Physical Acoustics)**| Karnopp stiction, vactrol decay, golden panning, anti-runaway limiters | 160 / 160 Cases | ~2.5 s | **PASS** |
-| **Total C++ Headless Verification**| Complete DSP verification test runner | 208 / 208 Cases | ~3.5 s | **PASS** |
+| **Native DSP Tier 1 (Features)** | Exciters, 5 Manifolds, Materials, Double-RK4 Lorenz, BBD Chorus, Chime/Limiter/Steer | 46 / 46 Cases | < 5.0 s | **PASS** |
+| **Native DSP Tier 2 (Boundaries)**| Multi-rate (44.1k-192k), block sizes (0, 1-4096), `/fp:fast` bitwise NaN/Inf, scope ring | 10 / 10 Cases | < 600 ms | **PASS** |
+| **Native DSP Tier 3 (Physical Acoustics)**| Karnopp stiction, vactrol decay, golden panning, anti-runaway limiters | 160 / 160 Cases | ~3.5 s | **PASS** |
+| **Total C++ Headless Verification**| `mr16_headless_dsp_tests` (216) + `mr16_dsp_verification_tests` (6) | 216 / 216 (+ 6/6) | ~8.1 s | **PASS** |
 | **Web UI & Architecture** | `web/verify.mjs` (token parity, Rams rules, WAV rec) | 15 / 15 Cases | ~30 ms | **PASS** |
-| **Checklist Validation** | `web/test-checklist.mjs` (coefficients, immunity, presets) | 16 / 16 Cases | ~50 ms | **PASS** |
+| **Checklist Validation** | `web/test-checklist.mjs` (37-param APVTS, coefficients, immunity, v1.1.0 regressions) | 25 / 25 Cases | ~60 ms | **PASS** |
 | **Physical Dynamics Suite** | `web/test-stiction-vactrol-panning.mjs` (stiction, vactrol, panning, limiter) | 106 / 106 Cases | ~35 ms | **PASS** |
-| **Complete Web Audio API Suite** | `npm test` (all 7 test suites) | 221 / 221 Tests | ~17.5 s | **PASS** |
+| **Complete Web Audio API Suite** | `npm test` (all 7 test suites / 49 sub-suites) | 230 / 230 Tests | ~7.0 s | **PASS** |
 | **Memory Leak Audit** | Intercepted `operator new/delete` over 100 blocks | 0 Allocations | Continuous | **0 LEAKS** |
 | **Denormal Immunity** | Hardware FTZ/DAZ + Software `flushDenormal()` | 100% Flush | Continuous | **0 DENORMALS** |
 | **Numerical Stability** | +40 dBFS input bursts, infinite feedback | 0 NaNs / 0 Infs | Continuous | **0 NaNs** |
@@ -124,7 +125,7 @@ cmake --build build --config Release --target mr16_headless_dsp_tests
 - [x] **19" 2U Rackmount Enclosure**: Machined rack ears, hex countersunk screws, and chassis drop shadow.
 - [x] **Dual Finish Finishes**: Aluminum Light (`#ECEBE4`) and Anthracite Dark (`#141517`) persisted via `localStorage`.
 - [x] **Technical Nomenclature Audit**: Strict DIN 1451 technical typography and functional laboratory nomenclature across all source files.
-- [x] **RFC 8259 JSON Patch Specification**: Complete 31-parameter schema serialization, import, export, and drag-and-drop dropzone.
+- [x] **RFC 8259 JSON Patch Specification**: Complete 37-parameter schema serialization, import, export, and drag-and-drop dropzone.
 - [x] **Lossless 16-Bit 48kHz WAV Master Recorder**: Generates bit-exact 44-byte RIFF/WAVE header and 16-bit PCM encoding, validated in `web/verify.mjs` test suite 6.
 - [x] **Instant A/B Parameter Comparison Buffer**: Single-click toggling and `COPY A->B` synchronization.
 - [x] **16 Curated Factory Presets**: All presets valid JSON and bounded within physical limits, validated in `web/verify.mjs` test suite 4.
@@ -177,7 +178,7 @@ Scalar central summing bus gain is strictly $-\frac{2}{16} \cdot \text{coupling}
 
 ## 5. Conclusion & Acceptance Sign-off
 
-The BRAUN MR-16 (Target Release v1.0.12) has satisfied all technical criteria and operational requirements. All 207 headless DSP C++ tests (Tier 1: 39 cases, Tier 2: 8 cases, Tier 3: 160 cases) and 206 automated Web Audio verification tests pass with a 100% success rate, zero memory leaks, zero denormals, zero NaNs, and complete adherence to Dieter Rams functionalist austerity.
+The BRAUN MR-16 (Target Release v1.1.0) has satisfied all technical criteria and operational requirements. All 216 headless DSP C++ tests (Tier 1: 46 cases, Tier 2: 10 cases, Tier 3: 160 cases), 6 core DSP invariants (`mr16_dsp_verification_tests`), and 230 automated Web Audio verification tests pass with a 100% success rate, zero memory leaks, zero denormals, zero NaNs, and complete adherence to Dieter Rams functionalist austerity.
 
 For architectural diagrams, complete mathematical formulations, and APVTS specifications, see [ARCHITECTURE.md](ARCHITECTURE.md).
 

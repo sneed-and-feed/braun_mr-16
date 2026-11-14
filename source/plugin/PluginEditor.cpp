@@ -196,7 +196,8 @@ const paramsMeta = [
   { id: 'friction_speed', webId: 'frictionSpeed', name: 'Friction Speed', deck: 1, min: 0, max: 1, def: 0.4, unit: '%' },
   { id: 'vactrol_sag', webId: 'vactrolSag', name: 'Vactrol Sag', deck: 1, min: 0, max: 1, def: 0.6, unit: '%' },
   { id: 'ext_input_gain', webId: 'extInputGain', name: 'Ext Input Drive', deck: 1, min: -24, max: 12, def: 0, unit: 'dB' },
-  { id: 'poisson_density', webId: 'poissonDensity', name: 'Poisson Density', deck: 1, min: 0, max: 25, def: 0, unit: 'Hz' },
+  { id: 'poisson_density', webId: 'poissonDensity', name: 'Poisson Density', deck: 1, min: 0, max: 50, def: 0, unit: 'Hz' },
+  { id: 'euclidean_enable', webId: 'euclideanEnable', name: 'Euclidean Seq', deck: 1, min: 0, max: 1, def: 0, isBool: true },
   { id: 'euclidean_pulses', webId: 'euclideanPulses', name: 'Euclidean Pulses', deck: 1, min: 0, max: 32, def: 4, unit: '' },
   { id: 'euclidean_steps', webId: 'euclideanSteps', name: 'Euclidean Steps', deck: 1, min: 1, max: 32, def: 16, unit: '' },
 
@@ -207,25 +208,28 @@ const paramsMeta = [
   { id: 'material_profile', webId: 'materialProfile', name: 'Material', deck: 2, min: 0, max: 4, def: 0, isChoice: true, choices: ['Wood', 'Glass', 'Steel', 'Brass', 'Nylon'] },
   { id: 'modal_coupling', webId: 'modalCoupling', name: 'Coupling', deck: 2, min: 0, max: 1, def: 0.25, unit: '%' },
   { id: 'modal_spread', webId: 'modalSpread', name: 'Harmonic Spread', deck: 2, min: 0.2, max: 3, def: 1.0, unit: 'x' },
-  { id: 'modal_q', webId: 'modalQ', name: 'Resonance Q', deck: 2, min: 5, max: 500, def: 50, unit: 'Q' },
+  { id: 'modal_q', webId: 'modalQ', name: 'Resonance Q', deck: 2, min: 5, max: 500, def: 85, unit: 'Q' },
 
   // Deck 03
+  { id: 'lorenz_morph_alpha', webId: 'lorenzMorphAlpha', name: 'Morph A/B', deck: 3, min: 0, max: 1, def: 0.0, unit: '' },
   { id: 'lorenz_rate', webId: 'lorenzRate', name: 'Chaos Rate', deck: 3, min: 0.01, max: 10, def: 0.5, unit: 'Hz' },
   { id: 'lorenz_chaos', webId: 'lorenzChaos', name: 'Chaos Depth', deck: 3, min: 0, max: 1, def: 0.5, unit: '%' },
   { id: 'lorenz_freq_mod', webId: 'lorenzFreqMod', name: 'Freq Mod', deck: 3, min: 0, max: 1, def: 0.2, unit: '%' },
   { id: 'lorenz_q_mod', webId: 'lorenzQMod', name: 'Damping Mod', deck: 3, min: 0, max: 1, def: 0.15, unit: '%' },
+  { id: 'lorenz_morph_steer', webId: 'lorenzMorphSteer', name: 'Lorenz Steer', deck: 3, min: 0, max: 1, def: 0.0, unit: '%' },
 
   // Deck 04
   { id: 'chorus_enable', webId: 'chorusEnable', name: 'Chorus Enable', deck: 4, min: 0, max: 1, def: 1, isBool: true },
-  { id: 'chorus_rate_hz', webId: 'chorusRateHz', name: 'Chorus Rate', deck: 4, min: 0.05, max: 5, def: 0.8, unit: 'Hz' },
+  { id: 'chorus_rate_hz', webId: 'chorusRateHz', name: 'Chorus Rate', deck: 4, min: 0.05, max: 8, def: 0.8, unit: 'Hz' },
   { id: 'chorus_depth_ms', webId: 'chorusDepthMs', name: 'Chorus Depth', deck: 4, min: 0.1, max: 10, def: 2.5, unit: 'ms' },
   { id: 'chorus_dimension', webId: 'chorusDimension', name: 'Dimension Spread', deck: 4, min: 0, max: 1, def: 0.75, unit: '%' },
   { id: 'chorus_mix', webId: 'chorusMix', name: 'Chorus Mix', deck: 4, min: 0, max: 1, def: 0.5, unit: '%' },
 
   // Deck 05
   { id: 'golden_pan_spread', webId: 'goldenPanSpread', name: 'Spatial Pan', deck: 5, min: 0, max: 1, def: 0.8, unit: '%' },
-  { id: 'vactrol_lpg_cutoff', webId: 'vactrolLpgCutoff', name: 'LPG Cutoff', deck: 5, min: 100, max: 20000, def: 12000, unit: 'Hz' },
+  { id: 'vactrol_lpg_cutoff', webId: 'vactrolLpgCutoff', name: 'LPG Cutoff', deck: 5, min: 20, max: 20000, def: 12000, unit: 'Hz' },
   { id: 'drive_saturation', webId: 'driveSaturation', name: 'Drive Saturation', deck: 5, min: 0, max: 1, def: 0.25, unit: '%' },
+  { id: 'soft_limiter', webId: 'softLimiter', name: 'Soft Limiter', deck: 5, min: 0, max: 1, def: 1, isBool: true },
   { id: 'master_trim_db', webId: 'masterTrimDb', name: 'Master Trim', deck: 5, min: -24, max: 12, def: 0, unit: 'dB' },
   { id: 'dry_wet_mix', webId: 'dryWetMix', name: 'Dry / Wet', deck: 5, min: 0, max: 1, def: 0.65, unit: '%' },
 
@@ -570,6 +574,8 @@ void BRAUN_MR16AudioProcessorEditor::parameterChanged(const juce::String& parame
     {
         if (parameterID == table[i].apvtsId)
         {
+            if (mSuppressEchoParamIndex.load(std::memory_order_acquire) == static_cast<int>(i))
+                break;
             pendingParamValues[i].store(newValue, std::memory_order_relaxed);
             paramDirty[i].store(true, std::memory_order_release);
             break;
@@ -618,6 +624,8 @@ juce::WebBrowserComponent::Options BRAUN_MR16AudioProcessorEditor::createWebOpti
     initialParamsJson += "  \"powerState\": " + juce::String(editor.processorRef.isPower() ? 1.0f : 0.0f) + ",\n";
     initialParamsJson += "  \"scope_source\": " + juce::String(editor.processorRef.isMonitoringInput() ? 1.0f : 0.0f) + ",\n";
     initialParamsJson += "  \"scopeSource\": " + juce::String(editor.processorRef.isMonitoringInput() ? 1.0f : 0.0f) + ",\n";
+    initialParamsJson += "  \"euclidean_enable\": " + juce::String(editor.processorRef.isEuclideanEnabled() ? 1.0f : 0.0f) + ",\n";
+    initialParamsJson += "  \"euclideanEnable\": " + juce::String(editor.processorRef.isEuclideanEnabled() ? 1.0f : 0.0f) + ",\n";
     initialParamsJson += "  \"currentProgram\": " + juce::String(editor.processorRef.getCurrentProgram()) + "\n";
     initialParamsJson += "}";
 
@@ -706,6 +714,13 @@ std::optional<juce::WebBrowserComponent::Resource> BRAUN_MR16AudioProcessorEdito
     if (path.isEmpty())
         path = "index.html";
 
+    const juce::String decodedPath = juce::URL::removeEscapeChars(path);
+    if (path.contains("..") || path.containsChar(':') ||
+        decodedPath.contains("..") || decodedPath.containsChar(':'))
+    {
+        return std::nullopt;
+    }
+
     juce::String mimeType = "application/octet-stream";
     if (path.endsWithIgnoreCase(".html") || path.endsWithIgnoreCase(".htm")) mimeType = "text/html; charset=utf-8";
     else if (path.endsWithIgnoreCase(".css")) mimeType = "text/css; charset=utf-8";
@@ -720,8 +735,11 @@ std::optional<juce::WebBrowserComponent::Resource> BRAUN_MR16AudioProcessorEdito
     else if (path.endsWithIgnoreCase(".wasm")) mimeType = "application/wasm";
 
     // 1. Search local filesystem (for live dev iteration and standalone execution)
-    auto checkDiskFile = [&](const juce::File& file) -> std::optional<juce::WebBrowserComponent::Resource> {
-        if (file.existsAsFile())
+    auto checkDiskFile = [&](const juce::File& baseDir) -> std::optional<juce::WebBrowserComponent::Resource> {
+        if (!baseDir.isDirectory())
+            return std::nullopt;
+        const juce::File file = baseDir.getChildFile(path);
+        if (file.isAChildOf(baseDir) && file.existsAsFile())
         {
             juce::MemoryBlock mb;
             if (file.loadFileAsData(mb))
@@ -735,19 +753,19 @@ std::optional<juce::WebBrowserComponent::Resource> BRAUN_MR16AudioProcessorEdito
     };
 
     const juce::File cwd = juce::File::getCurrentWorkingDirectory();
-    if (auto res = checkDiskFile(cwd.getChildFile("web").getChildFile(path))) return res;
-    if (auto res = checkDiskFile(cwd.getChildFile("ui").getChildFile(path))) return res;
-    if (auto res = checkDiskFile(cwd.getChildFile("braun_mr-16/web").getChildFile(path))) return res;
-    if (auto res = checkDiskFile(cwd.getChildFile("mr-16/web").getChildFile(path))) return res;
+    if (auto res = checkDiskFile(cwd.getChildFile("web"))) return res;
+    if (auto res = checkDiskFile(cwd.getChildFile("ui"))) return res;
+    if (auto res = checkDiskFile(cwd.getChildFile("braun_mr-16/web"))) return res;
+    if (auto res = checkDiskFile(cwd.getChildFile("mr-16/web"))) return res;
 
     // Search relative to executable
     auto dir = juce::File::getSpecialLocation(juce::File::SpecialLocationType::currentExecutableFile).getParentDirectory();
     for (int depth = 0; depth < 5; ++depth)
     {
-        if (auto res = checkDiskFile(dir.getChildFile("web").getChildFile(path))) return res;
-        if (auto res = checkDiskFile(dir.getChildFile("ui").getChildFile(path))) return res;
-        if (auto res = checkDiskFile(dir.getChildFile("braun_mr-16/web").getChildFile(path))) return res;
-        if (auto res = checkDiskFile(dir.getChildFile("mr-16/web").getChildFile(path))) return res;
+        if (auto res = checkDiskFile(dir.getChildFile("web"))) return res;
+        if (auto res = checkDiskFile(dir.getChildFile("ui"))) return res;
+        if (auto res = checkDiskFile(dir.getChildFile("braun_mr-16/web"))) return res;
+        if (auto res = checkDiskFile(dir.getChildFile("mr-16/web"))) return res;
         dir = dir.getParentDirectory();
     }
 
@@ -873,9 +891,22 @@ void BRAUN_MR16AudioProcessorEditor::handleParamChangeFromWeb(const juce::var& d
         return;
     }
 
-    const auto& table = mr16::getParameterMetadataTable();
-    for (const auto& meta : table)
+    if (id == "currentProgram" || id == "preset")
     {
+        processorRef.setCurrentProgramIndex(static_cast<int>(std::round(val)));
+        return;
+    }
+
+    if (id == "euclidean_enable" || id == "euclideanEnable")
+    {
+        processorRef.setEuclideanEnable(val > 0.5f);
+        return;
+    }
+
+    const auto& table = mr16::getParameterMetadataTable();
+    for (size_t i = 0; i < table.size(); ++i)
+    {
+        const auto& meta = table[i];
         if (id == meta.apvtsId || id == meta.webId)
         {
             if (auto* param = processorRef.getAPVTS().getParameter(meta.apvtsId))
@@ -888,7 +919,9 @@ void BRAUN_MR16AudioProcessorEditor::handleParamChangeFromWeb(const juce::var& d
                 const float norm = meta.isChoice
                                      ? param->convertTo0to1(std::round(targetVal))
                                      : param->convertTo0to1(targetVal);
+                mSuppressEchoParamIndex.store(static_cast<int>(i), std::memory_order_release);
                 param->setValueNotifyingHost(std::clamp(norm, 0.0f, 1.0f));
+                mSuppressEchoParamIndex.store(-1, std::memory_order_release);
             }
             break;
         }
@@ -898,32 +931,39 @@ void BRAUN_MR16AudioProcessorEditor::handleParamChangeFromWeb(const juce::var& d
 void BRAUN_MR16AudioProcessorEditor::handleExciterTriggerFromWeb(const juce::var& data)
 {
     if (!data.isObject()) return;
-
-    if (!processorRef.isPower())
-        processorRef.setPower(true);
+    if (data.hasProperty("enable") && !static_cast<bool>(data.getProperty("enable", true)))
+        return;
 
     const juce::String type = data.getProperty("type", "").toString();
+    auto wakeIfStandby = [this]() {
+        if (!processorRef.isPower())
+            processorRef.setPower(true);
+    };
 
     if (type.equalsIgnoreCase("strike"))
     {
+        wakeIfStandby();
         float vel = static_cast<float>(data.getProperty("vel", 0.8));
         float hard = static_cast<float>(data.getProperty("hard", 0.65));
         processorRef.triggerStrike(vel, hard);
     }
     else if (type.equalsIgnoreCase("dirac"))
     {
+        wakeIfStandby();
         float vel = static_cast<float>(data.getProperty("vel", 1.0));
         float hard = static_cast<float>(data.getProperty("hard", 1.0));
         processorRef.triggerStrike(vel, hard);
     }
     else if (type.equalsIgnoreCase("hammer"))
     {
+        wakeIfStandby();
         float vel = static_cast<float>(data.getProperty("vel", 0.8));
         float hard = static_cast<float>(data.getProperty("hard", 0.65));
         processorRef.triggerStrike(vel, hard);
     }
     else if (type.equalsIgnoreCase("friction"))
     {
+        wakeIfStandby();
         float speed = static_cast<float>(data.getProperty("speed", 0.6));
         float force = static_cast<float>(data.getProperty("force", 0.5));
         if (auto* pSpeed = processorRef.getAPVTS().getParameter(mr16::ParamIDs::frictionSpeed.getParamID()))
@@ -934,6 +974,7 @@ void BRAUN_MR16AudioProcessorEditor::handleExciterTriggerFromWeb(const juce::var
     }
     else if (type.equalsIgnoreCase("vactrol") || type.equalsIgnoreCase("airjet"))
     {
+        wakeIfStandby();
         float vel = static_cast<float>(data.getProperty("vel", 0.8));
         if (auto* pSag = processorRef.getAPVTS().getParameter(mr16::ParamIDs::vactrolSag.getParamID()))
             pSag->setValueNotifyingHost(pSag->convertTo0to1(vel));
@@ -941,18 +982,22 @@ void BRAUN_MR16AudioProcessorEditor::handleExciterTriggerFromWeb(const juce::var
     }
     else if (type.equalsIgnoreCase("pad"))
     {
+        wakeIfStandby();
         int index = static_cast<int>(data.getProperty("index", data.getProperty("pad", data.getProperty("button", 0))));
         float vel = static_cast<float>(data.getProperty("vel", 1.0));
         processorRef.triggerStrikeButton(index, vel);
     }
     else if (type.equalsIgnoreCase("chime"))
     {
+        wakeIfStandby();
         int key = static_cast<int>(data.getProperty("key", 0));
         float vel = static_cast<float>(data.getProperty("vel", 1.0));
-        processorRef.triggerChimeKey(key, vel);
+        float freq = data.hasProperty("freq") ? static_cast<float>(data.getProperty("freq", 0.0)) : 0.0f;
+        processorRef.triggerChimeKey(key, vel, freq);
     }
     else if (type.equalsIgnoreCase("note"))
     {
+        wakeIfStandby();
         int midi = static_cast<int>(data.getProperty("midi", data.getProperty("note", 60)));
         float vel = static_cast<float>(data.getProperty("velocity", data.getProperty("vel", 0.8)));
         processorRef.triggerMidiNote(midi, vel);
@@ -1001,6 +1046,7 @@ void BRAUN_MR16AudioProcessorEditor::syncAllParametersToWeb()
     }
     sendParameterUpdateToWeb("power_state", "powerState", processorRef.isPower() ? 1.0f : 0.0f);
     sendParameterUpdateToWeb("scope_source", "scopeSource", processorRef.isMonitoringInput() ? 1.0f : 0.0f);
+    sendParameterUpdateToWeb("euclidean_enable", "euclideanEnable", processorRef.isEuclideanEnabled() ? 1.0f : 0.0f);
     sendParameterUpdateToWeb("currentProgram", "preset", static_cast<float>(processorRef.getCurrentProgram()));
     sendRecordingStateUpdateToWeb(processorRef.isRecording());
 }
@@ -1122,10 +1168,12 @@ void BRAUN_MR16AudioProcessorEditor::timerCallback()
 #if JUCE_WEB_BROWSER
     if (!useNativeUI && webComponent != nullptr && webComponent->isVisible())
     {
-        if (!initialSyncDone)
+        const uint32_t currentEpoch = processorRef.getStateSyncEpoch();
+        if (!initialSyncDone || currentEpoch != mLastSyncedEpoch)
         {
             syncAllParametersToWeb();
             initialSyncDone = true;
+            mLastSyncedEpoch = currentEpoch;
         }
 
         const auto& table = mr16::getParameterMetadataTable();
@@ -1143,6 +1191,12 @@ void BRAUN_MR16AudioProcessorEditor::timerCallback()
     {
         recordButton.setButtonText("REC WAV");
         recordButton.setColour(juce::TextButton::buttonColourId, findColour(mr16::BraunColours::bgPanelInsetColourId));
+#if JUCE_WEB_BROWSER
+        if (!useNativeUI)
+        {
+            sendRecordingStateUpdateToWeb(false);
+        }
+#endif
     }
 
     if (useNativeUI)
@@ -1161,6 +1215,10 @@ void BRAUN_MR16AudioProcessorEditor::timerCallback()
             if (poissonTriggerBtn.getToggleState() != poissonActive)
                 poissonTriggerBtn.setToggleState(poissonActive, juce::dontSendNotification);
         }
+
+        const bool euclActive = processorRef.isEuclideanEnabled();
+        if (euclideanTriggerBtn.getToggleState() != euclActive)
+            euclideanTriggerBtn.setToggleState(euclActive, juce::dontSendNotification);
 
         const int currentProg = processorRef.getCurrentProgram();
         if (presetComboBox.getSelectedId() != currentProg + 1)
@@ -1275,10 +1333,24 @@ void BRAUN_MR16AudioProcessorEditor::setupNativeControls()
     if (auto* p = processorRef.getAPVTS().getRawParameterValue(mr16::ParamIDs::poissonDensity.getParamID()))
         poissonTriggerBtn.setToggleState(p->load(std::memory_order_relaxed) > 0.1f, juce::dontSendNotification);
     poissonTriggerBtn.onClick = [this] {
+        const bool en = poissonTriggerBtn.getToggleState();
+        if (en && !processorRef.isPower())
+            processorRef.setPower(true);
         if (auto* p = processorRef.getAPVTS().getParameter(mr16::ParamIDs::poissonDensity.getParamID()))
-            p->setValueNotifyingHost(poissonTriggerBtn.getToggleState() ? 0.35f : 0.0f);
+            p->setValueNotifyingHost(en ? 0.35f : 0.0f);
     };
     addChildComponent(poissonTriggerBtn);
+
+    euclideanTriggerBtn.setButtonText("EUCLIDEAN SEQ");
+    euclideanTriggerBtn.setClickingTogglesState(true);
+    euclideanTriggerBtn.setToggleState(processorRef.isEuclideanEnabled(), juce::dontSendNotification);
+    euclideanTriggerBtn.onClick = [this] {
+        const bool en = euclideanTriggerBtn.getToggleState();
+        if (en && !processorRef.isPower())
+            processorRef.setPower(true);
+        processorRef.setEuclideanEnable(en);
+    };
+    addChildComponent(euclideanTriggerBtn);
 
     diracTriggerBtn.setButtonText("DIRAC");
     diracTriggerBtn.onClick = [this] { processorRef.triggerStrike(1.0f, 1.0f); };
@@ -1340,6 +1412,14 @@ void BRAUN_MR16AudioProcessorEditor::setupNativeControls()
             slot->paramId = meta.apvtsId;
             slot->button.setButtonText(meta.name);
             slot->attachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, meta.apvtsId, slot->button);
+            if (slot->paramId == mr16::ParamIDs::euclideanEnable.getParamID())
+            {
+                auto* btnPtr = &slot->button;
+                slot->button.onClick = [this, btnPtr] {
+                    if (btnPtr->getToggleState() && !processorRef.isPower())
+                        processorRef.setPower(true);
+                };
+            }
             addChildComponent(slot->button);
             buttonSlots.push_back(std::move(slot));
         }
@@ -1387,6 +1467,7 @@ void BRAUN_MR16AudioProcessorEditor::updateNativeControlVisibility()
     frictionTriggerBtn.setVisible(show);
     vactrolTriggerBtn.setVisible(show);
     poissonTriggerBtn.setVisible(show);
+    euclideanTriggerBtn.setVisible(show);
     diracTriggerBtn.setVisible(show);
     scopeSourceButton.setVisible(show);
 
@@ -1402,6 +1483,11 @@ void BRAUN_MR16AudioProcessorEditor::updateNativeControlVisibility()
     }
     for (auto& s : buttonSlots)
     {
+        if (s->paramId == mr16::ParamIDs::powerState.getParamID())
+        {
+            s->button.setVisible(false);
+            continue;
+        }
         s->button.setVisible(show);
         if (show)
             s->button.toFront(false);
@@ -1430,6 +1516,7 @@ void BRAUN_MR16AudioProcessorEditor::updateNativeControlVisibility()
         frictionTriggerBtn.toFront(false);
         vactrolTriggerBtn.toFront(false);
         poissonTriggerBtn.toFront(false);
+        euclideanTriggerBtn.toFront(false);
         diracTriggerBtn.toFront(false);
         scopeSourceButton.toFront(false);
 #if JUCE_WEB_BROWSER
@@ -1594,15 +1681,16 @@ void BRAUN_MR16AudioProcessorEditor::drawCrtDisplay(juce::Graphics& g, juce::Rec
         const float cy = (float)scopeScreen.getCentreY();
         const float maxR = (float)juce::jmin(scopeScreen.getWidth(), scopeScreen.getHeight()) * 0.40f;
 
-        static float phase = 0.0f;
-        phase += 0.02f;
+        mNativeChladniPhase += 0.02f;
+        if (mNativeChladniPhase > juce::MathConstants<float>::twoPi * 2.0f)
+            mNativeChladniPhase -= juce::MathConstants<float>::twoPi * 2.0f;
 
         juce::Path chladniCurve;
         const int steps = 120;
         for (int i = 0; i <= steps; ++i)
         {
             float theta = (float)i / (float)steps * juce::MathConstants<float>::twoPi;
-            float r = maxR * (0.65f + 0.35f * std::sin(3.0f * theta + phase) * std::cos(2.0f * theta - phase * 0.5f));
+            float r = maxR * (0.65f + 0.35f * std::sin(3.0f * theta + mNativeChladniPhase) * std::cos(2.0f * theta - mNativeChladniPhase * 0.5f));
             float px = cx + r * std::cos(theta);
             float py = cy + r * std::sin(theta);
             if (i == 0) chladniCurve.startNewSubPath(px, py);
@@ -1754,11 +1842,12 @@ void BRAUN_MR16AudioProcessorEditor::layoutNativeControls()
     // 3. Audition Exciter Bar (34px)
     auto audition = bounds.removeFromTop(34).reduced(16, 2);
     audition.removeFromLeft(130); // Skip label drawn by chassis
-    strikeTriggerBtn.setBounds(audition.removeFromLeft(110).reduced(4, 2));
-    frictionTriggerBtn.setBounds(audition.removeFromLeft(110).reduced(4, 2));
-    vactrolTriggerBtn.setBounds(audition.removeFromLeft(110).reduced(4, 2));
-    poissonTriggerBtn.setBounds(audition.removeFromLeft(130).reduced(4, 2));
-    diracTriggerBtn.setBounds(audition.removeFromLeft(110).reduced(4, 2));
+    strikeTriggerBtn.setBounds(audition.removeFromLeft(96).reduced(3, 2));
+    frictionTriggerBtn.setBounds(audition.removeFromLeft(96).reduced(3, 2));
+    vactrolTriggerBtn.setBounds(audition.removeFromLeft(96).reduced(3, 2));
+    poissonTriggerBtn.setBounds(audition.removeFromLeft(120).reduced(3, 2));
+    euclideanTriggerBtn.setBounds(audition.removeFromLeft(124).reduced(3, 2));
+    diracTriggerBtn.setBounds(audition.removeFromLeft(96).reduced(3, 2));
     scopeSourceButton.setBounds(audition.removeFromRight(100).reduced(4, 2));
 
     // 4. 5 Signal-Flow Decks Grid
@@ -1806,37 +1895,51 @@ void BRAUN_MR16AudioProcessorEditor::layoutNativeControls()
     deck5Area.removeFromTop(24);
 
     // Deck 01 (Kinetic Exciter)
-    layoutComboInArea(findCombo(mr16::ParamIDs::exciterType), deck1Area.removeFromTop(38).reduced(4, 2));
-    layout2Knobs(findKnob(mr16::ParamIDs::strikeHardness), findKnob(mr16::ParamIDs::strikeVelocity), deck1Area, 72);
-    layout2Knobs(findKnob(mr16::ParamIDs::frictionForce), findKnob(mr16::ParamIDs::frictionSpeed), deck1Area, 72);
-    layout2Knobs(findKnob(mr16::ParamIDs::vactrolSag), findKnob(mr16::ParamIDs::extInputGain), deck1Area, 72);
-    layout2Knobs(findKnob(mr16::ParamIDs::poissonDensity), findKnob(mr16::ParamIDs::euclideanPulses), deck1Area, 72);
-    layout1Knob(findKnob(mr16::ParamIDs::euclideanSteps), deck1Area, 72);
+    layoutComboInArea(findCombo(mr16::ParamIDs::exciterType), deck1Area.removeFromTop(36).reduced(4, 2));
+    if (auto* b = findButton(mr16::ParamIDs::euclideanEnable))
+    {
+        b->button.setBounds(deck1Area.removeFromTop(26).reduced(12, 2));
+    }
+    const int d1RowH = juce::jlimit(52, 72, deck1Area.getHeight() / 5);
+    layout2Knobs(findKnob(mr16::ParamIDs::strikeHardness), findKnob(mr16::ParamIDs::strikeVelocity), deck1Area, d1RowH);
+    layout2Knobs(findKnob(mr16::ParamIDs::frictionForce), findKnob(mr16::ParamIDs::frictionSpeed), deck1Area, d1RowH);
+    layout2Knobs(findKnob(mr16::ParamIDs::vactrolSag), findKnob(mr16::ParamIDs::extInputGain), deck1Area, d1RowH);
+    layout2Knobs(findKnob(mr16::ParamIDs::poissonDensity), findKnob(mr16::ParamIDs::euclideanPulses), deck1Area, d1RowH);
+    layout1Knob(findKnob(mr16::ParamIDs::euclideanSteps), deck1Area, d1RowH);
 
     // Deck 02 (Modal Matrix)
-    layoutComboInArea(findCombo(mr16::ParamIDs::manifoldType), deck2Area.removeFromTop(38).reduced(4, 2));
-    layoutComboInArea(findCombo(mr16::ParamIDs::materialProfile), deck2Area.removeFromTop(38).reduced(4, 2));
-    layout2Knobs(findKnob(mr16::ParamIDs::modalFrequency), findKnob(mr16::ParamIDs::modalDamping), deck2Area, 72);
-    layout2Knobs(findKnob(mr16::ParamIDs::modalCoupling), findKnob(mr16::ParamIDs::modalSpread), deck2Area, 72);
-    layout1Knob(findKnob(mr16::ParamIDs::modalQ), deck2Area, 72);
+    layoutComboInArea(findCombo(mr16::ParamIDs::manifoldType), deck2Area.removeFromTop(36).reduced(4, 2));
+    layoutComboInArea(findCombo(mr16::ParamIDs::materialProfile), deck2Area.removeFromTop(36).reduced(4, 2));
+    const int d2RowH = juce::jlimit(52, 75, deck2Area.getHeight() / 3);
+    layout2Knobs(findKnob(mr16::ParamIDs::modalFrequency), findKnob(mr16::ParamIDs::modalDamping), deck2Area, d2RowH);
+    layout2Knobs(findKnob(mr16::ParamIDs::modalCoupling), findKnob(mr16::ParamIDs::modalSpread), deck2Area, d2RowH);
+    layout1Knob(findKnob(mr16::ParamIDs::modalQ), deck2Area, d2RowH);
 
     // Deck 03 (Lorenz Attractor)
-    layout2Knobs(findKnob(mr16::ParamIDs::lorenzRate), findKnob(mr16::ParamIDs::lorenzChaos), deck3Area, 80);
-    layout2Knobs(findKnob(mr16::ParamIDs::lorenzFreqMod), findKnob(mr16::ParamIDs::lorenzQMod), deck3Area, 80);
+    const int d3RowH = juce::jlimit(56, 80, deck3Area.getHeight() / 3);
+    layout2Knobs(findKnob(mr16::ParamIDs::lorenzMorphAlpha), findKnob(mr16::ParamIDs::lorenzMorphSteer), deck3Area, d3RowH);
+    layout2Knobs(findKnob(mr16::ParamIDs::lorenzRate), findKnob(mr16::ParamIDs::lorenzChaos), deck3Area, d3RowH);
+    layout2Knobs(findKnob(mr16::ParamIDs::lorenzFreqMod), findKnob(mr16::ParamIDs::lorenzQMod), deck3Area, d3RowH);
 
     // Deck 04 (Chorus)
     if (auto* b = findButton(mr16::ParamIDs::chorusEnable))
     {
-        b->button.setBounds(deck4Area.removeFromTop(32).reduced(12, 2));
+        b->button.setBounds(deck4Area.removeFromTop(30).reduced(12, 2));
     }
-    layout2Knobs(findKnob(mr16::ParamIDs::chorusRateHz), findKnob(mr16::ParamIDs::chorusDepthMs), deck4Area, 80);
-    layout2Knobs(findKnob(mr16::ParamIDs::chorusDimension), findKnob(mr16::ParamIDs::chorusMix), deck4Area, 80);
+    const int d4RowH = juce::jlimit(56, 80, deck4Area.getHeight() / 2);
+    layout2Knobs(findKnob(mr16::ParamIDs::chorusRateHz), findKnob(mr16::ParamIDs::chorusDepthMs), deck4Area, d4RowH);
+    layout2Knobs(findKnob(mr16::ParamIDs::chorusDimension), findKnob(mr16::ParamIDs::chorusMix), deck4Area, d4RowH);
 
     // Deck 05 (Spatial & Dynamics)
-    layoutComboInArea(findCombo(mr16::ParamIDs::displayMode), deck5Area.removeFromTop(38).reduced(4, 2));
-    layout2Knobs(findKnob(mr16::ParamIDs::goldenPanSpread), findKnob(mr16::ParamIDs::vactrolLpgCutoff), deck5Area, 75);
-    layout2Knobs(findKnob(mr16::ParamIDs::driveSaturation), findKnob(mr16::ParamIDs::masterTrimDb), deck5Area, 75);
-    layout1Knob(findKnob(mr16::ParamIDs::dryWetMix), deck5Area, 75);
+    layoutComboInArea(findCombo(mr16::ParamIDs::displayMode), deck5Area.removeFromTop(36).reduced(4, 2));
+    if (auto* b = findButton(mr16::ParamIDs::softLimiter))
+    {
+        b->button.setBounds(deck5Area.removeFromTop(26).reduced(12, 2));
+    }
+    const int d5RowH = juce::jlimit(52, 74, deck5Area.getHeight() / 3);
+    layout2Knobs(findKnob(mr16::ParamIDs::goldenPanSpread), findKnob(mr16::ParamIDs::vactrolLpgCutoff), deck5Area, d5RowH);
+    layout2Knobs(findKnob(mr16::ParamIDs::driveSaturation), findKnob(mr16::ParamIDs::masterTrimDb), deck5Area, d5RowH);
+    layout1Knob(findKnob(mr16::ParamIDs::dryWetMix), deck5Area, d5RowH);
 }
 
 void BRAUN_MR16AudioProcessorEditor::parentHierarchyChanged()

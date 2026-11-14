@@ -13,7 +13,7 @@ if(APPLE)
     set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "")
 endif()
 
-project(BRAUN_MR16_PROJECT VERSION 1.0.14 LANGUAGES C CXX)
+project(BRAUN_MR16_PROJECT VERSION 1.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -262,6 +262,19 @@ if(MR16_USE_WEBVIEW)
     endif()
 endif()
 
+# Ensure Windows PE VERSIONINFO (.rc) is regenerated whenever PROJECT_VERSION changes
+if(WIN32)
+    set(_mr16_rc_file "${CMAKE_CURRENT_BINARY_DIR}/BRAUN_MR16_artefacts/JuceLibraryCode/BRAUN_MR16_resources.rc")
+    if(EXISTS "${_mr16_rc_file}")
+        file(READ "${_mr16_rc_file}" _mr16_rc_contents)
+        string(FIND "${_mr16_rc_contents}" "\"FileVersion\",  \"${PROJECT_VERSION}\\0\"" _mr16_rc_ver_pos)
+        if(_mr16_rc_ver_pos EQUAL -1)
+            message(STATUS "Removing stale Windows resource file (${_mr16_rc_file}) to sync VERSION ${PROJECT_VERSION}")
+            file(REMOVE "${_mr16_rc_file}")
+        endif()
+    endif()
+endif()
+
 juce_add_plugin(BRAUN_MR16
     COMPANY_NAME "Sneed's Feed & Seed Ltd."
     BUNDLE_ID "com.sneedandfeed.mr16"
@@ -275,7 +288,7 @@ juce_add_plugin(BRAUN_MR16
     PLUGIN_CODE Mr16
     FORMATS ${MR16_FORMATS}
     PRODUCT_NAME "BRAUN_MR16"
-    VERSION "1.0.14"
+    VERSION "1.1.0"
     ${MR16_EXTRA_PLUGIN_ARGS}
 )
 

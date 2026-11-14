@@ -86,9 +86,11 @@ private:
     bool initialSyncDone { false };
 
     // Coalescing array for all APVTS parameters (prevents message loop stalls)
-    static constexpr size_t kNumParams = 33;
+    static constexpr size_t kNumParams = 37;
     std::atomic<float> pendingParamValues[kNumParams] {};
     std::atomic<bool> paramDirty[kNumParams] {};
+    std::atomic<int> mSuppressEchoParamIndex { -1 };
+    uint32_t mLastSyncedEpoch { 0 };
 
     // Telemetry & Scope streaming at 60 Hz with idle throttling
     int silentFrameCounter { 0 };
@@ -101,6 +103,7 @@ private:
     void ensureHwndStyles();
 
     mr16::VisualizerFrame latestTelemetryFrame {};
+    float mNativeChladniPhase { 0.0f };
 
     void registerParameterListeners();
     void unregisterParameterListeners();
@@ -134,6 +137,7 @@ private:
     juce::TextButton frictionTriggerBtn;
     juce::TextButton vactrolTriggerBtn;
     juce::TextButton poissonTriggerBtn;
+    juce::TextButton euclideanTriggerBtn;
     juce::TextButton diracTriggerBtn;
     juce::TextButton scopeSourceButton;
 

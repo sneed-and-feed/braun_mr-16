@@ -31,6 +31,7 @@ namespace ParamIDs {
     inline const juce::ParameterID vactrolSag       { "vactrol_sag", 1 };
     inline const juce::ParameterID extInputGain     { "ext_input_gain", 1 };
     inline const juce::ParameterID poissonDensity   { "poisson_density", 1 };
+    inline const juce::ParameterID euclideanEnable  { "euclidean_enable", 1 };
     inline const juce::ParameterID euclideanPulses  { "euclidean_pulses", 1 };
     inline const juce::ParameterID euclideanSteps   { "euclidean_steps", 1 };
 
@@ -44,10 +45,12 @@ namespace ParamIDs {
     inline const juce::ParameterID modalQ           { "modal_q", 1 };
 
     // Deck 03: Kinetic Morph & 3D Chaotic Attractor
+    inline const juce::ParameterID lorenzMorphAlpha { "lorenz_morph_alpha", 1 };
     inline const juce::ParameterID lorenzRate       { "lorenz_rate", 1 };
     inline const juce::ParameterID lorenzChaos      { "lorenz_chaos", 1 };
     inline const juce::ParameterID lorenzFreqMod    { "lorenz_freq_mod", 1 };
     inline const juce::ParameterID lorenzQMod       { "lorenz_q_mod", 1 };
+    inline const juce::ParameterID lorenzMorphSteer { "lorenz_morph_steer", 1 };
 
     // Deck 04: Tri-Phase Spatial BBD Chorus
     inline const juce::ParameterID chorusEnable     { "chorus_enable", 1 };
@@ -60,6 +63,7 @@ namespace ParamIDs {
     inline const juce::ParameterID goldenPanSpread  { "golden_pan_spread", 1 };
     inline const juce::ParameterID vactrolLpgCutoff { "vactrol_lpg_cutoff", 1 };
     inline const juce::ParameterID driveSaturation  { "drive_saturation", 1 };
+    inline const juce::ParameterID softLimiter      { "soft_limiter", 1 };
     inline const juce::ParameterID masterTrimDb     { "master_trim_db", 1 };
     inline const juce::ParameterID dryWetMix        { "dry_wet_mix", 1 };
     inline const juce::ParameterID powerState       { "power_state", 1 };
@@ -83,7 +87,8 @@ enum class ManifoldType : int {
     ChladniPlate = 0,
     StiffBeam    = 1,
     VocalFormant = 2,
-    PoincareHorn = 3
+    PoincareHorn = 3,
+    DiffusePlate = 4
 };
 
 enum class MaterialType : int {
@@ -222,8 +227,8 @@ struct ParameterMetadata {
     bool isChoice;
 };
 
-inline const std::array<ParameterMetadata, 33>& getParameterMetadataTable() {
-    static const std::array<ParameterMetadata, 33> table {{
+inline const std::array<ParameterMetadata, 37>& getParameterMetadataTable() {
+    static const std::array<ParameterMetadata, 37> table {{
         // Deck 01: Kinetic Exciter Engine
         { 1, "exciter_type",      "exciterType",     "Exciter Model",       "",     0.0f,    3.0f,     0.0f,    false, true  },
         { 1, "strike_hardness",   "strikeHardness",  "Strike Hardness",     "%",    0.0f,    1.0f,     0.50f,   false, false },
@@ -232,7 +237,8 @@ inline const std::array<ParameterMetadata, 33>& getParameterMetadataTable() {
         { 1, "friction_speed",    "frictionSpeed",   "Friction Speed",      "%",    0.0f,    1.0f,     0.40f,   false, false },
         { 1, "vactrol_sag",       "vactrolSag",      "Vactrol Sag",         "%",    0.0f,    1.0f,     0.60f,   false, false },
         { 1, "ext_input_gain",    "extInputGain",    "Ext Input Drive",     "dB",   -24.0f,  12.0f,    0.0f,    false, false },
-        { 1, "poisson_density",   "poissonDensity",  "Poisson Density",     "Hz",   0.0f,    25.0f,    0.0f,    false, false },
+        { 1, "poisson_density",   "poissonDensity",  "Poisson Density",     "Hz",   0.0f,    50.0f,    0.0f,    false, false },
+        { 1, "euclidean_enable",  "euclideanEnable", "Euclidean Seq",       "",     0.0f,    1.0f,     0.0f,    true,  false },
         { 1, "euclidean_pulses",  "euclideanPulses", "Euclidean Pulses",    "",     0.0f,    32.0f,    4.0f,    false, false },
         { 1, "euclidean_steps",   "euclideanSteps",  "Euclidean Steps",     "",     1.0f,    32.0f,    16.0f,   false, false },
 
@@ -243,25 +249,28 @@ inline const std::array<ParameterMetadata, 33>& getParameterMetadataTable() {
         { 2, "material_profile",  "materialProfile", "Material Profile",    "",     0.0f,    4.0f,     0.0f,    false, true  },
         { 2, "modal_coupling",    "modalCoupling",   "Modal Coupling",      "%",    0.0f,    1.0f,     0.25f,   false, false },
         { 2, "modal_spread",      "modalSpread",     "Harmonic Dispersion", "x",    0.2f,    3.0f,     1.00f,   false, false },
-        { 2, "modal_q",           "modalQ",          "Resonance Q",         "Q",    5.0f,    500.0f,   50.0f,   false, false },
+        { 2, "modal_q",           "modalQ",          "Resonance Q",         "Q",    5.0f,    500.0f,   85.0f,   false, false },
 
         // Deck 03: Kinetic Morph & 3D Chaotic Attractor
+        { 3, "lorenz_morph_alpha","lorenzMorphAlpha","Morph A/B",           "",     0.0f,    1.0f,     0.0f,    false, false },
         { 3, "lorenz_rate",       "lorenzRate",      "Chaos Rate",          "Hz",   0.01f,   10.0f,    0.50f,   false, false },
         { 3, "lorenz_chaos",      "lorenzChaos",     "Chaos Parameter",     "%",    0.0f,    1.0f,     0.50f,   false, false },
         { 3, "lorenz_freq_mod",   "lorenzFreqMod",   "Freq Chaos Mod",      "%",    0.0f,    1.0f,     0.20f,   false, false },
         { 3, "lorenz_q_mod",      "lorenzQMod",      "Damping Chaos Mod",   "%",    0.0f,    1.0f,     0.15f,   false, false },
+        { 3, "lorenz_morph_steer","lorenzMorphSteer","Lorenz Steer",        "%",    0.0f,    1.0f,     0.0f,    false, false },
 
         // Deck 04: Tri-Phase Spatial BBD Chorus
         { 4, "chorus_enable",     "chorusEnable",    "Chorus Enable",       "",     0.0f,    1.0f,     1.0f,    true,  false },
-        { 4, "chorus_rate_hz",    "chorusRateHz",    "Chorus Rate",         "Hz",   0.05f,   5.0f,     0.80f,   false, false },
+        { 4, "chorus_rate_hz",    "chorusRateHz",    "Chorus Rate",         "Hz",   0.05f,   8.0f,     0.80f,   false, false },
         { 4, "chorus_depth_ms",   "chorusDepthMs",   "Chorus Depth",        "ms",   0.1f,    10.0f,    2.50f,   false, false },
         { 4, "chorus_dimension",  "chorusDimension", "Dimension Spread",    "%",    0.0f,    1.0f,     0.75f,   false, false },
         { 4, "chorus_mix",        "chorusMix",       "Chorus Mix",          "%",    0.0f,    1.0f,     0.50f,   false, false },
 
         // Deck 05: Spatial Dispersion, Vactrol LPG & Dynamics
         { 5, "golden_pan_spread", "goldenPanSpread", "Spatial Dispersion",  "%",    0.0f,    1.0f,     0.80f,   false, false },
-        { 5, "vactrol_lpg_cutoff","vactrolLpgCutoff","Vactrol LPG Cutoff",  "Hz",   100.0f,  20000.0f, 12000.0f,false, false },
+        { 5, "vactrol_lpg_cutoff","vactrolLpgCutoff","Vactrol LPG Cutoff",  "Hz",   20.0f,   20000.0f, 12000.0f,false, false },
         { 5, "drive_saturation",  "driveSaturation", "Resonator Drive",     "%",    0.0f,    1.0f,     0.25f,   false, false },
+        { 5, "soft_limiter",      "softLimiter",     "Soft Limiter",        "",     0.0f,    1.0f,     1.0f,    true,  false },
         { 5, "master_trim_db",    "masterTrimDb",    "Output Trim",         "dB",   -24.0f,  12.0f,    0.0f,    false, false },
         { 5, "dry_wet_mix",       "dryWetMix",       "Dry / Wet Mix",       "%",    0.0f,    1.0f,     0.65f,   false, false },
         { 5, "power_state",       "powerState",      "Power Standby",       "",     0.0f,    1.0f,     1.0f,    true,  false },
@@ -312,13 +321,15 @@ struct alignas(64) Mr16ParameterSnapshot {
     MaterialProfile materialProfile { MaterialProfile::Wood };
     float           modalCoupling   { 0.25f };
     float           modalSpread     { 1.00f };
-    float           modalQ          { 50.0f };
+    float           modalQ          { 85.0f };
 
     // Deck 03: Kinetic Morph & 3D Chaotic Attractor
+    float lorenzMorphAlpha { 0.0f };
     float lorenzRate       { 0.50f };
     float lorenzChaos      { 0.50f };
     float lorenzFreqMod    { 0.20f };
     float lorenzQMod       { 0.15f };
+    float lorenzMorphSteer { 0.0f };
 
     // Deck 04: Tri-Phase Spatial BBD Chorus
     bool  chorusEnable     { true };
@@ -331,6 +342,7 @@ struct alignas(64) Mr16ParameterSnapshot {
     float goldenPanSpread   { 0.80f };
     float vactrolLpgCutoff  { 12000.0f };
     float driveSaturationDb { 0.25f };
+    bool  softLimiter       { true };
     float masterTrimDb      { 0.0f };
     float dryWetMix         { 0.65f };
     bool  powerState        { true };
@@ -341,11 +353,15 @@ struct alignas(64) Mr16ParameterSnapshot {
 #if MR16_HAS_DSP_ENGINE
     [[nodiscard]] braun::mr16::Mr16Parameters toDspParams() const noexcept {
         braun::mr16::Mr16Parameters p;
+        p.exciterMode           = static_cast<int>(exciterType);
         p.exciterStrikeVelocity = strikeVelocity;
         p.exciterStrikeHardness = strikeHardness;
         const bool isFriction   = (exciterType == ExciterType::Friction);
         p.exciterBowPressure    = isFriction ? frictionForce : 0.0f;
         p.exciterBowVelocity    = isFriction ? frictionSpeed : 0.0f;
+        p.uiFrictionForce       = frictionForce;
+        p.uiFrictionSpeed       = frictionSpeed;
+        p.displayMode           = static_cast<int>(displayMode);
         p.poissonEnable         = (poissonDensity > 0.01f);
         p.poissonEpm            = poissonDensity * 60.0f;
         p.euclideanEnable       = euclideanEnable;
@@ -356,17 +372,19 @@ struct alignas(64) Mr16ParameterSnapshot {
 
         p.fundamentalHz         = modalFrequency;
         p.manifold              = static_cast<braun::mr16::ManifoldType>(static_cast<int>(manifoldType));
+        p.manifoldMorph         = lorenzMorphAlpha;
         p.material              = static_cast<braun::mr16::MaterialType>(static_cast<int>(materialProfile));
         p.decayScale            = modalDamping;
         p.couplingDepth         = modalCoupling;
         p.stereoWidth           = goldenPanSpread;
-        p.modalQScale           = modalQ / 50.0f;
+        p.modalQScale           = modalQ / 85.0f;
         p.overtoneSpread        = modalSpread;
 
         p.chaosRateHz           = lorenzRate;
         p.chaosDepth            = lorenzChaos;
         p.chaosDetuneCents      = lorenzFreqMod * 300.0f;
         p.chaosQMod             = lorenzQMod;
+        p.lorenzMorphSteer      = lorenzMorphSteer;
 
         p.chorusEnable          = chorusEnable;
         p.chorusRateHz          = chorusRateHz;
@@ -379,6 +397,7 @@ struct alignas(64) Mr16ParameterSnapshot {
         p.vactrolSagAmount      = vactrolSag;
         p.vactrolLpgCutoff      = vactrolLpgCutoff;
         p.driveSaturation       = driveSaturationDb;
+        p.softLimiterEnable     = softLimiter;
         p.dryWetMix             = dryWetMix;
         p.masterVolumeDb        = masterTrimDb;
         p.outputMute            = !powerState;
@@ -399,7 +418,7 @@ struct Mr16AtomicPointers {
     std::atomic<float>* vactrolSag       { nullptr };
     std::atomic<float>* extInputGain     { nullptr };
     std::atomic<float>* poissonDensity   { nullptr };
-    std::atomic<bool>*  euclideanEnable  { nullptr };
+    std::atomic<float>* euclideanEnable  { nullptr };
     std::atomic<float>* euclideanPulses  { nullptr };
     std::atomic<float>* euclideanSteps   { nullptr };
 
@@ -411,10 +430,12 @@ struct Mr16AtomicPointers {
     std::atomic<float>* modalSpread      { nullptr };
     std::atomic<float>* modalQ           { nullptr };
 
+    std::atomic<float>* lorenzMorphAlpha { nullptr };
     std::atomic<float>* lorenzRate       { nullptr };
     std::atomic<float>* lorenzChaos      { nullptr };
     std::atomic<float>* lorenzFreqMod    { nullptr };
     std::atomic<float>* lorenzQMod       { nullptr };
+    std::atomic<float>* lorenzMorphSteer { nullptr };
 
     std::atomic<float>* chorusEnable     { nullptr };
     std::atomic<float>* chorusRateHz     { nullptr };
@@ -425,6 +446,7 @@ struct Mr16AtomicPointers {
     std::atomic<float>* goldenPanSpread  { nullptr };
     std::atomic<float>* vactrolLpgCutoff { nullptr };
     std::atomic<float>* driveSaturation  { nullptr };
+    std::atomic<float>* softLimiter      { nullptr };
     std::atomic<float>* masterTrimDb     { nullptr };
     std::atomic<float>* dryWetMix        { nullptr };
     std::atomic<float>* powerState       { nullptr };
@@ -440,6 +462,7 @@ struct Mr16AtomicPointers {
         vactrolSag       = apvts.getRawParameterValue(ParamIDs::vactrolSag.getParamID());
         extInputGain     = apvts.getRawParameterValue(ParamIDs::extInputGain.getParamID());
         poissonDensity   = apvts.getRawParameterValue(ParamIDs::poissonDensity.getParamID());
+        euclideanEnable  = apvts.getRawParameterValue(ParamIDs::euclideanEnable.getParamID());
         euclideanPulses  = apvts.getRawParameterValue(ParamIDs::euclideanPulses.getParamID());
         euclideanSteps   = apvts.getRawParameterValue(ParamIDs::euclideanSteps.getParamID());
 
@@ -451,10 +474,12 @@ struct Mr16AtomicPointers {
         modalSpread      = apvts.getRawParameterValue(ParamIDs::modalSpread.getParamID());
         modalQ           = apvts.getRawParameterValue(ParamIDs::modalQ.getParamID());
 
+        lorenzMorphAlpha = apvts.getRawParameterValue(ParamIDs::lorenzMorphAlpha.getParamID());
         lorenzRate       = apvts.getRawParameterValue(ParamIDs::lorenzRate.getParamID());
         lorenzChaos      = apvts.getRawParameterValue(ParamIDs::lorenzChaos.getParamID());
         lorenzFreqMod    = apvts.getRawParameterValue(ParamIDs::lorenzFreqMod.getParamID());
         lorenzQMod       = apvts.getRawParameterValue(ParamIDs::lorenzQMod.getParamID());
+        lorenzMorphSteer = apvts.getRawParameterValue(ParamIDs::lorenzMorphSteer.getParamID());
 
         chorusEnable     = apvts.getRawParameterValue(ParamIDs::chorusEnable.getParamID());
         chorusRateHz     = apvts.getRawParameterValue(ParamIDs::chorusRateHz.getParamID());
@@ -465,6 +490,7 @@ struct Mr16AtomicPointers {
         goldenPanSpread  = apvts.getRawParameterValue(ParamIDs::goldenPanSpread.getParamID());
         vactrolLpgCutoff = apvts.getRawParameterValue(ParamIDs::vactrolLpgCutoff.getParamID());
         driveSaturation  = apvts.getRawParameterValue(ParamIDs::driveSaturation.getParamID());
+        softLimiter      = apvts.getRawParameterValue(ParamIDs::softLimiter.getParamID());
         masterTrimDb     = apvts.getRawParameterValue(ParamIDs::masterTrimDb.getParamID());
         dryWetMix        = apvts.getRawParameterValue(ParamIDs::dryWetMix.getParamID());
         powerState       = apvts.getRawParameterValue(ParamIDs::powerState.getParamID());
@@ -487,7 +513,7 @@ struct Mr16AtomicPointers {
         if (vactrolSag)      s.vactrolSag      = vactrolSag->load(std::memory_order_relaxed);
         if (extInputGain)    s.extInputGainDb  = extInputGain->load(std::memory_order_relaxed);
         if (poissonDensity)  s.poissonDensity  = poissonDensity->load(std::memory_order_relaxed);
-        if (euclideanEnable) s.euclideanEnable = euclideanEnable->load(std::memory_order_relaxed);
+        if (euclideanEnable) s.euclideanEnable = (euclideanEnable->load(std::memory_order_relaxed) > 0.5f);
         if (euclideanPulses) s.euclideanPulses = static_cast<int>(std::round(euclideanPulses->load(std::memory_order_relaxed)));
         if (euclideanSteps)  s.euclideanSteps  = static_cast<int>(std::round(euclideanSteps->load(std::memory_order_relaxed)));
 
@@ -507,10 +533,12 @@ struct Mr16AtomicPointers {
         if (modalQ)          s.modalQ          = modalQ->load(std::memory_order_relaxed);
 
         // Deck 03
-        if (lorenzRate)      s.lorenzRate      = lorenzRate->load(std::memory_order_relaxed);
-        if (lorenzChaos)     s.lorenzChaos     = lorenzChaos->load(std::memory_order_relaxed);
-        if (lorenzFreqMod)   s.lorenzFreqMod   = lorenzFreqMod->load(std::memory_order_relaxed);
-        if (lorenzQMod)      s.lorenzQMod      = lorenzQMod->load(std::memory_order_relaxed);
+        if (lorenzMorphAlpha) s.lorenzMorphAlpha = lorenzMorphAlpha->load(std::memory_order_relaxed);
+        if (lorenzRate)       s.lorenzRate       = lorenzRate->load(std::memory_order_relaxed);
+        if (lorenzChaos)      s.lorenzChaos      = lorenzChaos->load(std::memory_order_relaxed);
+        if (lorenzFreqMod)    s.lorenzFreqMod    = lorenzFreqMod->load(std::memory_order_relaxed);
+        if (lorenzQMod)       s.lorenzQMod       = lorenzQMod->load(std::memory_order_relaxed);
+        if (lorenzMorphSteer) s.lorenzMorphSteer = lorenzMorphSteer->load(std::memory_order_relaxed);
 
         // Deck 04
         if (chorusEnable)    s.chorusEnable    = (chorusEnable->load(std::memory_order_relaxed) > 0.5f);
@@ -523,6 +551,7 @@ struct Mr16AtomicPointers {
         if (goldenPanSpread)   s.goldenPanSpread   = goldenPanSpread->load(std::memory_order_relaxed);
         if (vactrolLpgCutoff)  s.vactrolLpgCutoff  = vactrolLpgCutoff->load(std::memory_order_relaxed);
         if (driveSaturation)   s.driveSaturationDb = driveSaturation->load(std::memory_order_relaxed);
+        if (softLimiter)       s.softLimiter       = (softLimiter->load(std::memory_order_relaxed) > 0.5f);
         if (masterTrimDb)      s.masterTrimDb      = masterTrimDb->load(std::memory_order_relaxed);
         if (dryWetMix)         s.dryWetMix         = dryWetMix->load(std::memory_order_relaxed);
         if (powerState)        s.powerState        = (powerState->load(std::memory_order_relaxed) > 0.5f);
@@ -606,7 +635,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         ParamIDs::extInputGain,
         "Ext Input Drive",
         juce::NormalisableRange<float>(-24.0f, 12.0f, 0.1f, 1.0f),
-        -24.0f,
+        0.0f,
         juce::AudioParameterFloatAttributes().withLabel("dB")
             .withStringFromValueFunction([](float val, int) {
                 return juce::String(val, 1) + " dB";
@@ -615,12 +644,17 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::poissonDensity,
         "Poisson Density",
-        juce::NormalisableRange<float>(0.0f, 25.0f, 0.1f, 0.5f),
+        juce::NormalisableRange<float>(0.0f, 50.0f, 0.1f, 0.5f),
         0.0f,
         juce::AudioParameterFloatAttributes().withLabel("Hz")
             .withStringFromValueFunction([](float val, int) {
                 return juce::String(val, 1) + " Hz";
             })));
+
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        ParamIDs::euclideanEnable,
+        "Euclidean Seq",
+        false));
 
     params.push_back(std::make_unique<juce::AudioParameterInt>(
         ParamIDs::euclideanPulses,
@@ -693,7 +727,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         ParamIDs::modalQ,
         "Resonance Q",
         juce::NormalisableRange<float>(5.0f, 500.0f, 0.1f, 0.4f),
-        50.0f,
+        85.0f,
         juce::AudioParameterFloatAttributes().withLabel("Q")
             .withStringFromValueFunction([](float val, int) {
                 return juce::String(val, 1) + " Q";
@@ -702,6 +736,16 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     // ------------------------------------------------------------------------
     // Deck 03: Kinetic Morph & 3D Chaotic Attractor
     // ------------------------------------------------------------------------
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        ParamIDs::lorenzMorphAlpha,
+        "Morph A/B",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f, 1.0f),
+        0.0f,
+        juce::AudioParameterFloatAttributes()
+            .withStringFromValueFunction([](float val, int) {
+                return juce::String(val, 2);
+            })));
+
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::lorenzRate,
         "Chaos Rate",
@@ -742,6 +786,16 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
                 return juce::String(static_cast<int>(std::round(val * 100.0f))) + " %";
             })));
 
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        ParamIDs::lorenzMorphSteer,
+        "Lorenz Steer",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f, 1.0f),
+        0.0f,
+        juce::AudioParameterFloatAttributes().withLabel("%")
+            .withStringFromValueFunction([](float val, int) {
+                return juce::String(static_cast<int>(std::round(val * 100.0f))) + " %";
+            })));
+
     // ------------------------------------------------------------------------
     // Deck 04: Tri-Phase Spatial BBD Chorus
     // ------------------------------------------------------------------------
@@ -753,7 +807,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::chorusRateHz,
         "Chorus Rate",
-        juce::NormalisableRange<float>(0.05f, 5.0f, 0.01f, 0.5f),
+        juce::NormalisableRange<float>(0.05f, 8.0f, 0.01f, 0.5f),
         0.80f,
         juce::AudioParameterFloatAttributes().withLabel("Hz")
             .withStringFromValueFunction([](float val, int) {
@@ -806,7 +860,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::vactrolLpgCutoff,
         "Vactrol LPG Cutoff",
-        juce::NormalisableRange<float>(100.0f, 20000.0f, 1.0f, 0.35f),
+        juce::NormalisableRange<float>(20.0f, 20000.0f, 1.0f, 0.35f),
         12000.0f,
         juce::AudioParameterFloatAttributes().withLabel("Hz")
             .withStringFromValueFunction([](float val, int) {
@@ -822,6 +876,11 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
             .withStringFromValueFunction([](float val, int) {
                 return juce::String(static_cast<int>(std::round(val * 100.0f))) + " %";
             })));
+
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        ParamIDs::softLimiter,
+        "Soft Limiter",
+        true));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::masterTrimDb,

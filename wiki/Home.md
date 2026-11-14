@@ -1,8 +1,8 @@
 # BRAUN MR-16 · Physical Acoustic Modal Resonator & Synthesizer
 
-[![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(207%2F207%20C%2B%2B%20%7C%20213%2F213%20Web)-24FF6A?style=for-the-badge&logo=checkmarx)](https://github.com/sneed-and-feed/braun_mr-16/blob/main/VERIFICATION_CHECKLIST.md)
-[![Version: 1.0.12](https://img.shields.io/badge/Version-1.0.12-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_mr-16/releases/tag/v1.0.12)
-[![Windows VST3 & Standalone](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.12/BRAUN_MR16-v1.0.12-Windows-x64.zip)
+[![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(216%2F216%20C%2B%2B%20%7C%20230%2F230%20Web)-24FF6A?style=for-the-badge&logo=checkmarx)](https://github.com/sneed-and-feed/braun_mr-16/blob/main/VERIFICATION_CHECKLIST.md)
+[![Version: 1.1.0](https://img.shields.io/badge/Version-1.1.0-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_mr-16/releases/tag/v1.1.0)
+[![Windows VST3 & Standalone](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.1.0/BRAUN_MR16-v1.1.0-Windows-x64.zip)
 [![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_mr-16/releases)
 [![Web Audio API](https://img.shields.io/badge/Web%20Audio-100%25%20Client--Side-4A4A4A?style=for-the-badge)](https://sneed-and-feed.github.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=for-the-badge)](https://github.com/sneed-and-feed/braun_mr-16/blob/main/LICENSE)
@@ -12,7 +12,7 @@
 
 Welcome to the official **BRAUN MR-16** technical documentation and knowledge base.
 
-The **BRAUN MR-16** is an authentic physical acoustic modal resonator and kinetic impulse synthesizer engineered in C++20 and the Web Audio API. Inspired by the functionalist industrial design principles of Dieter Rams and 1960s Braun acoustic laboratories, the instrument models physical excitation mechanics—mass-spring felt mallet impacts, continuous stick-slip friction bowing, optical vactrol plucking, and live line-input re-amping—coupled into a 16-pole modal resonator matrix with 4 geometric manifolds, orthogonal Householder energy scattering, continuous 3D chaotic Lorenz attractor steering, and tri-phase spatial bucket-brigade device (BBD) chorusing.
+The **BRAUN MR-16** is an authentic physical acoustic modal resonator and kinetic impulse synthesizer engineered in C++20 and the Web Audio API. Inspired by the functionalist industrial design principles of Dieter Rams and 1960s Braun acoustic laboratories, the instrument models physical excitation mechanics—mass-spring felt mallet impacts, continuous stick-slip friction bowing, optical vactrol plucking, and live line-input re-amping—coupled into a 16-pole modal resonator matrix with 5 geometric manifolds, orthogonal Householder energy scattering, continuous 3D chaotic Lorenz attractor steering, and tri-phase spatial bucket-brigade device (BBD) chorusing.
 
 The instrument operates in two distinct acoustic domains:
 1. **Expressive Physical Synthesizer (Instrument Mode):** Playable via MIDI controllers or the onboard 16-key microtonal chime performance strip with 6 curated harmonic scales, generative Poisson rain, and Euclidean polyrhythms.
@@ -22,13 +22,13 @@ The MR-16 runs 100% client-side via the **[Live Web Audio Showcase](https://snee
 
 ---
 
-## Precompiled Releases & Distribution (Current: v1.0.12)
+## Precompiled Releases & Distribution (Current: v1.1.0)
 
 | Platform | Format | Release Package | Status |
 | :--- | :--- | :--- | :--- |
 | **Web Browser** | Web Audio & Web MIDI | [Live Web Showcase](https://sneed-and-feed.github.io/) | Zero-install, 100% client-side |
-| **Windows x64** | VST3, CLAP & Standalone | [BRAUN_MR16-v1.0.12-Windows-x64.zip](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.12/BRAUN_MR16-v1.0.12-Windows-x64.zip) | Full Desktop Bundle (Standalone .exe + VST3 + CLAP) |
-| **Windows x64** | VST3 Plugin Only | [BRAUN_MR16-v1.0.12-VST3-Windows-x64.zip](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.12/BRAUN_MR16-v1.0.12-VST3-Windows-x64.zip) | Standalone VST3 bundle for DAW directories |
+| **Windows x64** | VST3, CLAP & Standalone | [BRAUN_MR16-v1.1.0-Windows-x64.zip](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.1.0/BRAUN_MR16-v1.1.0-Windows-x64.zip) | Full Desktop Bundle (Standalone .exe + VST3 + CLAP) |
+| **Windows x64** | VST3 Plugin Only | [BRAUN_MR16-v1.1.0-VST3-Windows-x64.zip](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.1.0/BRAUN_MR16-v1.1.0-VST3-Windows-x64.zip) | Standalone VST3 bundle for DAW directories |
 | **macOS Universal** | AUv2, VST3, CLAP, Standalone | [CMake Build Guide](Compiling-from-Source) | Apple Silicon (M1–M4) & Intel x86_64 |
 | **Linux** | VST3, CLAP & Standalone | [CMake Build Guide](Compiling-from-Source) | WebKitGTK 4.0/4.1 & ALSA/JACK/PipeWire |
 
@@ -38,7 +38,7 @@ The MR-16 runs 100% client-side via the **[Live Web Audio Showcase](https://snee
 
 | Document | Description |
 | :--- | :--- |
-| **[Sound Design & Signal Flow](Acoustic-Sound-Design-and-Signal-Flow)** | Comprehensive analysis of the 7-deck signal flow, Hunt-Crossley mechanics, Karnopp stick-slip friction, 16-pole Zavalishin SVF core, Householder scattering, and full 33 APVTS parameter specification. |
+| **[Sound Design & Signal Flow](Acoustic-Sound-Design-and-Signal-Flow)** | Comprehensive analysis of the 7-deck signal flow, Hunt-Crossley mechanics, Karnopp stick-slip friction, 16-pole Zavalishin SVF core, Householder scattering, and full 37 APVTS parameter specification. |
 | **[Sample-to-Modal Extraction & Morphing](Sample-to-Modal-Extraction-and-Morphing)** | Step-by-step guide to dragging and dropping audio files, 4096-point Radix-2 FFT analysis, sub-bin parabolic peak interpolation, temporal decay regression, and dual-slot Lorenz-steered A/B morphing. |
 | **[Performance & Playing Guide](Performance-and-Playing-Guide)** | How to perform on the 16-key microtonal chime strip, computer keyboard hotkeys (`A`–`B`), 6 microtonal scales, strike audition buttons, and generative ambient automation. |
 | **[DAW Setup & Acoustic Re-Amping](DAW-Setup-and-Acoustic-Re-Amping)** | Host configuration guide for Ableton Live, FL Studio, Reaper, Logic Pro, Bitwig, and Cubase. Re-chassising drum machines, processing vocals, and right-click parameter automation. |
@@ -82,7 +82,7 @@ graph TD
     end
 
     subgraph D2["Deck 02: 16-Pole Modal Resonator Matrix"]
-        MANIFOLDS["4 Geometric Manifolds<br/>(Chladni / Beam / Vocal / Horn)"]
+        MANIFOLDS["5 Geometric Manifolds<br/>(Chladni / Beam / Vocal / Horn / Diffuse)"]
         MATERIALS["5 Acoustic Materials<br/>(Wood / Glass / Steel / Brass / Nylon)"]
         FILTERS["16x Parallel Bandpass SVF<br/>(Zavalishin TPT Topology)"]
         HOUSEHOLDER["Orthogonal Householder Matrix<br/>H = I - (2/N) 1 1^T (O(N) Sum)"]
@@ -143,12 +143,13 @@ At the core of the MR-16 are 16 parallel 2nd-order topology-preserving transform
 
 Because this matrix is unitary ($\mathbf{H}^T\mathbf{H} = \mathbf{I}$), mutual acoustic energy is redistributed across all 16 modes on every sample step without energy gain or loss. This enables physical sympathetic vibration, inharmonic ring-down, and natural acoustic bloom with $O(N)$ computational efficiency.
 
-### 2. Four Geometric Manifolds & Five Calibrated Acoustic Materials
-Modes are dispersed across four mathematical geometries:
+### 2. Five Geometric Manifolds & Five Calibrated Acoustic Materials
+Modes are dispersed across five mathematical geometries:
 - **Chladni Plate**: Transverse biharmonic 4th-order plate modes ($\nabla^4 w = -\frac{\rho h}{D}\ddot{w}$) producing the classic resonant spectra of bells, gongs, and sheet metal.
 - **Stiff Beam**: Euler-Bernoulli beam with shear deformation corrections, characteristic of marimba and xylophone tone bars.
 - **Vocal Formant Tract**: 16-pole cascaded acoustic tube model matching physical human vocal tract formants across varying vowel configurations.
 - **Poincaré Hyperbolic Horn**: Negative spatial curvature acoustic cavity with non-linear flare expansion.
+- **Diffuse Acoustic Plate**: Golden-ratio irrational overtone dispersion minimizing modal coincidence and metallic comb ringing.
 
 These geometries are parameterized by five physical material damping profiles: **Wood (Spruce/Rosewood)**, **Glass (Borosilicate)**, **High-Carbon Steel**, **Bell Bronze**, and **Viscoelastic Nylon**.
 
@@ -179,7 +180,18 @@ Deck 03 features a drag-and-drop audio dropzone. Users can drop any `.wav`, `.mp
 
 ---
 
-## Release Milestones & Changelog (v1.0.10 – v1.0.12)
+## Release Milestones & Changelog (v1.0.10 – v1.1.0)
+
+### v1.1.0 (Multi-Sample-Rate DSP Calibration, Lock-Free Lifecycle & WebView2 Sync Overhaul)
+- **Sample-Rate-Invariant Physical Modeling (44.1–192 kHz):** Upgraded the 3D Lorenz chaotic attractor to double-precision RK4 integration with proper reciprocal sample-rate step scaling (fixing float32 ULP stagnation at 192 kHz), calibrated modal radiation/energy filters and vactrol envelope ballistics across all host sample rates, added smooth $C^1$ Hermite ultrasonic Q-norm rolloff with $0.48 f_s$ Nyquist clamps, and closed the Karnopp stick-slip bow resonator feedback loop.
+- **Lock-Free Audio-Thread Lifecycle & MIDI Expressivity:** Eliminated audio-thread `setValueNotifyingHost` locks on Standby auto-wake via 30 Hz UI timer handoff, added lock-free MIDI CC64 sustain ($3.5\times$ decay), 14-bit Pitch Bend ($\pm 2$ st), CC1 Mod Wheel coupling, CC120/121/123 panic/reset, and zero-allocation chunked mono bus downmixing for arbitrary host block sizes ($0$ to $4096+$ samples).
+- **WebView2 IPC & WebAudio Parity:** Added `mStateSyncEpoch` host state/preset UI synchronization, eliminated parameter echo feedback loops, preserved JSON preset `[0, 100]%` semantics while fixing `(0, 1]%` knob jumps via `_toJuceParamValue`, enabled client-side sample-to-modal FFT extraction inside the native WebView2 plugin via `OfflineAudioContext`, and upgraded the WebAudio engine to RK4 Lorenz integration with live Q-modulation and $0.48 f_s$ Nyquist clamps.
+- **Unified Test Verification:** 100% pass rate achieved across **216 C++ headless DSP tests** (+ 6/6 core verification tests) and **230 Web Audio & UI tests** (49 test suites).
+
+### v1.0.14 (Poisson Rain Block Persistence & Modal Matrix Optimization)
+- **Poisson Rain Persistence:** Fixed per-block countdown resets in `KineticExciter::setPoissonRain` when inter-arrival intervals exceeded one audio buffer.
+- **Modal Matrix CPU Optimization:** Precomputed static mode dispersion ratios and Q-dependent coupling damping in `ModalResonatorMatrix`, adding setter change guards.
+- **Lorenz Q-Modulation Wiring:** Connected `lorenz_q_mod` APVTS parameter to chaotic modal Q-spread depth and native fallback UI Deck 02.
 
 ### v1.0.12 (VST3 Editor Lifecycle & Parameter Persistence Fix)
 - **Synchronous Web Options State Injection:** Replaced asynchronous Web-to-C++ handshake with JUCE 8 `withUserScript(window.__JUCE_INITIAL_PARAMS__)`, synchronously injecting all 33 running APVTS parameter values and discrete states into Chromium before DOM evaluation.

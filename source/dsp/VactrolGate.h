@@ -68,8 +68,10 @@ private:
     float mMaxCutoff { 18000.0f };
     float mCurrentCutoff { 40.0f };
 
-    // Dynamic envelope follower for self-sagging
+    // Dynamic envelope follower for self-sagging (sample-rate invariant coefficients)
     float mEnvFollower { 0.0f };
+    float mEnvAttackCoeff { 0.02f };
+    float mEnvReleaseCoeff { 0.0005f };
 
     // TPT filter states (Stereo 2-pole cascade)
     float mStateL1 { 0.0f };

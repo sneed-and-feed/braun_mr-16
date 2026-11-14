@@ -192,7 +192,9 @@ private:
     std::array<float, kNumModes> mPanL { 0.7071f };
     std::array<float, kNumModes> mPanR { 0.7071f };
 
-    // CRT Telemetry Energy Trackers
+    // CRT Telemetry Energy Trackers & Sample-Rate Scaled Damping Coefficients
+    float mRadiationCoeff { 0.08f };
+    float mEnergyDecayCoeff { 0.992f };
     std::array<float, kNumModes> mModalEnergies { 0.0f };
 };
 

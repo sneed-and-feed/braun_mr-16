@@ -338,23 +338,37 @@ class BraunMr16App {
             return;
           }
 
-          if (typeof this.engine.params[targetId] !== 'undefined') {
-            this.engine.params[targetId] = value;
-          }
-          if (this.activeBuffer === 'A' && this.bufferA && typeof this.bufferA[targetId] !== 'undefined') {
-            this.bufferA[targetId] = value;
-          }
-
-          const isPercentKnob = [
+          const isPercentEngineParam = [
             'chorus_mix', 'chorusMix',
-            'modal_coupling', 'modalCoupling',
-            'chorus_dimension', 'chorusDimension',
             'golden_pan_spread', 'goldenPanSpread',
             'drive_saturation', 'driveSaturation',
             'lorenz_freq_mod', 'lorenzFreqMod',
             'lorenz_q_mod', 'lorenzQMod',
             'dry_wet_mix', 'dryWetMix'
           ].includes(targetId);
+
+          const isPercentKnob = [
+            'chorus_mix', 'chorusMix',
+            'modal_coupling', 'modalCoupling',
+            'chorus_dimension', 'chorusDimension',
+            'lorenz_morph_steer', 'lorenzMorphSteer',
+            'golden_pan_spread', 'goldenPanSpread',
+            'drive_saturation', 'driveSaturation',
+            'lorenz_freq_mod', 'lorenzFreqMod',
+            'lorenz_q_mod', 'lorenzQMod',
+            'dry_wet_mix', 'dryWetMix'
+          ].includes(targetId);
+
+          const engineVal = (isPercentEngineParam && typeof value === 'number' && value <= 1.0)
+            ? (value * 100.0)
+            : value;
+
+          if (typeof this.engine.params[targetId] !== 'undefined') {
+            this.engine.params[targetId] = engineVal;
+          }
+          if (this.activeBuffer === 'A' && this.bufferA && typeof this.bufferA[targetId] !== 'undefined') {
+            this.bufferA[targetId] = engineVal;
+          }
 
           let knob = this.knobs[targetId] || (webId && this.knobs[webId]);
           if (knob && typeof value === 'number') {
@@ -387,12 +401,23 @@ class BraunMr16App {
             if (btn) this._updateSegmentActive('group-material', btn);
           } else if (targetId === 'chorus_enable' || targetId === 'chorusEnable') {
             const active = (value > 0.5);
+            this.engine.params.chorus_enable = active;
             if (this.dom.btnChorusEnable) {
               this.dom.btnChorusEnable.classList.toggle('is-active', active);
               const text = this.dom.btnChorusEnable.querySelector('span:last-child');
               if (text) text.textContent = active ? 'CHORUS ACTIVE' : 'CHORUS BYPASS';
               const led = this.dom.btnChorusEnable.querySelector('.braun-led');
               if (led) led.classList.toggle('is-active-orange', active);
+            }
+          } else if (targetId === 'soft_limiter' || targetId === 'softLimiter') {
+            const active = (value > 0.5);
+            this.engine.params.soft_limiter = active;
+            if (this.dom.btnSoftLimit) {
+              this.dom.btnSoftLimit.classList.toggle('is-active', active);
+              const text = this.dom.btnSoftLimit.querySelector('span:last-child');
+              if (text) text.textContent = active ? 'LIMITER ACTIVE' : 'LIMITER BYPASS';
+              const led = this.dom.btnSoftLimit.querySelector('.braun-led');
+              if (led) led.classList.toggle('is-active-green', active);
             }
           } else if (targetId === 'chorus_dimension' || targetId === 'chorusDimension') {
             const dim = value <= 1.0 ? value * 100 : value;
@@ -406,14 +431,19 @@ class BraunMr16App {
             if (btn) this._updateSegmentActive('group-dimension-mode', btn);
           } else if (targetId === 'display_mode' || targetId === 'displayMode') {
             const dVal = parseInt(value, 10);
-            const mode = dVal === 0 ? 'CHLADNI' : (dVal === 1 ? 'ATTRACTOR' : 'FFT');
+            const mode = dVal === 0 ? 'CHLADNI' : (dVal === 1 ? 'ATTRACTOR' : 'MODAL_FFT');
             const group = document.getElementById('group-crt-mode');
             const btn = group?.querySelector(`button[data-val="${mode}"]`);
             if (btn) this._updateSegmentActive('group-crt-mode', btn);
             if (this.crt) this.crt.setMode(mode);
           } else if (targetId === 'poisson_density' || targetId === 'poissonDensity') {
-            const pBtn = document.getElementById('btn-poisson-rain');
+            const pBtn = document.getElementById('btn-audition-poisson') || document.getElementById('btn-poisson-rain');
             if (pBtn) pBtn.classList.toggle('is-active', value > 0.1);
+          } else if (targetId === 'euclidean_enable' || targetId === 'euclideanEnable') {
+            const active = (value > 0.5);
+            this.engine.params.euclidean_enable = active;
+            const eBtn = document.getElementById('btn-audition-euclidean');
+            if (eBtn) eBtn.classList.toggle('is-active', active);
           }
         });
 
@@ -524,19 +554,27 @@ class BraunMr16App {
       }
     };
 
-    if (window.__JUCE__?.backend) {
+    if (typeof window !== 'undefined' && window.__JUCE__?.backend) {
       setupBackend();
     } else {
       let attempts = 0;
       const poll = setInterval(() => {
+        if (typeof window === 'undefined') {
+          clearInterval(poll);
+          this._juceBridgePoll = null;
+          return;
+        }
         attempts++;
         if (window.__JUCE__?.backend) {
           clearInterval(poll);
+          this._juceBridgePoll = null;
           setupBackend();
         } else if (attempts >= 100) {
           clearInterval(poll);
+          this._juceBridgePoll = null;
         }
       }, 50);
+      this._juceBridgePoll = poll;
       if (typeof poll.unref === 'function') {
         poll.unref();
       }
@@ -679,7 +717,7 @@ class BraunMr16App {
     const displayVal = typeof p.display_mode === 'number' ? p.display_mode : p.displayMode;
     if (typeof displayVal === 'number') {
       const dVal = parseInt(displayVal, 10);
-      const mode = dVal === 0 ? 'CHLADNI' : (dVal === 1 ? 'ATTRACTOR' : 'FFT');
+      const mode = dVal === 0 ? 'CHLADNI' : (dVal === 1 ? 'ATTRACTOR' : 'MODAL_FFT');
       const group = document.getElementById('group-crt-mode');
       const btn = group?.querySelector(`button[data-val="${mode}"]`);
       if (btn) this._updateSegmentActive('group-crt-mode', btn);
@@ -689,8 +727,29 @@ class BraunMr16App {
     // 9. Poisson Density indicator
     const poissonVal = typeof p.poisson_density === 'number' ? p.poisson_density : p.poissonDensity;
     if (typeof poissonVal === 'number') {
-      const pBtn = document.getElementById('btn-poisson-rain');
+      const pBtn = document.getElementById('btn-audition-poisson') || document.getElementById('btn-poisson-rain');
       if (pBtn) pBtn.classList.toggle('is-active', poissonVal > 0.1);
+    }
+
+    // 9a. Euclidean Sequencer indicator
+    const euclEnVal = typeof p.euclidean_enable === 'number' ? p.euclidean_enable : p.euclideanEnable;
+    if (typeof euclEnVal === 'number') {
+      const active = euclEnVal > 0.5;
+      this.engine.params.euclidean_enable = active;
+      const eBtn = document.getElementById('btn-audition-euclidean');
+      if (eBtn) eBtn.classList.toggle('is-active', active);
+    }
+
+    // 9b. Soft Limiter
+    const softLimVal = typeof p.soft_limiter === 'number' ? p.soft_limiter : p.softLimiter;
+    if (typeof softLimVal === 'number' && this.dom.btnSoftLimit) {
+      const active = softLimVal > 0.5;
+      this.engine.params.soft_limiter = active;
+      this.dom.btnSoftLimit.classList.toggle('is-active', active);
+      const text = this.dom.btnSoftLimit.querySelector('span:last-child');
+      if (text) text.textContent = active ? 'LIMITER ACTIVE' : 'LIMITER BYPASS';
+      const led = this.dom.btnSoftLimit.querySelector('.braun-led');
+      if (led) led.classList.toggle('is-active-green', active);
     }
 
     // 10. Current Program / Preset
@@ -751,11 +810,14 @@ class BraunMr16App {
       if (led) led.classList.toggle('is-active-green', this.engine.isPowered);
     }
 
-    // Unlock AudioContext on first gesture
-    const unlock = async () => {
-      await this._ensureActiveAudio();
+    // Unlock AudioContext on first gesture (without double-toggling #btn-power)
+    const unlock = async (e) => {
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
+      if (this.dom.btnPower && e && e.target && typeof this.dom.btnPower.contains === 'function' && this.dom.btnPower.contains(e.target)) {
+        return;
+      }
+      await this._ensureActiveAudio();
     };
     window.addEventListener('pointerdown', unlock, { once: true });
     window.addEventListener('keydown', unlock, { once: true });
@@ -823,6 +885,7 @@ class BraunMr16App {
       'chorus_mix', 'chorusMix',
       'modal_coupling', 'modalCoupling',
       'chorus_dimension', 'chorusDimension',
+      'lorenz_morph_steer', 'lorenzMorphSteer',
       'golden_pan_spread', 'goldenPanSpread',
       'drive_saturation', 'driveSaturation',
       'lorenz_freq_mod', 'lorenzFreqMod',
@@ -851,7 +914,11 @@ class BraunMr16App {
         ...options,
         value: initialValue,
         onChange: (val) => {
-          this.engine.setParam(options.paramId, val);
+          const isUnitEngineKnob = options.paramId === 'modal_coupling'
+            || options.paramId === 'chorus_dimension'
+            || options.paramId === 'lorenz_morph_steer';
+          const engineVal = isUnitEngineKnob ? (val * 0.01) : val;
+          this.engine.setParam(options.paramId, engineVal);
           const juceVal = (isPercentKnob(options.paramId) && options.max === 100.0) ? (val * 0.01) : val;
           this._emitJuceParam(options.paramId, juceVal);
         },
@@ -871,7 +938,10 @@ class BraunMr16App {
       });
       this.knobs[options.paramId] = knob;
       if (this.engine && this.engine.params && typeof this.engine.params[options.paramId] !== 'undefined') {
-        this.engine.params[options.paramId] = initialValue;
+        const isUnitEngineKnob = options.paramId === 'modal_coupling'
+          || options.paramId === 'chorus_dimension'
+          || options.paramId === 'lorenz_morph_steer';
+        this.engine.params[options.paramId] = isUnitEngineKnob ? (initialValue * 0.01) : initialValue;
       }
     };
 
@@ -974,7 +1044,7 @@ class BraunMr16App {
     create('knob-morph-alpha', {
       label: 'MORPH A/B',
       paramId: 'lorenz_morph_alpha',
-      min: 0.0, max: 1.0, step: 0.01, value: 0.50, unit: '', precision: 2, size: 'secondary'
+      min: 0.0, max: 1.0, step: 0.01, value: 0.0, unit: '', precision: 2, size: 'secondary'
     });
     create('knob-lorenz-steer', {
       label: 'LORENZ STEER',
@@ -1154,8 +1224,9 @@ class BraunMr16App {
 
   triggerChimeKey(index, velocity = 0.8) {
     if (index < 0 || index >= 16) return;
+    const freq = this.chimePitches[index];
     if (this.isJuce) {
-      this._emitJuceExciter({ type: 'chime', key: index, vel: velocity });
+      this._emitJuceExciter({ type: 'chime', key: index, vel: velocity, freq });
       if (this.dom.chimeStrip) {
         const keys = this.dom.chimeStrip.children;
         if (keys[index]) {
@@ -1166,9 +1237,8 @@ class BraunMr16App {
       return;
     }
     this._ensureActiveAudio();
-    const freq = this.chimePitches[index];
     this.engine.triggerStrike(this.engine.params.strike_hardness, velocity, freq);
-    this._emitJuceExciter({ type: 'chime', key: index, vel: velocity });
+    this._emitJuceExciter({ type: 'chime', key: index, vel: velocity, freq });
 
     // Visual feedback
     if (this.dom.chimeStrip) {
@@ -1182,6 +1252,17 @@ class BraunMr16App {
 
   _initEventListeners() {
     // --- Audition Sound Bar ---
+    const wakeStandbyForAudition = async () => {
+      if (this.isJuce) {
+        if (!this.engine.isPowered) {
+          this.engine.setPower(true);
+          this._emitJuceParam('power_state', 1.0);
+        }
+      } else {
+        await this._ensureActiveAudio();
+      }
+    };
+
     document.getElementById('btn-audition-impulse')?.addEventListener('click', () => {
       this.triggerDirac();
     });
@@ -1194,20 +1275,35 @@ class BraunMr16App {
     document.getElementById('btn-audition-air')?.addEventListener('click', () => {
       this.triggerAirJet(0.8);
     });
-    document.getElementById('btn-audition-poisson')?.addEventListener('click', (e) => {
-      this._ensureActiveAudio();
+    document.getElementById('btn-audition-poisson')?.addEventListener('click', async (e) => {
       const btn = e.currentTarget;
       if (this.engine.params.poisson_density > 0) {
         this.engine.setParam('poisson_density', 0);
-        if (this.knobs['poisson_density']) this.knobs['poisson_density'].setValue(0);
+        if (this.knobs['poisson_density']) this.knobs['poisson_density'].setValue(0, false);
         btn.classList.remove('is-active');
         this._emitJuceParam('poisson_density', 0.0);
       } else {
+        await wakeStandbyForAudition();
         this.engine.setParam('poisson_density', 18.0);
-        if (this.knobs['poisson_density']) this.knobs['poisson_density'].setValue(18.0);
+        if (this.knobs['poisson_density']) this.knobs['poisson_density'].setValue(18.0, false);
         btn.classList.add('is-active');
         this._emitJuceParam('poisson_density', 18.0);
       }
+    });
+    document.getElementById('btn-audition-euclidean')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const nextActive = !Boolean(this.engine.params.euclidean_enable);
+      if (nextActive) {
+        await wakeStandbyForAudition();
+        if ((Number(this.engine.params.euclidean_pulses) || 0) <= 0) {
+          this.engine.setParam('euclidean_pulses', 4);
+          if (this.knobs['euclidean_pulses']) this.knobs['euclidean_pulses'].setValue(4, false);
+          this._emitJuceParam('euclidean_pulses', 4);
+        }
+      }
+      this.engine.setParam('euclidean_enable', nextActive);
+      btn.classList.toggle('is-active', nextActive);
+      this._emitJuceParam('euclidean_enable', nextActive ? 1.0 : 0.0);
     });
 
     // Spacebar triggers Dirac Impulse, Escape cancels inputs and overlays
@@ -1388,9 +1484,9 @@ class BraunMr16App {
         this._updateSegmentActive('group-dimension-mode', e.target);
         const dimensionWidths = { 1: 35.0, 2: 65.0, 3: 85.0, 4: 100.0 };
         const w = dimensionWidths[val] || 75.0;
-        this.engine.setParam('chorus_dimension', w);
+        this.engine.setParam('chorus_dimension', w * 0.01);
         if (this.knobs['chorus_dimension']) this.knobs['chorus_dimension'].setValue(w);
-        this._emitJuceParam('chorus_dimension', w);
+        this._emitJuceParam('chorus_dimension', w * 0.01);
       }
     });
 
@@ -1443,7 +1539,11 @@ class BraunMr16App {
     this.dom.btnPower?.addEventListener('click', async () => {
       const isPowered = !this.engine.isPowered;
       if (isPowered) {
-        await this._ensureActiveAudio();
+        if (this.isJuce) {
+          this.engine.setPower(true);
+        } else {
+          await this._ensureActiveAudio();
+        }
       } else {
         this.engine.setPower(false);
       }
@@ -1526,6 +1626,10 @@ class BraunMr16App {
     // --- Preset Selector ---
     this.dom.selectPreset?.addEventListener('change', (e) => {
       const presetId = e.target.value;
+      const selectedIdx = this.dom.selectPreset.selectedIndex;
+      if (selectedIdx >= 0 && selectedIdx < 16) {
+        this._emitJuceParam('currentProgram', selectedIdx);
+      }
       if (this.presets[presetId]) {
         this.applyPreset(this.presets[presetId]);
       }
@@ -1667,12 +1771,20 @@ class BraunMr16App {
       }
     });
 
-    // --- Visibility State Synchronization ---
+    // --- Visibility & BFCache State Synchronization ---
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         if (this.crt) this.crt.stop();
       } else {
         if (this.crt && this.crt.isPowered) this.crt.start();
+      }
+    });
+    window.addEventListener('pagehide', () => {
+      if (this.crt) this.crt.stop();
+    });
+    window.addEventListener('pageshow', (e) => {
+      if (e && e.persisted && this.crt && this.crt.isPowered) {
+        this.crt.start();
       }
     });
   }
@@ -1864,13 +1976,40 @@ class BraunMr16App {
       return;
     }
     try {
-      await this.engine.init();
       const arrayBuffer = await file.arrayBuffer();
-      const audioBuffer = await this.engine.ctx.decodeAudioData(arrayBuffer);
+      let audioBuffer;
+      if (this.isJuce) {
+        // Decode strictly offline without instantiating a live WebAudio output device or RAF loop
+        const OfflineCtx = (typeof window !== 'undefined' && (window.OfflineAudioContext || window.webkitOfflineAudioContext))
+          || globalThis.OfflineAudioContext;
+        if (!OfflineCtx) {
+          throw new Error('OfflineAudioContext unavailable for sample decoding.');
+        }
+        const decodeCtx = new OfflineCtx(1, 1, 48000);
+        audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+      } else {
+        await this.engine.init();
+        audioBuffer = await this.engine.ctx.decodeAudioData(arrayBuffer);
+      }
       const profile = await this.modalExtractor.extractFromAudioBuffer(audioBuffer, file.name);
 
       const slot = this.activeProfileSlot || 'A';
       this.engine.loadModalProfile(profile, slot);
+
+      if (this.isJuce && profile) {
+        const manifoldMap = { CHLADNI: 0, BEAM: 1, VOCAL: 2, HORN: 3, DIFFUSE: 4 };
+        const mType = manifoldMap[profile.manifoldClassification?.type] ?? 0;
+        const f0 = Math.max(20.0, Math.min(2000.0, Number(profile.fundamental) || 220.0));
+        const mode0 = profile.modes && profile.modes[0];
+        const damping = Math.max(0.05, Math.min(10.0, Number(mode0?.decayTimeSec) || 1.8));
+        const qVal = Math.max(5.0, Math.min(500.0, Number(mode0?.q) || 85.0));
+        this.applyParamTree({
+          manifold_type: mType,
+          modal_frequency: f0,
+          modal_damping: damping,
+          modal_q: qVal
+        });
+      }
 
       const targetBtn = slot === 'B' ? this.dom.btnSlotB : this.dom.btnSlotA;
       if (targetBtn) {
@@ -1915,6 +2054,20 @@ class BraunMr16App {
         if (patch.format === 'BRAUN_MR16_MODAL_PROFILE' || patch.modes) {
           const slot = this.activeProfileSlot || 'A';
           this.engine.loadModalProfile(patch, slot);
+          if (this.isJuce) {
+            const manifoldMap = { CHLADNI: 0, BEAM: 1, VOCAL: 2, HORN: 3, DIFFUSE: 4 };
+            const mType = manifoldMap[patch.manifoldClassification?.type] ?? 0;
+            const f0 = Math.max(20.0, Math.min(2000.0, Number(patch.fundamental) || 220.0));
+            const mode0 = patch.modes && patch.modes[0];
+            const damping = Math.max(0.05, Math.min(10.0, Number(mode0?.decayTimeSec) || 1.8));
+            const qVal = Math.max(5.0, Math.min(500.0, Number(mode0?.q) || 85.0));
+            this.applyParamTree({
+              manifold_type: mType,
+              modal_frequency: f0,
+              modal_damping: damping,
+              modal_q: qVal
+            });
+          }
           const targetBtn = slot === 'B' ? this.dom.btnSlotB : this.dom.btnSlotA;
           if (targetBtn) {
             const orig = targetBtn.textContent;
@@ -1954,8 +2107,19 @@ class BraunMr16App {
   applyPreset(preset) {
     if (!preset || !preset.params) return;
 
-    // Apply parameters to engine & knobs
-    this.applyParamTree(preset.params);
+    if (typeof this.engine.setCustomProfileActive === 'function') {
+      this.engine.setCustomProfileActive(false);
+    }
+
+    // Apply parameters to engine & knobs (normalizing optional preset fields so legacy/partial patches reset cleanly)
+    const normalizedParams = {
+      euclidean_enable: false,
+      lorenz_morph_alpha: 0.0,
+      lorenz_morph_steer: 0.0,
+      soft_limiter: true,
+      ...preset.params
+    };
+    this.applyParamTree(normalizedParams);
 
     // Snapshot current state into active buffer
     if (this.activeBuffer === 'A') {
@@ -1966,13 +2130,19 @@ class BraunMr16App {
 
     // Apply UI state if present
     if (preset.ui) {
-      if (preset.ui.vector_crt_mode && this.crt) {
-        this.crt.setMode(preset.ui.vector_crt_mode);
+      if (preset.ui.vector_crt_mode) {
+        if (this.crt) {
+          this.crt.setMode(preset.ui.vector_crt_mode);
+        }
         const group = document.getElementById('group-crt-mode');
         if (group) {
           const btn = group.querySelector(`button[data-val="${preset.ui.vector_crt_mode}"]`);
           if (btn) this._updateSegmentActive('group-crt-mode', btn);
         }
+        const modeIdx = preset.ui.vector_crt_mode === 'CHLADNI'
+          ? 0
+          : (preset.ui.vector_crt_mode === 'ATTRACTOR' ? 1 : 2);
+        this._emitJuceParam('display_mode', modeIdx);
       }
       if (preset.ui.phosphor_type && this.crt) {
         this.crt.setPhosphorType(preset.ui.phosphor_type);
@@ -2006,17 +2176,33 @@ class BraunMr16App {
     this._emitJuceParam('scope_source', this.scopeSource === 'IN' ? 1.0 : 0.0);
   }
 
+  _toJuceParamValue(id, val) {
+    if (typeof val === 'boolean') {
+      return val ? 1.0 : 0.0;
+    }
+    if (['chorus_mix', 'golden_pan_spread', 'drive_saturation', 'lorenz_freq_mod', 'lorenz_q_mod', 'dry_wet_mix'].includes(id)) {
+      return typeof val === 'number' ? (val * 0.01) : val;
+    }
+    if ((id === 'modal_coupling' || id === 'chorus_dimension' || id === 'lorenz_morph_steer') && typeof val === 'number' && val > 1.0) {
+      return val * 0.01;
+    }
+    return val;
+  }
+
   applyParamTree(params) {
     for (const id in params) {
       const val = params[id];
-      this.engine.setParam(id, val);
-      this._emitJuceParam(id, val);
+      const engineVal = ((id === 'modal_coupling' || id === 'chorus_dimension' || id === 'lorenz_morph_steer') && typeof val === 'number' && val > 1.0)
+        ? (val * 0.01)
+        : val;
+      this.engine.setParam(id, engineVal);
+      this._emitJuceParam(id, this._toJuceParamValue(id, val));
       let knobVal = val;
       if (id === 'modal_coupling' && val <= 1.0) {
         knobVal = val * 100;
       } else if (id === 'chorus_dimension' && val <= 1.0) {
         knobVal = val * 100;
-      } else if (['chorus_mix', 'golden_pan_spread', 'drive_saturation', 'lorenz_freq_mod', 'lorenz_q_mod', 'dry_wet_mix'].includes(id) && val <= 1.0) {
+      } else if (id === 'lorenz_morph_steer' && val <= 1.0) {
         knobVal = val * 100;
       }
       if (this.knobs[id]) {
@@ -2063,6 +2249,15 @@ class BraunMr16App {
       const led = this.dom.btnChorusEnable.querySelector('.braun-led');
       if (led) led.classList.toggle('is-active-orange', active);
     }
+    if (params.poisson_density !== undefined) {
+      const pBtn = document.getElementById('btn-audition-poisson') || document.getElementById('btn-poisson-rain');
+      if (pBtn) pBtn.classList.toggle('is-active', Number(params.poisson_density) > 0.1);
+    }
+    if (params.euclidean_enable !== undefined) {
+      const eBtn = document.getElementById('btn-audition-euclidean');
+      const active = typeof params.euclidean_enable === 'number' ? params.euclidean_enable > 0.5 : Boolean(params.euclidean_enable);
+      if (eBtn) eBtn.classList.toggle('is-active', active);
+    }
     if (params.soft_limiter !== undefined && this.dom.btnSoftLimit) {
       const active = Boolean(params.soft_limiter);
       this.dom.btnSoftLimit.classList.toggle('is-active', active);
@@ -2084,6 +2279,10 @@ class BraunMr16App {
   }
 
   destroy() {
+    if (this._juceBridgePoll) {
+      clearInterval(this._juceBridgePoll);
+      this._juceBridgePoll = null;
+    }
     if (this.telemetryRafId && typeof cancelAnimationFrame === 'function') {
       cancelAnimationFrame(this.telemetryRafId);
       this.telemetryRafId = null;
@@ -2098,6 +2297,9 @@ class BraunMr16App {
     }
     if (this.recorder) {
       this.recorder.stop();
+    }
+    if (this.engine && typeof this.engine.destroy === 'function') {
+      this.engine.destroy();
     }
     for (const id in this.knobs) {
       if (typeof this.knobs[id].destroy === 'function') {

@@ -103,6 +103,13 @@ export class HeadlessAudioNode {
     this.outputs = [];
 
     this._currentBlockIndex = -1;
+    this._inputBuffers = [];
+    for (let inp = 0; inp < Math.max(1, numInputs); inp++) {
+      this._inputBuffers.push([
+        new Float32Array(context.blockSize),
+        new Float32Array(context.blockSize)
+      ]);
+    }
     this._outputBuffers = [];
     for (let o = 0; o < numOutputs; o++) {
       this._outputBuffers.push([
@@ -139,12 +146,27 @@ export class HeadlessAudioNode {
   }
 
   getSummedInput(inputIndex, blockSize) {
-    const inL = new Float32Array(blockSize);
-    const inR = new Float32Array(blockSize);
+    let pair = this._inputBuffers[inputIndex];
+    if (!pair || pair[0].length < blockSize) {
+      pair = [new Float32Array(blockSize), new Float32Array(blockSize)];
+      this._inputBuffers[inputIndex] = pair;
+    }
 
-    for (const conn of this.inputs) {
+    for (let c = 0; c < this.inputs.length; c++) {
+      const conn = this.inputs[c];
       if (conn.targetInput === inputIndex) {
         conn.sourceNode.processBlock(this.context.currentBlockIndex, blockSize);
+      }
+    }
+
+    const inL = pair[0];
+    const inR = pair[1];
+    inL.fill(0, 0, blockSize);
+    inR.fill(0, 0, blockSize);
+
+    for (let c = 0; c < this.inputs.length; c++) {
+      const conn = this.inputs[c];
+      if (conn.targetInput === inputIndex) {
         const srcBufs = conn.sourceNode._outputBuffers[conn.sourceOutput];
         const sL = srcBufs[0];
         const sR = srcBufs.length > 1 ? srcBufs[1] : srcBufs[0];
@@ -154,7 +176,7 @@ export class HeadlessAudioNode {
         }
       }
     }
-    return [inL, inR];
+    return blockSize === inL.length ? pair : [inL.subarray(0, blockSize), inR.subarray(0, blockSize)];
   }
 
   processBlock(blockIndex, blockSize) {

@@ -351,8 +351,12 @@ describe('BRAUN MR-16 UI Layout & CRT Display Audit Suite', () => {
         await call('Page.enable');
         await call('Runtime.enable');
 
-        // Allow DOM to settle
-        await new Promise((r) => setTimeout(r, 1200));
+        // Poll until DOM and ES module app instance settle (eliminates parallel CDP boot race)
+        for (let i = 0; i < 50; i++) {
+          const ready = await evaluate("Boolean(window.__MR16__ && document.title && document.title.includes('BRAUN'))");
+          if (ready) break;
+          await new Promise((r) => setTimeout(r, 100));
+        }
 
         // 1. Document title & zero errors
         const title = await evaluate('document.title');

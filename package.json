@@ -1,7 +1,7 @@
 {
   "name": "braun-mr-16",
-  "version": "1.0.14",
-  "description": "BRAUN MR-16 Modal Resonator & Kinetic Impulse Synthesizer. Dieter Rams inspired design homage (not affiliated with Braun GmbH). 16-pole modal matrix, 4 manifolds, 3D Lorenz attractor, tri-phase BBD chorus.",
+  "version": "1.1.0",
+  "description": "BRAUN MR-16 Modal Resonator & Kinetic Impulse Synthesizer. Dieter Rams inspired design homage (not affiliated with Braun GmbH). 16-pole modal matrix, 5 manifolds, 3D Lorenz attractor, tri-phase BBD chorus.",
   "type": "module",
   "scripts": {
     "start": "node server.js",

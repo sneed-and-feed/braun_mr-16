@@ -1167,6 +1167,377 @@ inline void registerTier1Tests() {
         return test::gCurrentTestAssertFailures == 0;
     });
 
+    registerTest("Tier 1", "T1_LOR_04", "Lorenz Attractor - 192 kHz Low-Rate Double-Precision RK4 Parity & 300-Cent Detune Range", []() {
+        mr16::LorenzAttractor lorenz48, lorenz192;
+        lorenz48.prepare(48000.0);
+        lorenz192.prepare(192000.0);
+        lorenz48.reset();
+        lorenz192.reset();
+
+        lorenz48.setRateHz(0.05f);
+        lorenz192.setRateHz(0.05f);
+        lorenz48.setDepth(1.0f);
+        lorenz192.setDepth(1.0f);
+
+        // Advance both integrators by exactly 1.0 second of audio wall-clock time
+        for (int i = 0; i < 48000; ++i) lorenz48.step();
+        for (int i = 0; i < 192000; ++i) lorenz192.step();
+
+        // Must advance appreciably from initial seed (0.1, 0.0, 0.0) without float32 ULP stagnation
+        TEST_ASSERT(std::abs(lorenz192.getX() - 0.1f) > 0.01f || std::abs(lorenz192.getY()) > 0.01f,
+                    "192 kHz low-rate Lorenz integrator must advance without float32 ULP stagnation");
+        TEST_ASSERT_NEAR(lorenz48.getX(), lorenz192.getX(), 0.05f,
+                         "Lorenz X trajectory after 1.0s at 0.05 Hz must match between 48 kHz and 192 kHz");
+        TEST_ASSERT_NEAR(lorenz48.getY(), lorenz192.getY(), 0.05f,
+                         "Lorenz Y trajectory after 1.0s at 0.05 Hz must match between 48 kHz and 192 kHz");
+        TEST_ASSERT_NEAR(lorenz48.getZ(), lorenz192.getZ(), 0.05f,
+                         "Lorenz Z trajectory after 1.0s at 0.05 Hz must match between 48 kHz and 192 kHz");
+
+        // Verify full 300-cent detune range (exceeds legacy 200-cent cap 2^(200/1200) ~= 1.12246)
+        mr16::LorenzAttractor lorenzWide;
+        lorenzWide.prepare(48000.0);
+        lorenzWide.reset();
+        lorenzWide.setRateHz(2.5f);
+        lorenzWide.setDepth(1.0f);
+        lorenzWide.setDetuneMaxCents(300.0f);
+
+        float maxMult0 = 1.0f;
+        float minMult0 = 1.0f;
+        float maxMultAll = 1.0f;
+        float minMultAll = 1.0f;
+        for (int i = 0; i < 48000; ++i) {
+            lorenzWide.step();
+            if ((i & 63) == 0) {
+                const auto& mults = lorenzWide.getFrequencyMultipliers();
+                maxMult0 = std::max(maxMult0, mults[0]);
+                minMult0 = std::min(minMult0, mults[0]);
+                for (float m : mults) {
+                    maxMultAll = std::max(maxMultAll, m);
+                    minMultAll = std::min(minMultAll, m);
+                }
+            }
+        }
+        TEST_ASSERT(maxMult0 > 1.13f || minMult0 < 0.885f,
+                    "Mode 0 300-cent Lorenz detune range must exceed legacy 200-cent ceiling");
+        TEST_ASSERT(maxMult0 <= 1.20f && minMult0 >= 0.83f,
+                    "Mode 0 300-cent Lorenz detune multipliers must remain bounded within +/- 300 cents");
+        TEST_ASSERT(maxMultAll <= 1.30f && minMultAll >= 0.77f,
+                    "Mode-dispersed Lorenz detune multipliers must remain bounded across all 16 modes");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    registerTest("Tier 1", "T1_MOD_13", "Modal Resonator Matrix - Reset State Preservation, Diffuse Plate & Ultrasonic Nyquist Rolloff", []() {
+        mr16::ModalResonatorMatrix matrix;
+        matrix.prepare(44100.0);
+        matrix.setQScale(3.75f);
+        matrix.setOvertoneSpread(1.65f);
+        matrix.setManifold(mr16::ManifoldType::DiffusePlate);
+        matrix.setFundamentalHz(220.0f);
+        matrix.reset();
+
+        TEST_ASSERT_NEAR(matrix.getQScale(), 3.75f, 1.0e-4f, "reset() must preserve configured QScale");
+        TEST_ASSERT_NEAR(matrix.getOvertoneSpread(), 1.65f, 1.0e-4f, "reset() must preserve configured OvertoneSpread");
+
+        const auto& diffuseFreqs = matrix.getCurrentFrequencies();
+        for (size_t i = 1; i < mr16::ModalResonatorMatrix::kNumModes; ++i) {
+            TEST_ASSERT(diffuseFreqs[i] >= diffuseFreqs[i - 1], "DiffusePlate frequencies must be non-decreasing");
+            TEST_ASSERT(diffuseFreqs[i] <= 44100.0f * 0.4801f, "Modal frequencies must clamp cleanly below 0.48 * fs");
+        }
+
+        // Stress ultrasonic modes on StiffBeam at 44.1 kHz with high fundamental (2000 Hz) & high Q
+        matrix.setManifold(mr16::ManifoldType::StiffBeam);
+        matrix.setMaterial(mr16::MaterialType::Glass);
+        matrix.setFundamentalHz(2000.0f);
+        matrix.setQScale(8.0f);
+        matrix.setOvertoneSpread(2.0f);
+        matrix.reset();
+
+        const size_t n = 8192;
+        std::vector<float> sigL(n, 0.0f), sigR(n, 0.0f);
+        matrix.processSample(1.0f, sigL[0], sigR[0]);
+        for (size_t i = 1; i < n; ++i) {
+            matrix.processSample(0.0f, sigL[i], sigR[i]);
+        }
+
+        TEST_ASSERT(test_utils::isSignalFinite(sigL) && test_utils::isSignalFinite(sigR),
+                    "Ultrasonic Nyquist boundary modes at 44.1 kHz must remain strictly finite");
+        const double earlyRms = test_utils::computeRMS(sigL, 0, 1024);
+        const double lateRms  = test_utils::computeRMS(sigL, 6144, 2048);
+        TEST_ASSERT(lateRms < earlyRms, "Ultrasonic modes near Nyquist must decay cleanly without self-oscillation");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    registerTest("Tier 1", "T1_EXC_10", "Kinetic Exciter & Mr16Engine - High-Density 50 Hz Poisson Sweep & Closed-Loop Bowing", []() {
+        mr16::KineticExciter exciter;
+        exciter.prepare(48000.0);
+        exciter.reset();
+
+        // Sweep EPM continuously every 64 samples from 120 EPM (2 Hz) to 3000 EPM (50 Hz)
+        const int totalSamples = 48000; // 1.0 second
+        int contactTransitions = 0;
+        bool prevContact = false;
+        for (int i = 0; i < totalSamples; ++i) {
+            if ((i & 63) == 0) {
+                const float norm = static_cast<float>(i) / static_cast<float>(totalSamples);
+                const float epm = 120.0f + norm * (3000.0f - 120.0f);
+                exciter.setPoissonRain(true, epm, 0.35f);
+            }
+            const float out = exciter.processSample(0.0f);
+            TEST_ASSERT(mr16::isFinite(out), "High-density Poisson sweep output must be finite");
+            const bool inContact = exciter.isMalletInContact();
+            if (inContact && !prevContact) {
+                ++contactTransitions;
+            }
+            prevContact = inContact;
+        }
+        TEST_ASSERT(contactTransitions >= 8,
+                    "Continuous Poisson EPM automation sweep up to 3000 EPM (50 Hz) must trigger multiple strikes without stalling countdown");
+
+        // Verify sustained closed-loop Karnopp stick-slip bowing in Mr16Engine via resonator body velocity feedback
+        mr16::Mr16Engine engine;
+        engine.prepare(48000.0, 256);
+        engine.reset();
+
+        mr16::Mr16Parameters p;
+        p.exciterBowPressure = 0.65f;
+        p.exciterBowVelocity = 0.60f;
+        p.fundamentalHz = 220.0f;
+        p.decayScale = 2.0f;
+        p.poissonEnable = false;
+        p.euclideanEnable = false;
+        p.externalAudioEnable = false;
+        p.outputMute = false;
+        engine.setParameters(p);
+
+        constexpr int blockSize = 256;
+        constexpr int numBlocks = (48000 * 2) / blockSize; // 2.0 seconds
+        std::vector<float> outL(blockSize, 0.0f), outR(blockSize, 0.0f);
+        std::vector<float> tailWindow;
+        tailWindow.reserve(24000);
+
+        for (int b = 0; b < numBlocks; ++b) {
+            engine.processBlock(nullptr, nullptr, outL.data(), outR.data(), blockSize);
+            if (b >= numBlocks / 2) {
+                tailWindow.insert(tailWindow.end(), outL.begin(), outL.end());
+            }
+        }
+
+        TEST_ASSERT(test_utils::isSignalFinite(tailWindow), "Closed-loop bowed engine output must be finite");
+        const double tailRms = test_utils::computeRMS(tailWindow, 0, tailWindow.size());
+        int zeroCrossings = 0;
+        for (size_t i = 1; i < tailWindow.size(); ++i) {
+            if ((tailWindow[i - 1] <= 0.0f && tailWindow[i] > 0.0f) ||
+                (tailWindow[i - 1] >= 0.0f && tailWindow[i] < 0.0f)) {
+                ++zeroCrossings;
+            }
+        }
+        TEST_ASSERT(tailRms > 0.002, "Closed-loop bowed resonator must sustain audible RMS oscillation after 1.0s");
+        TEST_ASSERT(zeroCrossings > 40, "Closed-loop bowed resonator must exhibit AC oscillatory zero crossings (no static stick lockup)");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    // =========================================================================
+    // [T1_R2_01] v1.1.0 Round-2: Microtonal Chime Pitch Override (up to 5 kHz)
+    // =========================================================================
+    registerTest("Tier 1", "T1_R2_01", "Microtonal Chime Pitch Override & 5 kHz Modal Fundamental Ceiling", []() {
+        auto countZeroCrossings = [](const std::vector<float>& sig) -> int {
+            int zc = 0;
+            for (size_t i = 1; i < sig.size(); ++i) {
+                if ((sig[i - 1] <= 0.0f && sig[i] > 0.0f) ||
+                    (sig[i - 1] >= 0.0f && sig[i] < 0.0f)) {
+                    ++zc;
+                }
+            }
+            return zc;
+        };
+
+        struct ChimeRenderResult {
+            std::vector<float> samples;
+            float settledFundamentalHz { 0.0f };
+        };
+
+        auto renderChime = [](float freqOverrideHz) -> ChimeRenderResult {
+            mr16::Mr16Engine engine;
+            engine.prepare(96000.0, 256);
+            engine.reset();
+
+            mr16::Mr16Parameters p;
+            p.outputMute = false;
+            p.poissonEnable = false;
+            p.euclideanEnable = false;
+            p.chorusEnable = false;
+            p.material = mr16::MaterialType::Glass;
+            p.couplingDepth = 0.0f;
+            p.chaosDetuneCents = 0.0f;
+            p.chaosQMod = 0.0f;
+            p.decayScale = 3.0f;
+            p.fundamentalHz = 440.0f;
+            p.chimeRootHz = 261.63f; // C4 12-TET root
+            engine.setParameters(p);
+
+            engine.enqueueTriggerChime(0, 0.9f, freqOverrideHz);
+
+            std::vector<float> rendered;
+            rendered.reserve(4096);
+            std::array<float, 256> outL {}, outR {};
+            for (int b = 0; b < 16; ++b) {
+                // Simulate PluginProcessor::processBlock calling setParameters(dspParams) every block
+                engine.setParameters(p);
+                engine.processBlock(nullptr, nullptr, outL.data(), outR.data(), 256);
+                rendered.insert(rendered.end(), outL.begin(), outL.end());
+            }
+            return { rendered, engine.getVisualizerFrame().chladniFundamentalHz };
+        };
+
+        const auto defaultC4 = renderChime(0.0f);       // 261.63 Hz 12-TET fallback
+        const auto microtonal = renderChime(432.0f);    // custom microtonal pitch
+        const auto clamped3900 = renderChime(3900.0f);  // below old 4000 Hz ceiling
+        const auto highChime = renderChime(4600.0f);    // > 4000 Hz (verifies 5000 Hz ModalResonatorMatrix ceiling)
+
+        TEST_ASSERT(test_utils::isSignalFinite(defaultC4.samples) && test_utils::isSignalFinite(microtonal.samples) &&
+                    test_utils::isSignalFinite(highChime.samples),
+                    "Microtonal and >4kHz chime triggers must produce finite audio");
+        TEST_ASSERT(std::abs(defaultC4.settledFundamentalHz - 261.63f) < 0.05f,
+                    "freqOverrideHz <= 0 must fall back to scale pitch and persist across per-block setParameters()");
+        TEST_ASSERT(std::abs(microtonal.settledFundamentalHz - 432.0f) < 0.05f,
+                    "Microtonal 432 Hz chime override must tune modal matrix and persist across per-block setParameters()");
+        TEST_ASSERT(std::abs(highChime.settledFundamentalHz - 4600.0f) < 0.05f,
+                    "4600 Hz chime override must exceed legacy 4000 Hz clamp (up to 5000 Hz) and persist across blocks");
+        TEST_ASSERT(test_utils::computeRMS(highChime.samples, 0, highChime.samples.size()) > 1.0e-4,
+                    "4600 Hz chime trigger must excite audible modal energy");
+
+        const int zcDefault = countZeroCrossings(defaultC4.samples);
+        const int zcMicro = countZeroCrossings(microtonal.samples);
+        const int zc3900 = countZeroCrossings(clamped3900.samples);
+        const int zc4600 = countZeroCrossings(highChime.samples);
+
+        TEST_ASSERT(zcMicro > zcDefault + 10,
+                    "432 Hz microtonal chime override must oscillate faster than default C4 (261.63 Hz)");
+        TEST_ASSERT(zc4600 > zc3900 + 10,
+                    "4600 Hz chime override must oscillate faster than 3900 Hz chime");
+
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    // =========================================================================
+    // [T1_R2_02] v1.1.0 Round-2: Soft Limiter Bypass vs Hermite Knee + Brickwall
+    // =========================================================================
+    registerTest("Tier 1", "T1_R2_02", "Soft Limiter Bypass Preserves +/-1.00 Safety Brickwall Ceiling", []() {
+        auto measureStrikePeak = [](bool limiterOn, float masterVolumeDb, float ceiling) -> float {
+            mr16::Mr16Engine engine;
+            engine.prepare(48000.0, 256);
+            engine.reset();
+
+            mr16::Mr16Parameters p;
+            p.outputMute = false;
+            p.poissonEnable = false;
+            p.euclideanEnable = false;
+            p.externalAudioEnable = false;
+            p.chorusEnable = false;
+            p.chaosDetuneCents = 0.0f;
+            p.chaosQMod = 0.0f;
+            p.softLimiterEnable = limiterOn;
+            p.saturatorKnee = 0.72f;
+            p.saturatorCeiling = ceiling;
+            p.masterVolumeDb = masterVolumeDb;
+            engine.setParameters(p);
+
+            std::array<float, 256> outL {}, outR {};
+            // Settle volume smoother before deterministic strike
+            for (int b = 0; b < 8; ++b) {
+                engine.processBlock(nullptr, nullptr, outL.data(), outR.data(), 256);
+            }
+
+            engine.enqueueTriggerStrike(0.90f, 0.80f);
+            float maxAbs = 0.0f;
+            for (int b = 0; b < 8; ++b) {
+                engine.processBlock(nullptr, nullptr, outL.data(), outR.data(), 256);
+                for (float v : outL) {
+                    TEST_ASSERT(std::isfinite(v), "Output must remain finite");
+                    maxAbs = std::max(maxAbs, std::abs(v));
+                }
+            }
+            return maxAbs;
+        };
+
+        const float rawPeak = measureStrikePeak(false, 0.0f, 10.0f);
+        TEST_ASSERT(rawPeak > 1.0e-3f, "Reference strike must produce non-zero linear peak");
+        // Calibrate strike peak to 0.86 (inside Hermite soft-knee region [0.72, 1.00])
+        const float calibratedDb = 20.0f * std::log10(0.86f / rawPeak);
+
+        const float peakSoftOff = measureStrikePeak(false, calibratedDb, 1.00f);
+        const float peakSoftOn = measureStrikePeak(true, calibratedDb, 1.00f);
+        const float peakHotBrickwall = measureStrikePeak(false, calibratedDb + 12.0f, 1.00f);
+
+        TEST_ASSERT(std::abs(peakSoftOff - 0.86f) < 0.02f && peakSoftOn > peakSoftOff + 0.04f && peakSoftOn <= 1.00001f,
+                    "Disabling soft_limiter must bypass C1 Hermite diode/tape knee shaping while soft_limiter=true applies warm saturation");
+        TEST_ASSERT(peakHotBrickwall <= 1.00001f && peakHotBrickwall >= 0.999f,
+                    "Disabling soft_limiter must still enforce hard +/-1.00 safety brickwall ceiling on hot signals");
+
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    // =========================================================================
+    // [T1_R2_03] v1.1.0 Round-2: Lorenz Morph Steer & Calibrated Preset Parity
+    // =========================================================================
+    registerTest("Tier 1", "T1_R2_03", "Lorenz Morph Steer Modulation & Calibrated 16-Preset Parity", []() {
+        test::gCurrentTestAssertFailures = 0;
+
+        const auto presets = mr16::Mr16Engine::getFactoryPresets();
+        TEST_ASSERT(presets.size() == 16, "Must have 16 factory presets");
+        for (size_t i = 0; i < presets.size(); ++i) {
+            const bool expectEuclid = (i == 7 || i == 14);
+            TEST_ASSERT(presets[i].params.euclideanEnable == expectEuclid,
+                        "euclideanEnable must be true only on index 7 (EUCLIDEAN_METALLOPHONE) and index 14 (FROSTED_GLASS_ARPEGGIO)");
+        }
+        TEST_ASSERT(presets[2].params.modalQScale > presets[0].params.modalQScale &&
+                    presets[0].params.modalQScale > presets[1].params.modalQScale,
+                    "Calibrated modalQScale must reflect Glass (preset 2) > Steel Default (preset 0) > Wood (preset 1)");
+
+        auto renderWithSteer = [](float steerAmount) -> std::vector<float> {
+            mr16::Mr16Engine engine;
+            engine.prepare(48000.0, 256);
+            engine.reset();
+
+            mr16::Mr16Parameters p;
+            p.outputMute = false;
+            p.poissonEnable = false;
+            p.euclideanEnable = false;
+            p.chorusEnable = false;
+            p.manifold = mr16::ManifoldType::ChladniPlate;
+            p.manifoldMorph = 0.35f;
+            p.chaosRateHz = 3.5f;
+            p.chaosDepth = 0.85f;
+            p.chaosDetuneCents = 0.0f;
+            p.chaosQMod = 0.0f;
+            p.lorenzMorphSteer = steerAmount;
+            engine.setParameters(p);
+            engine.enqueueTriggerStrike(0.85f, 0.8f);
+
+            std::vector<float> out;
+            out.reserve(4096);
+            std::array<float, 256> outL {}, outR {};
+            for (int b = 0; b < 16; ++b) {
+                engine.processBlock(nullptr, nullptr, outL.data(), outR.data(), 256);
+                out.insert(out.end(), outL.begin(), outL.end());
+            }
+            return out;
+        };
+
+        const auto unsteered = renderWithSteer(0.0f);
+        const auto steered = renderWithSteer(1.0f);
+        double diffEnergy = 0.0;
+        for (size_t i = 0; i < unsteered.size(); ++i) {
+            const double d = static_cast<double>(steered[i]) - static_cast<double>(unsteered[i]);
+            diffEnergy += d * d;
+        }
+        const double diffRms = std::sqrt(diffEnergy / static_cast<double>(unsteered.size()));
+        TEST_ASSERT(diffRms > 1.0e-5,
+                    "lorenzMorphSteer=1.0 must dynamically modulate manifold morphing trajectory vs lorenzMorphSteer=0.0");
+
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
 }
 
 } // namespace test

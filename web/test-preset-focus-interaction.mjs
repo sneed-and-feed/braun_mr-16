@@ -238,8 +238,12 @@ describe('BRAUN MR-16 Preset Focus & Hotkey Interaction Suite', () => {
         await call('Page.enable');
         await call('Runtime.enable');
 
-        // Allow app initialization
-        await new Promise((r) => setTimeout(r, 1200));
+        // Poll until app initialization completes (eliminates parallel CDP boot race)
+        for (let i = 0; i < 50; i++) {
+          const ready = await evaluate("Boolean(window.__MR16__ && window.__MR16__.engine && document.title.includes('BRAUN'))");
+          if (ready) break;
+          await new Promise((r) => setTimeout(r, 100));
+        }
 
         // Instrument chime triggers and dirac triggers
         await evaluate(`

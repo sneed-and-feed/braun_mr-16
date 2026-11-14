@@ -76,6 +76,18 @@ private:
 // Bitwise IEEE 754 inspection ensures 100% immunity to compiler -ffast-math
 // optimization which would otherwise optimize away std::isfinite().
 // ============================================================================
+[[nodiscard]] inline bool isFinite(float val) noexcept {
+    uint32_t bits;
+    std::memcpy(&bits, &val, sizeof(float));
+    return ((bits >> 23) & 0xFFu) != 0xFFu;
+}
+
+[[nodiscard]] inline bool isFinite(double val) noexcept {
+    uint64_t bits;
+    std::memcpy(&bits, &val, sizeof(double));
+    return ((bits >> 52) & 0x7FFULL) != 0x7FFULL;
+}
+
 [[nodiscard]] inline float flushDenormal(float val) noexcept {
     uint32_t bits;
     std::memcpy(&bits, &val, sizeof(float));
@@ -91,13 +103,9 @@ private:
 template <typename T>
 [[nodiscard]] inline T safeClamp(T val, T lo, T hi, T fallback = T{}) noexcept {
     if constexpr (std::is_same_v<T, float>) {
-        uint32_t bits;
-        std::memcpy(&bits, &val, sizeof(float));
-        if (((bits >> 23) & 0xFF) == 0xFF) [[unlikely]] return fallback;
+        if (!isFinite(val)) [[unlikely]] return fallback;
     } else if constexpr (std::is_same_v<T, double>) {
-        uint64_t bits;
-        std::memcpy(&bits, &val, sizeof(double));
-        if (((bits >> 52) & 0x7FF) == 0x7FF) [[unlikely]] return fallback;
+        if (!isFinite(val)) [[unlikely]] return fallback;
     } else {
         if (!std::isfinite(val)) [[unlikely]] return fallback;
     }
@@ -133,7 +141,7 @@ public:
     }();
 
     [[nodiscard]] static inline float sin(float angle) noexcept {
-        if (!std::isfinite(angle)) [[unlikely]] {
+        if (!isFinite(angle)) [[unlikely]] {
             return 0.0f;
         }
         const float norm = angle * (static_cast<float>(kTableSize) / kTwoPi);
@@ -262,20 +270,20 @@ public:
     }
 
     void setSampleRate(float sampleRate) noexcept {
-        mSampleRate = (sampleRate > 100.0f) ? sampleRate : 48000.0f;
+        mSampleRate = (isFinite(sampleRate) && sampleRate > 100.0f) ? sampleRate : 48000.0f;
         updateCoeff();
     }
 
     void setTimeConstant(float tauSec) noexcept {
-        mTau = (tauSec > 0.0001f) ? tauSec : 0.0001f;
+        mTau = (isFinite(tauSec) && tauSec > 0.0001f) ? tauSec : 0.0001f;
         updateCoeff();
     }
 
     void setTarget(float target) noexcept {
-        mTarget = std::isfinite(target) ? target : 0.0f;
+        mTarget = isFinite(target) ? target : 0.0f;
     }
     void snapTo(float value) noexcept {
-        const float v = std::isfinite(value) ? value : 0.0f;
+        const float v = isFinite(value) ? value : 0.0f;
         mTarget = v;
         mCurrent = v;
     }
@@ -312,8 +320,8 @@ public:
     void reset() noexcept { mState = 0.0f; }
 
     void setCutoff(float sampleRate, float cutoffHz) noexcept {
-        const float fs = (sampleRate > 100.0f) ? sampleRate : 48000.0f;
-        const float cleanFc = std::isfinite(cutoffHz) ? cutoffHz : 1000.0f;
+        const float fs = (isFinite(sampleRate) && sampleRate > 100.0f) ? sampleRate : 48000.0f;
+        const float cleanFc = isFinite(cutoffHz) ? cutoffHz : 1000.0f;
         const float fc = std::clamp(cleanFc, 1.0f, fs * 0.495f);
         mAlpha = 1.0f - std::exp(-kTwoPi * (fc / fs));
     }
@@ -339,8 +347,8 @@ public:
     }
 
     void setCutoff(float sampleRate, float cutoffHz) noexcept {
-        const float fs = (sampleRate > 100.0f) ? sampleRate : 48000.0f;
-        const float cleanFc = std::isfinite(cutoffHz) ? cutoffHz : 1000.0f;
+        const float fs = (isFinite(sampleRate) && sampleRate > 100.0f) ? sampleRate : 48000.0f;
+        const float cleanFc = isFinite(cutoffHz) ? cutoffHz : 1000.0f;
         const float fc = std::clamp(cleanFc, 1.0f, fs * 0.495f);
         mAlpha = 1.0f / (1.0f + kTwoPi * (fc / fs));
     }
@@ -382,7 +390,7 @@ public:
 
     // Read with fractional delay using 4-point Hermite cubic interpolation
     [[nodiscard]] inline float readHermite(float delaySamples) const noexcept {
-        if (!std::isfinite(delaySamples)) [[unlikely]] {
+        if (!isFinite(delaySamples)) [[unlikely]] {
             delaySamples = 1.0f;
         }
         const float clampedDelay = std::clamp(delaySamples, 1.0f, static_cast<float>(Capacity - 4));
@@ -400,7 +408,7 @@ public:
 
     // Read with linear fractional interpolation
     [[nodiscard]] inline float readLinear(float delaySamples) const noexcept {
-        if (!std::isfinite(delaySamples)) [[unlikely]] {
+        if (!isFinite(delaySamples)) [[unlikely]] {
             delaySamples = 0.0f;
         }
         const float clampedDelay = std::clamp(delaySamples, 0.0f, static_cast<float>(Capacity - 2));

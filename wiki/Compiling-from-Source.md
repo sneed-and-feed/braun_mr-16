@@ -48,9 +48,9 @@ cmake --build build --config Release --parallel
 ```
 
 Compiled binaries will be generated in:
-- Standalone: `build/source/plugin/BRAUN_MR16_artefacts/Release/Standalone/BRAUN_MR16.exe`
-- VST3: `build/source/plugin/BRAUN_MR16_artefacts/Release/VST3/BRAUN_MR16.vst3`
-- CLAP: `build/source/plugin/BRAUN_MR16_artefacts/Release/CLAP/BRAUN_MR16.clap`
+- Standalone: `build/BRAUN_MR16_artefacts/Release/Standalone/BRAUN_MR16.exe`
+- VST3: `build/BRAUN_MR16_artefacts/Release/VST3/BRAUN_MR16.vst3`
+- CLAP: `build/BRAUN_MR16_artefacts/Release/CLAP/BRAUN_MR16.clap`
 
 ---
 
@@ -71,10 +71,10 @@ cmake --build build --config Release --parallel
 ```
 
 Compiled bundles:
-- Standalone: `build/source/plugin/BRAUN_MR16_artefacts/Release/Standalone/BRAUN_MR16.app`
-- VST3: `build/source/plugin/BRAUN_MR16_artefacts/Release/VST3/BRAUN_MR16.vst3`
-- AUv2: `build/source/plugin/BRAUN_MR16_artefacts/Release/AU/BRAUN_MR16.component`
-- CLAP: `build/source/plugin/BRAUN_MR16_artefacts/Release/CLAP/BRAUN_MR16.clap`
+- Standalone: `build/BRAUN_MR16_artefacts/Release/Standalone/BRAUN_MR16.app`
+- VST3: `build/BRAUN_MR16_artefacts/Release/VST3/BRAUN_MR16.vst3`
+- AUv2: `build/BRAUN_MR16_artefacts/Release/AU/BRAUN_MR16.component`
+- CLAP: `build/BRAUN_MR16_artefacts/Release/CLAP/BRAUN_MR16.clap`
 
 ---
 
@@ -120,8 +120,9 @@ ctest --test-dir build -C Release --output-on-failure
 
 Expected result:
 ```text
-100% tests passed, 0 tests failed out of 207
-Total Test time (real) = 0.85 sec
+100% tests passed, 0 tests failed out of 2
+  Mr16HeadlessDspTests:      216 / 216 PASS (Tier 1: 46, Tier 2: 10, Tier 3: 160)
+  Mr16DspVerificationTests:    6 / 6 PASS
 ```
 
 ### 2. Web Audio & UI Test Suite (Node.js)
@@ -133,10 +134,9 @@ npm test
 
 Expected result:
 ```text
-Test Suites: 44 passed, 44 total
-Tests:       213 passed, 213 total
-Snapshots:   0 total
-Time:        3.42 s
+Test Suites: 49 passed, 49 total
+Tests:       230 passed, 230 total
+Time:        ~7.0 s
 ```
 
 ---
@@ -146,10 +146,11 @@ Time:        3.42 s
 To build clean production release archives with SHA-256 manifests on Windows:
 
 ```powershell
-pwsh -ExecutionPolicy Bypass -File scripts/package-release.ps1
+python scripts/package_release.py 1.1.0
+# or: pwsh -ExecutionPolicy Bypass -File scripts/package-release.ps1
 ```
 
 This creates:
-- `releases/BRAUN_MR16-v1.0.12-Windows-x64.zip` (Standalone + VST3 + CLAP)
-- `releases/BRAUN_MR16-v1.0.12-VST3-Windows-x64.zip` (VST3 plugin only)
+- `releases/BRAUN_MR16-v1.1.0-Windows-x64.zip` (Standalone + VST3 + docs)
+- `releases/BRAUN_MR16-v1.1.0-VST3-Windows-x64.zip` (VST3 plugin + docs)
 - `releases/SHA256SUMS.txt` (Cryptographic verification checksums)

@@ -1,7 +1,7 @@
 # BRAUN MR-16 · Architecture & Mathematical DSP Specification
 
-[![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(208%2F208%20C%2B%2B%20%7C%20221%2F221%20Web)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
-[![Version: 1.0.14](https://img.shields.io/badge/Version-1.0.14-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_mr-16/releases/tag/v1.0.14)
+[![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(216%2F216%20C%2B%2B%20%7C%20230%2F230%20Web)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
+[![Version: 1.1.0](https://img.shields.io/badge/Version-1.1.0-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_mr-16/releases/tag/v1.1.0)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-4A4A4A?style=for-the-badge)](https://isocpp.org/)
 [![JUCE 8](https://img.shields.io/badge/JUCE-8.0.6-EE592B?style=for-the-badge)](https://juce.com/)
 [![Web Audio API](https://img.shields.io/badge/Web%20Audio-100%25%20Client--Side-4A4A4A?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
@@ -16,7 +16,7 @@
 
 ## 1. System Overview & Signal-Flow Topology
 
-The **BRAUN MR-16** is an authentic physical acoustic modal resonator and kinetic impulse synthesizer engineered in C++20 and Web Audio API. The instrument models physical excitation mechanics (mallet impact, stick-slip friction, optical vactrol plucking) coupled into a 16-pole modal resonator matrix with 4 geometric manifolds, orthogonal Householder energy scattering, continuous 3D Lorenz attractor modulation, and tri-phase spatial BBD chorus.
+The **BRAUN MR-16** is an authentic physical acoustic modal resonator and kinetic impulse synthesizer engineered in C++20 and Web Audio API. The instrument models physical excitation mechanics (mallet impact, closed-loop stick-slip friction, optical vactrol plucking) coupled into a 16-pole modal resonator matrix with 5 geometric manifolds, orthogonal Householder energy scattering, continuous double-precision 3D Lorenz attractor modulation, and tri-phase spatial BBD chorus.
 
 ```mermaid
 graph TD
@@ -46,7 +46,7 @@ graph TD
     end
 
     subgraph S2["Deck 02: 16-Pole Modal Resonator Matrix"]
-        MANIFOLDS["4 Geometric Manifolds<br/>Chladni / Beam / Formant / Horn"]
+        MANIFOLDS["5 Geometric Manifolds<br/>Chladni / Beam / Formant / Horn / Diffuse"]
         FILTERS["16x Parallel Bandpass SVF<br/>(Zavalishin TPT Core)"]
         HOUSEHOLDER["Orthogonal Householder Bus<br/>Gain = -Coupling * (2/16)"]
         MATERIALS["Material Damping Profiles<br/>Wood / Glass / Steel / Brass / Nylon"]
@@ -106,7 +106,12 @@ Physical mass-spring collision model simulating hammer and felt mallet strikes a
 F_c(x, \dot{x}) = k_c \, x(t)^\alpha + \lambda_c \, x(t)^\alpha \, \dot{x}(t)
 ```
 
-where $x(t) \ge 0$ represents boundary penetration, $\dot{x}(t)$ is contact velocity, $k_c$ is elastic modulus, $\alpha \in [1.5, 2.8]$ is the non-linear Hertzian contact exponent, and $\lambda_c$ is viscous damping. Striking hardness modulates $k_c$ and $\alpha$, shifting transient energy toward higher partials.
+where:
+- $x(t) \ge 0$ represents boundary penetration depth.
+- $\dot{x}(t)$ is instantaneous contact velocity.
+- $k_c$ is elastic contact modulus (modulated by `strike_hardness`).
+- $\alpha \in [1.5, 2.8]$ is the non-linear Hertzian contact exponent shifting transient energy toward higher partials.
+- $\lambda_c$ is internal viscous hysteresis damping.
 
 #### Karnopp Stick-Slip Friction & Stribeck Dynamics
 Continuous bowing and scraping friction governed by the Karnopp velocity-threshold model:
@@ -131,7 +136,11 @@ Light-dependent resistor (CdS photoresistor) optocoupler dynamics governed by as
 \frac{dg}{dt} = \begin{cases} \frac{u(t) - g(t)}{\tau_{\mathrm{attack}}} & u(t) \ge g(t) \\ \frac{u(t) - g(t)}{\tau_{\mathrm{decay}} \left[ 1 + \kappa \, (1 - g(t))^2 \right]} & u(t) < g(t) \end{cases}
 ```
 
-where $g(t) \in [0, 1]$ is optical conductance, $u(t)$ is LED control drive, $\tau_{\mathrm{attack}} = 2\text{ ms}$, nominal $\tau_{\mathrm{decay}} = 40\text{ ms} - 120\text{ ms}$, and $\kappa = 4.5$ is the non-linear sag expansion coefficient producing the characteristic sustained phosphorescent release tail.
+where:
+- $g(t) \in [0, 1]$ is optical conductance and $u(t)$ is LED control drive.
+- $\tau_{\mathrm{attack}} = 2\text{ ms}$ is the rapid optical turn-on time constant.
+- $\tau_{\mathrm{decay}} = 40\text{ ms} - 120\text{ ms}$ is the nominal carrier discharge rate.
+- $\kappa = 4.5$ is the non-linear sag expansion coefficient producing the characteristic sustained phosphorescent release tail.
 
 #### Poisson Stochastic Interval Clock
 Memoryless Poisson point process generating natural stochastic droplet rain:
@@ -185,7 +194,7 @@ y_m[n] = \mathrm{clamp}\left( \tanh(1.2 \cdot y_m[n]), -1.0, 1.0 \right)
 
 3. **Central Householder Sum Clamp**: The central feedback bus is brickwall-limited to $[-0.95, +0.95]$.
 
-#### 4 Geometric Acoustic Manifolds
+#### 5 Geometric Acoustic Manifolds
 Mode frequency ratios $r_m = f_m / f_0$ follow closed-form physical dispersions:
 1. **Biharmonic Chladni Plate** ($\nabla^4 w = -\frac{\rho h}{D} \ddot{w}$): Transverse square free plate modes:
 
@@ -205,6 +214,8 @@ r_m = \left( \frac{2 m + 1}{3} \right)^2 \cdot \sqrt{1 + \mu \, m^2}
 ```math
 r_m = \sqrt{1 + \left( \frac{m \cdot c}{2 \, L \, f_{\mathrm{cutoff}}} \right)^2}
 ```
+
+5. **Diffuse Acoustic Plate** (High-density irrational plate dispersion): Mutually coprime modal spacing eliminating periodic comb-filter flutter while preserving smooth modal bloom.
 
 #### 5 Calibrated Material Damping Profiles
 Modal RT60 decay factors $\kappa_m$ reflect physical internal friction and radiation losses:
@@ -329,42 +340,47 @@ where $u = \frac{\lvert x \rvert - 0.72}{0.33} \in (0, 1)$. Output headroom safe
 
 ## 3. Parameter Reference Table
 
-The C++ AudioProcessorValueTreeState (APVTS) and Web Audio engine share 32 synchronized parameters:
+The C++ AudioProcessorValueTreeState (APVTS) and Web Audio engine share 37 synchronized parameters:
 
-| Deck | Parameter ID (`apvtsId`) | Web Property | Range | Default | Units | Description |
+| Deck | Parameter ID (`apvtsId`) | Web Property | APVTS Range | Default | Units | Description |
 |:---|:---|:---|:---:|:---:|:---:|:---|
 | 01 | `exciter_type` | `exciterType` | 0 - 3 | 0 (Strike) | - | 0: Strike, 1: Friction, 2: Vactrol, 3: Ext In |
-| 01 | `strike_hardness` | `strikeHardness` | 0.0 - 1.0 | 0.65 | % | Mallet stiffness & transient HF content |
+| 01 | `strike_hardness` | `strikeHardness` | 0.0 - 1.0 | 0.50 | % | Mallet stiffness & transient HF content |
 | 01 | `strike_velocity` | `strikeVelocity` | 0.0 - 1.0 | 0.80 | % | Kinetic impact force |
-| 01 | `friction_force` | `frictionForce` | 0.0 - 1.0 | 0.50 | % | Normal contact pressure in Karnopp bow |
+| 01 | `friction_force` | `frictionForce` | 0.0 - 1.0 | 0.35 | % | Normal contact pressure in Karnopp bow |
 | 01 | `friction_speed` | `frictionSpeed` | 0.0 - 1.0 | 0.40 | % | Relative rubbing velocity |
-| 01 | `vactrol_sag` | `vactrolSag` | 0.0 - 1.0 | 0.35 | % | Optical photocarrier release decay |
+| 01 | `vactrol_sag` | `vactrolSag` | 0.0 - 1.0 | 0.60 | % | Optical photocarrier release decay |
 | 01 | `ext_input_gain` | `extInputGain` | -24.0 - +12.0 | 0.0 | dB | External audio sensitivity trim |
-| 01 | `poisson_density` | `poissonDensity` | 0.0 - 50.0 | 0.0 (Off) | Hz | Mean stochastic trigger rate |
-| 01 | `euclidean_pulses` | `euclideanPulses` | 1 - 16 | 4 | pulses | Active Euclidean pulses |
-| 01 | `euclidean_steps` | `euclideanSteps` | 1 - 16 | 16 | steps | Total clock step resolution |
-| 02 | `manifold_type` | `manifoldType` | 0 - 3 | 0 (Chladni) | - | 0: Chladni, 1: Beam, 2: Vocal, 3: Horn |
-| 02 | `modal_frequency` | `modalFrequency` | 20.0 - 2000.0 | 220.0 | Hz | Base fundamental frequency ($f_0$) |
+| 01 | `poisson_density` | `poissonDensity` | 0.0 - 50.0 | 0.0 (Off) | Hz | Mean stochastic trigger rate (0 - 3000 EPM) |
+| 01 | `euclidean_enable` | `euclideanEnable` | Bool | 0 (Off) | - | Euclidean polyrhythm clock arm/disarm toggle |
+| 01 | `euclidean_pulses` | `euclideanPulses` | 0 - 32 | 4 | pulses | Active Euclidean pulses |
+| 01 | `euclidean_steps` | `euclideanSteps` | 1 - 32 | 16 | steps | Total clock step resolution |
+| 02 | `manifold_type` | `manifoldType` | 0 - 4 | 0 (Chladni) | - | 0: Chladni, 1: Beam, 2: Vocal, 3: Horn, 4: Diffuse |
+| 02 | `modal_frequency` | `modalFrequency` | 20.0 - 5000.0 | 440.0 | Hz | Base fundamental frequency ($f_0$) |
 | 02 | `modal_damping` | `modalDamping` | 0.05 - 10.0 | 1.80 | s | RT60 modal decay time |
-| 02 | `material_profile` | `materialProfile` | 0 - 4 | 2 (Steel) | - | 0: Wood, 1: Glass, 2: Steel, 3: Brass, 4: Nylon |
-| 02 | `modal_coupling` | `modalCoupling` | 0.0 - 1.0 | 0.40 | % | Householder energy scattering depth |
-| 02 | `modal_spread` | `modalSpread` | 0.25 - 2.0 | 1.00 | x | Overtone ratio frequency stretching |
-| 02 | `modal_q` | `modalQ` | 1.0 - 500.0 | 50.0 | Q | Resonance sharpness multiplier |
-| 03 | `lorenz_rate` | `lorenzRate` | 0.01 - 10.0 | 0.85 | Hz | Chaotic orbit speed |
+| 02 | `material_profile` | `materialProfile` | 0 - 4 | 0 (Wood) | - | 0: Wood, 1: Glass, 2: Steel, 3: Brass, 4: Nylon |
+| 02 | `modal_coupling` | `modalCoupling` | 0.0 - 1.0 | 0.25 | % | Householder energy scattering depth |
+| 02 | `modal_spread` | `modalSpread` | 0.20 - 3.00 | 1.00 | x | Overtone ratio frequency stretching |
+| 02 | `modal_q` | `modalQ` | 5.0 - 500.0 | 85.0 | Q | Calibrated resonance sharpness multiplier |
+| 03 | `lorenz_morph_alpha` | `lorenzMorphAlpha` | 0.0 - 1.0 | 0.00 | - | Adjacent manifold / Slot A-B morph coordinate |
+| 03 | `lorenz_rate` | `lorenzRate` | 0.01 - 10.0 | 0.50 | Hz | Chaotic orbit speed |
 | 03 | `lorenz_chaos` | `lorenzChaos` | 0.0 - 1.0 | 0.50 | % | Attractor non-linearity depth ($\rho$) |
-| 03 | `lorenz_freq_mod` | `lorenzFreqMod` | 0.0 - 100.0 | 15.0 | % | Modal frequency detune depth |
-| 03 | `lorenz_q_mod` | `lorenzQMod` | 0.0 - 100.0 | 20.0 | % | Modal Q-factor breathing depth |
+| 03 | `lorenz_freq_mod` | `lorenzFreqMod` | 0.0 - 1.0 (0 - 100%) | 0.20 (20%) | % | Modal frequency detune depth (up to 300 cents) |
+| 03 | `lorenz_q_mod` | `lorenzQMod` | 0.0 - 1.0 (0 - 100%) | 0.15 (15%) | % | Modal Q-factor breathing depth |
+| 03 | `lorenz_morph_steer` | `lorenzMorphSteer` | 0.0 - 1.0 (0 - 100%) | 0.00 (0%) | % | Dynamic Lorenz attractor morph steering depth |
 | 04 | `chorus_enable` | `chorusEnable` | Bool | 1 (True) | - | BBD chorus network bypass toggle |
-| 04 | `chorus_rate_hz` | `chorusRateHz` | 0.05 - 8.0 | 0.65 | Hz | Tri-phase LFO modulation rate |
-| 04 | `chorus_depth_ms` | `chorusDepthMs` | 0.1 - 5.0 | 1.40 | ms | BBD delay modulation amplitude |
+| 04 | `chorus_rate_hz` | `chorusRateHz` | 0.05 - 8.0 | 0.80 | Hz | Tri-phase LFO modulation rate |
+| 04 | `chorus_depth_ms` | `chorusDepthMs` | 0.1 - 10.0 | 2.50 | ms | BBD delay modulation amplitude |
 | 04 | `chorus_dimension` | `chorusDimension` | 0.0 - 1.0 | 0.75 | % | Dimension D cross-phase matrix width |
-| 04 | `chorus_mix` | `chorusMix` | 0.0 - 100.0 | 45.0 | % | Wet/dry chorus balance |
-| 05 | `golden_pan_spread`| `goldenPanSpread` | 0.0 - 100.0 | 85.0 | % | Golden angle modal stereo dispersion |
-| 05 | `vactrol_lpg_cutoff`| `vactrolLpgCutoff`| 20.0 - 20000.0 | 14000.0 | Hz | Buchla dynamic lowpass gate ceiling |
-| 05 | `drive_saturation` | `driveSaturation` | 0.0 - 100.0 | 25.0 | % | Hermite soft-knee saturation drive |
+| 04 | `chorus_mix` | `chorusMix` | 0.0 - 1.0 (0 - 100%) | 0.50 (50%) | % | Wet/dry chorus balance |
+| 05 | `golden_pan_spread`| `goldenPanSpread` | 0.0 - 1.0 (0 - 100%) | 0.80 (80%) | % | Golden angle modal stereo dispersion |
+| 05 | `vactrol_lpg_cutoff`| `vactrolLpgCutoff`| 20.0 - 20000.0 | 12000.0 | Hz | Buchla dynamic lowpass gate ceiling |
+| 05 | `drive_saturation` | `driveSaturation` | 0.0 - 1.0 (0 - 100%) | 0.25 (25%) | % | Hermite soft-knee saturation drive |
+| 05 | `soft_limiter` | `softLimiter` | Bool | 1 (True) | - | Hermite soft-knee saturator toggle (brickwall retained) |
 | 05 | `master_trim_db` | `masterTrimDb` | -24.0 - +12.0 | 0.0 | dB | Master output volume trim |
-| 05 | `dry_wet_mix` | `dryWetMix` | 0.0 - 100.0 | 65.0 | % | Exciter dry vs resonator wet balance |
-| 07 | `power_active` | `powerActive` | Bool | 0 (Standby) | - | Master instrument output mute/unmute |
+| 05 | `dry_wet_mix` | `dryWetMix` | 0.0 - 1.0 (0 - 100%) | 0.65 (65%) | % | Exciter dry vs resonator wet balance |
+| 05 | `power_state` | `powerState` | Bool | 1 (Active)* | - | Master instrument power (*Standby on Standalone/Web boot) |
+| 06 | `display_mode` | `displayMode` | 0 - 2 | 0 (Chladni) | - | 0: Chladni, 1: Attractor, 2: Modal FFT |
 
 ---
 

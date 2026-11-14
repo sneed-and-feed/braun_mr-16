@@ -36,8 +36,8 @@ public:
           mInvDelta((ceiling > knee) ? (1.0f / (ceiling - knee)) : 1.0f) {}
 
     void setKneeAndCeiling(float knee, float ceiling) noexcept {
-        const float cleanKnee = std::isfinite(knee) ? knee : kDefaultKnee;
-        const float cleanCeiling = std::isfinite(ceiling) ? ceiling : kDefaultCeiling;
+        const float cleanKnee = isFinite(knee) ? knee : kDefaultKnee;
+        const float cleanCeiling = isFinite(ceiling) ? ceiling : kDefaultCeiling;
         mKnee = std::clamp(cleanKnee, 0.10f, 0.99f);
         mCeiling = std::max(mKnee + 0.01f, cleanCeiling);
         mDelta = mCeiling - mKnee;
@@ -51,7 +51,7 @@ public:
      * Process a single audio sample (inlined for hard real-time performance).
      */
     [[nodiscard]] inline float processSample(float x) const noexcept {
-        if (!std::isfinite(x)) [[unlikely]] {
+        if (!isFinite(x)) [[unlikely]] {
             return 0.0f;
         }
 

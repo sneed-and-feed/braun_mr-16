@@ -135,13 +135,22 @@ bool testZeroHeapAllocations() {
     std::array<float, 512> outL {};
     std::array<float, 512> outR {};
 
+    Mr16Parameters rtParams {};
+    rtParams.euclideanEnable = true;
+    rtParams.euclideanPulses = 5;
+    rtParams.euclideanSteps = 16;
+    rtParams.manifoldMorph = 0.35f;
+    rtParams.lorenzMorphSteer = 0.75f;
+    rtParams.softLimiterEnable = true;
+    engine.setParameters(rtParams);
+
     // Warm up
     engine.processBlock(inL.data(), inR.data(), outL.data(), outR.data(), 512);
 
-    // Trigger performance strikes
+    // Trigger performance strikes (including custom microtonal chime pitch > 4 kHz)
     engine.enqueueTriggerStrike(0.9f, 0.75f);
     engine.enqueueTriggerButton(1, 0.8f);
-    engine.enqueueTriggerChime(5, 0.85f);
+    engine.enqueueTriggerChime(5, 0.85f, 4480.0f);
     engine.enqueueMidiNoteOn(60, 0.9f);
 
     // Enable heap allocation tracker
@@ -287,6 +296,19 @@ bool testFactoryPresets() {
 
     const auto presets = Mr16Engine::getFactoryPresets();
     TEST_ASSERT(presets.size() == 16, "Must provide exactly 16 factory presets");
+    TEST_ASSERT(std::string(presets[0].id) == "DEFAULT_CONCERT_CHLADNI", "Preset 0 ID must match Web canonical preset");
+    TEST_ASSERT(std::string(presets[0].name) == "CALIBRATED DEFAULT", "Preset 0 Name must match Web canonical preset");
+    TEST_ASSERT(presets[2].params.exciterMode == 1 && presets[2].params.exciterBowVelocity > 0.5f,
+                "CRYSTAL WINE GLASS must configure continuous Karnopp friction exciter");
+    TEST_ASSERT(presets[13].params.poissonEnable && std::abs(presets[13].params.poissonEpm - 1920.0f) < 0.1f,
+                "SOLAR WIND RESONANCE must configure 32 Hz (1920 EPM) Poisson micro-transients");
+    TEST_ASSERT(presets[7].params.euclideanEnable && presets[14].params.euclideanEnable && !presets[0].params.euclideanEnable,
+                "Only EUCLIDEAN_METALLOPHONE (index 7) and FROSTED_GLASS_ARPEGGIO (index 14) may enable euclideanEnable by default");
+    TEST_ASSERT(presets[2].params.modalQScale > presets[0].params.modalQScale &&
+                presets[0].params.modalQScale > presets[1].params.modalQScale,
+                "Calibrated preset modalQScale must distinguish Glass > Steel Default > Wood");
+    TEST_ASSERT(presets[15].params.couplingDepth > 0.95f,
+                "INFINITE MODAL SINGULARITY must configure near-unity Householder coupling");
 
     Mr16Engine engine;
     engine.prepare(48000.0, 128);

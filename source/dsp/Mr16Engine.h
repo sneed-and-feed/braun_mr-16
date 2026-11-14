@@ -56,6 +56,7 @@ struct Mr16Parameters {
     float chaosDepth            { 0.50f };
     float chaosDetuneCents      { 50.0f };
     float chaosQMod             { 0.65f };
+    float lorenzMorphSteer      { 0.0f };
 
     // Deck 04: Tri-Phase Spatial BBD Chorus
     bool  chorusEnable          { true };
@@ -72,6 +73,7 @@ struct Mr16Parameters {
     float vactrolLpgCutoff      { 12000.0f };
     float driveSaturation       { 0.25f };
     float dryWetMix             { 0.65f };
+    bool  softLimiterEnable     { true };
     float saturatorKnee         { 0.72f };
     float saturatorCeiling      { 1.00f };
 
@@ -79,6 +81,12 @@ struct Mr16Parameters {
     float masterVolumeDb        { 0.0f };
     bool  outputMute            { false };
     bool  freezeHold            { false };
+
+    // UI / Host Preset Metadata Parity
+    int   exciterMode           { 0 };
+    float uiFrictionForce       { 0.35f };
+    float uiFrictionSpeed       { 0.40f };
+    int   displayMode           { 0 };
 };
 
 // ============================================================================
@@ -156,7 +164,7 @@ public:
     // Performance triggers (lock-free thread-safe push)
     bool enqueueTriggerStrike(float velocity, float hardness = 0.65f) noexcept;
     bool enqueueTriggerButton(int buttonIndex, float velocity = 1.0f) noexcept;
-    bool enqueueTriggerChime(int keyIndex, float velocity = 1.0f) noexcept;
+    bool enqueueTriggerChime(int keyIndex, float velocity = 1.0f, float freqHz = 0.0f) noexcept;
     bool enqueueMidiNoteOn(int midiNote, float velocity) noexcept;
     [[nodiscard]] bool hasPendingEvents() const noexcept {
         return mQueueReadHead != mQueueWriteHead.load(std::memory_order_acquire);
@@ -190,15 +198,21 @@ private:
 
     // Parameters
     Mr16Parameters mParams;
+    float mLastParamFundamentalHz { -1.0f };
     OnePoleSmoother mVolumeSmoother;
+    OnePoleLowpass  mBowBodyFilter;
+    float mBowBodyVelocity { 0.0f };
 
     // SPSC lock-free ring buffer for incoming UI/MIDI trigger events
     std::array<TriggerEvent, kEventQueueCapacity> mEventQueue {};
     std::atomic<size_t> mQueueWriteHead { 0 };
     size_t mQueueReadHead { 0 };
 
-    // Telemetry tracking
+    // Telemetry tracking & lock-free 256-sample scope history
     mutable VisualizerFrame mVisualizerTelemetry;
+    std::array<float, 256> mScopeRingL { 0.0f };
+    std::array<float, 256> mScopeRingR { 0.0f };
+    size_t mScopeWritePos { 0 };
     float mInputRmsL { 0.0f };
     float mInputRmsR { 0.0f };
     float mOutputRmsL { 0.0f };

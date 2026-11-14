@@ -21,10 +21,16 @@ def audit_file(filepath):
 
         # Track fenced code blocks
         if stripped.startswith('```') or stripped.startswith('~~~'):
-            if stripped.startswith('```math'):
-                in_math_fence = not in_math_fence
+            if not in_code_block and not in_math_fence and stripped.startswith('```math'):
+                in_math_fence = True
                 if not line.startswith('```math'):
                     errors.append((idx, "Display math fence ```math must start at Column 0 (no indentation)"))
+                if idx > 1 and lines[idx - 2].strip() != '':
+                    errors.append((idx, "Display math ```math block must be preceded by an empty blank line"))
+            elif in_math_fence:
+                in_math_fence = False
+                if idx < len(lines) and lines[idx].strip() != '':
+                    errors.append((idx, "Display math ```math block must be followed by an empty blank line"))
             elif in_code_block:
                 in_code_block = False
             else:

@@ -41,7 +41,7 @@ graph TD
     end
 
     subgraph D2["Deck 02: 16-Pole Modal Resonator Matrix"]
-        GEOM["Geometric Dispersions<br/>Chladni / Beam / Vocal / Horn"]
+        GEOM["Geometric Dispersions<br/>Chladni / Beam / Vocal / Horn / Diffuse"]
         MAT["Material Losses<br/>Wood / Glass / Steel / Brass / Nylon"]
         MODES["16x Zavalishin TPT SVF Core<br/>Lyapunov Unconditional Stability"]
         HH["Orthogonal Householder Matrix<br/>H = I - (2/16) 1 1^T"]
@@ -120,10 +120,12 @@ Simulates continuous bowing of strings, wine glass rims, or metal plates. Fricti
 f(v) = \begin{cases} f_e & \lvert v \rvert < v_d \quad (\text{stick: } \lvert f_e \rvert \le f_s) \\ \mathrm{sgn}(v) \left[ f_c + (f_s - f_c) \, e^{-(v / v_s)^2} \right] + b \, v & \lvert v \rvert \ge v_d \quad (\text{slip}) \end{cases}
 ```
 
-- **Stick Phase**: While relative velocity $\lvert v \rvert$ remains within the deadband $v_d$, the bow sticks to the surface, applying restoring force $f_e$ up to the static breakaway threshold $f_s = \mu_s F_n$.
+- **Stick Phase**: While relative velocity remains within the deadband $\lvert v \rvert < v_d$, the bow sticks to the surface.
+  - Restoring force tracks displacement up to the static breakaway threshold $f_s = \mu_s F_n$.
 - **Slip Phase**: When restoring energy overcomes static friction, the surface slips backward against dynamic Coulomb friction $f_c = \mu_k F_n$.
 - **Stribeck Dynamic**: The exponential term $e^{-(v / v_s)^2}$ models boundary layer lubrication and velocity weakening, producing spontaneous limit cycles and organic harmonic squeals.
-- **Controls**: `friction_force` modulates normal force $F_n$, while `friction_speed` sets bow velocity $v_{\mathrm{bow}}$.
+- **Controls**: `friction_force` modulates normal contact force $F_n$.
+  - `friction_speed` sets the relative rubbing velocity $v_{\mathrm{bow}}$.
 
 ### 3. Optical Vactrol Pluck & Sag (Buchla 292 Photocarrier Dynamics)
 Simulates an optocoupler vactrol circuit (light-emitting diode optically coupled to a cadmium-sulfide photoresistor) as popularized in the Don Buchla 292 Lowpass Gate. CdS semiconductor photo-excitation exhibits asymmetric charge-carrier relaxation:
@@ -144,20 +146,24 @@ Enables using the MR-16 as an acoustic physical processor for external signals (
 
 ### Stochastic Poisson Rain & Euclidean Polyrhythm Generators
 Deck 01 includes two hardware clock engines:
-- **Poisson Rain**: Generates memoryless stochastic trigger pulses following an exponential distribution:
-  
-  ```math
-  \Delta t = -\frac{\ln(1 - U)}{\lambda}
-  ```
-  
-  where $U \sim \mathcal{U}(0, 1)$ is a uniform pseudo-random variable, and $\lambda \in [0, 50]\text{ Hz}$ is the average event rate set by `poisson_density`. Individual strike velocities follow a 3-stage Irwin-Hall distribution, creating realistic rain droplet variations.
-- **Euclidean Motor**: Implements the Bjorklund algorithm, distributing $k$ pulses across $n$ clock steps with maximal geometric symmetry ($E(k, n)$):
-  
-  ```math
-  E(k, n) = \left\lfloor \frac{(i + 1) \, k}{n} \right\rfloor - \left\lfloor \frac{i \, k}{n} \right\rfloor, \quad i \in \lbrace 0, \dots, n - 1 \rbrace
-  ```
-  
-  Configurable via `euclidean_pulses` (1–16) and `euclidean_steps` (1–16).
+
+#### Poisson Rain
+Generates memoryless stochastic trigger pulses following an exponential distribution:
+
+```math
+\Delta t = -\frac{\ln(1 - U)}{\lambda}
+```
+
+where $U \sim \mathcal{U}(0, 1)$ is a uniform pseudo-random variable, and $\lambda \in [0, 50]\text{ Hz}$ is the average event rate set by `poisson_density`. Individual strike velocities follow a 3-stage Irwin-Hall distribution, creating realistic rain droplet variations.
+
+#### Euclidean Motor
+Implements the Bjorklund algorithm, distributing $k$ pulses across $n$ clock steps with maximal geometric symmetry $E(k, n)$:
+
+```math
+E(k, n) = \left\lfloor \frac{(i + 1) \, k}{n} \right\rfloor - \left\lfloor \frac{i \, k}{n} \right\rfloor, \quad i \in \lbrace 0, \dots, n - 1 \rbrace
+```
+
+Configurable via `euclidean_enable` (arm/disarm), `euclidean_pulses` (0–32), and `euclidean_steps` (1–32).
 
 ---
 
@@ -188,9 +194,9 @@ Integrator states advance unconditionally:
 s_1[n] = s_1[n-1] + 2 \, v_1[n], \quad s_2[n] = s_2[n-1] + 2 \, v_2[n]
 ```
 
-Because trapezoidal integration maps the continuous left half-plane directly inside the discrete unit circle, the filters are **unconditionally stable under arbitrary, audio-rate modulation** of center frequency $f_m$ and quality factor $Q_m$.
+Because trapezoidal integration maps the continuous left half-plane directly inside the discrete unit circle, the filters are **unconditionally stable under arbitrary, audio-rate modulation** of center frequency and quality factor $(f_m, Q_m)$.
 
-### Four Geometric Acoustic Manifolds
+### Five Geometric Acoustic Manifolds
 The frequency ratios $r_m = f_m / f_0$ of the 16 modes are derived from exact physical boundary conditions:
 
 | Manifold | Index | Governing PDE | Acoustic Character |
@@ -199,31 +205,33 @@ The frequency ratios $r_m = f_m / f_0$ of the 16 modes are derived from exact ph
 | **Stiff Beam** | 1 | $\frac{\partial^4 w}{\partial x^4} + \frac{\rho A}{E I} \ddot{w} = 0$ (Euler-Bernoulli) | Marimba tone bars, xylophone slats, wooden kalimba |
 | **Vocal Formant** | 2 | Acoustic tube cascade with vowel formants | Human vocal tract, formant vowels, throat singing |
 | **Poincaré Horn** | 3 | Negative spatial curvature flare $\kappa < 0$ | Brass bell flares, cathedrals, flared organ pipes |
+| **Diffuse Plate** | 4 | Golden-ratio irrational modal dispersion | Non-coincident acoustic plate free of comb ringing |
 
-#### Closed-Form Mathematical Ratios:
-1. **Chladni Square Plate:**
-   
-   ```math
-   r_m = \frac{\sqrt{p_m^2 + q_m^2}}{\sqrt{2}}, \quad (p, q) \in \lbrace (1,1), (2,1), (1,2), (3,1), (2,2), \dots \rbrace
-   ```
+#### Closed-Form Mathematical Ratios
 
-2. **Stiff Struck Beam:**
-   
-   ```math
-   r_m = \left( \frac{2 m + 1}{3} \right)^2 \cdot \sqrt{1 + \mu \, m^2}
-   ```
-   
-   where $\mu \approx 0.045$ represents inharmonic shear dispersion.
+**1. Chladni Square Plate:**
 
-3. **Poincaré Hyperbolic Horn:**
-   
-   ```math
-   r_m = \sqrt{1 + \left( \frac{m \cdot c}{2 \, L \, f_{\mathrm{cutoff}}} \right)^2}
-   ```
+```math
+r_m = \frac{\sqrt{p_m^2 + q_m^2}}{\sqrt{2}}, \quad (p, q) \in \lbrace (1,1), (2,1), (1,2), (3,1), (2,2), \dots \rbrace
+```
+
+**2. Stiff Struck Beam:**
+
+```math
+r_m = \left( \frac{2 m + 1}{3} \right)^2 \cdot \sqrt{1 + \mu \, m^2}
+```
+
+where $\mu \approx 0.045$ represents inharmonic shear dispersion.
+
+**3. Poincaré Hyperbolic Horn:**
+
+```math
+r_m = \sqrt{1 + \left( \frac{m \cdot c}{2 \, L \, f_{\mathrm{cutoff}}} \right)^2}
+```
 
 ### Five Calibrated Acoustic Materials
 Each material profile defines the frequency-dependent damping curve across the 16 modes:
-- **Wood (Spruce/Rosewood):** Rapid high-frequency viscous damping ($\kappa_m = (1 + 0.12 m^{1.6})^{-1}$). $Q \approx 25 - 65$.
+- **Wood (Spruce/Rosewood):** Rapid high-frequency viscous damping $\kappa_m = (1 + 0.12 m^{1.6})^{-1}$ with nominal $Q \approx 25 - 65$.
 - **Glass (Borosilicate):** Minimal internal molecular dissipation. High-$Q$ sustain ($Q \approx 150 - 450$) with crystalline shimmer.
 - **Steel (High-Carbon):** Linear damping across partials with high stiffness dispersion. $Q \approx 90 - 220$.
 - **Brass (Bell Bronze):** Rich mid-range resonance with prominent non-linear mode exchange. $Q \approx 70 - 180$.
@@ -254,18 +262,20 @@ Scaled by coupling depth $C \in [0, 1]$ (`modal_coupling`), the feedback injecte
 f_{\mathrm{feed}, m} = -C \cdot \left( \frac{1}{8} \sum_{k=0}^{15} y_k \right)
 ```
 
-**Algorithmic Efficiency:** A full $16 \times 16$ feedback matrix requires 256 multiplications per sample ($O(N^2)$). The Householder formulation requires only **1 global sum and 16 subtractions ($O(N)$)**, delivering rich sympathetic resonance with negligible CPU consumption.
+**Algorithmic Efficiency:** A full $16 \times 16$ feedback matrix requires 256 multiplications per sample $(O(N^2))$. The Householder formulation requires only **1 global sum and 16 subtractions** $(O(N))$, delivering rich sympathetic resonance with negligible CPU consumption.
 
 ### Multi-Tier Anti-Runaway Safeguards
 To guarantee absolute safety during self-oscillation or resonance build-ups, a three-stage limiter architecture is enforced on every sample:
-1. **Integrator Clamping:** Filter state variables $s_1, s_2$ are bounded to $[-6.0, +6.0]$.
-2. **Individual Mode Soft Saturation:**
-   
-   ```math
-   y_m[n] = \mathrm{clamp}\left( \tanh(1.2 \cdot y_m[n]), -1.0, 1.0 \right)
-   ```
 
-3. **Central Householder Brickwall Bus:** The feedback sum $\sum y_k$ is clamped to $[-0.95, +0.95]$, preventing acoustic runaway even at `modal_coupling = 100%`.
+**1. Integrator Clamping:** Filter state variables $s_1, s_2$ are bounded to $[-6.0, +6.0]$.
+
+**2. Individual Mode Soft Saturation:**
+
+```math
+y_m[n] = \mathrm{clamp}\left( \tanh(1.2 \cdot y_m[n]), -1.0, 1.0 \right)
+```
+
+**3. Central Householder Brickwall Bus:** The feedback sum $\sum y_k$ is clamped to $[-0.95, +0.95]$, preventing acoustic runaway even at `modal_coupling = 100%`.
 
 ---
 
@@ -285,15 +295,19 @@ Standard canonical parameters: $\sigma = 10.0$, $\rho = 28.0$, $\beta = 8/3$.
 ```math
 k_1 = f(y_n) \cdot \Delta t
 ```
+
 ```math
 k_2 = f\left(y_n + \frac{k_1}{2}\right) \cdot \Delta t
 ```
+
 ```math
 k_3 = f\left(y_n + \frac{k_2}{2}\right) \cdot \Delta t
 ```
+
 ```math
 k_4 = f(y_n + k_3) \cdot \Delta t
 ```
+
 ```math
 y_{n+1} = y_n + \frac{1}{6}(k_1 + 2k_2 + 2k_3 + k_4)
 ```
@@ -380,15 +394,18 @@ where $u = (\lvert x \rvert - 0.72) / 0.33 \in (0, 1)$. Headroom safely tolerate
 ## Deck 06: Vector Phosphor CRT Display
 
 The embedded vector CRT scope renders telemetry at 60 FPS across four selectable modes:
-1. **`CHLADNI`**: Computes and displays the 2D nodal lines and vibration displacement of a square plate:
-   
-   ```math
-   w(x, y) = \sum_{m=0}^{15} A_m \left[ \cos\left(\frac{p_m \pi x}{L}\right) \cos\left(\frac{q_m \pi y}{L}\right) - \cos\left(\frac{q_m \pi x}{L}\right) \cos\left(\frac{p_m \pi y}{L}\right) \right]
-   ```
 
-2. **`ATTRACTOR`**: Orthographic projection of the 3D Lorenz trajectory $(x(t), y(t), z(t))$ rendered with exponential phosphor decay trails.
-3. **`MODAL FFT`**: Real-time 16-column modal spectrum displaying the instantaneous energy and $Q$-decay of all 16 modes.
-4. **`STEREO LISS`**: Classic X/Y Lissajous stereo phase correlation scope ($L \to X, R \to Y$).
+**1. `CHLADNI`:** Computes and displays the 2D nodal lines and vibration displacement of a square plate:
+
+```math
+w(x, y) = \sum_{m=0}^{15} A_m \left[ \cos\left(\frac{p_m \pi x}{L}\right) \cos\left(\frac{q_m \pi y}{L}\right) - \cos\left(\frac{q_m \pi x}{L}\right) \cos\left(\frac{p_m \pi y}{L}\right) \right]
+```
+
+**2. `ATTRACTOR`:** Orthographic projection of the 3D Lorenz trajectory $(x(t), y(t), z(t))$ rendered with exponential phosphor decay trails.
+
+**3. `MODAL FFT`:** Real-time 16-column modal spectrum displaying the instantaneous energy and $Q$-decay of all 16 modes.
+
+**4. `STEREO LISS`:** Classic X/Y Lissajous stereo phase correlation scope ($L \to X, R \to Y$).
 
 ---
 
@@ -402,40 +419,44 @@ Located along the top chassis:
 
 ---
 
-## Complete 33 APVTS Parameter Reference
+## Complete 37 APVTS Parameter Reference
 
 | Deck | Parameter ID | Web Property | Range | Default | Units | Description |
 |:---:|:---|:---|:---:|:---:|:---:|:---|
 | 01 | `exciter_type` | `exciterType` | 0 - 3 | 0 | - | 0: Strike, 1: Friction, 2: Vactrol, 3: Ext In |
-| 01 | `strike_hardness` | `strikeHardness` | 0.0 - 1.0 | 0.65 | % | Mallet stiffness ($k_c$) and Hertzian exponent |
+| 01 | `strike_hardness` | `strikeHardness` | 0.0 - 1.0 | 0.50 | % | Mallet stiffness ($k_c$) and Hertzian exponent |
 | 01 | `strike_velocity` | `strikeVelocity` | 0.0 - 1.0 | 0.80 | % | Kinetic impact force |
-| 01 | `friction_force` | `frictionForce` | 0.0 - 1.0 | 0.50 | % | Normal contact pressure in Karnopp bow ($F_n$) |
+| 01 | `friction_force` | `frictionForce` | 0.0 - 1.0 | 0.35 | % | Normal contact pressure in Karnopp bow ($F_n$) |
 | 01 | `friction_speed` | `frictionSpeed` | 0.0 - 1.0 | 0.40 | % | Relative rubbing velocity ($v_{\mathrm{bow}}$) |
-| 01 | `vactrol_sag` | `vactrolSag` | 0.0 - 1.0 | 0.35 | % | Optical photocarrier decay tail ($\kappa$) |
+| 01 | `vactrol_sag` | `vactrolSag` | 0.0 - 1.0 | 0.60 | % | Optical photocarrier decay tail ($\kappa$) |
 | 01 | `ext_input_gain` | `extInputGain` | -24.0 - +12.0 | 0.0 | dB | External audio sensitivity drive trim |
-| 01 | `poisson_density` | `poissonDensity` | 0.0 - 50.0 | 0.0 | Hz | Mean stochastic trigger rate ($\lambda$) |
-| 01 | `euclidean_pulses`| `euclideanPulses` | 1 - 16 | 4 | pulses | Active Euclidean pulses ($k$) |
-| 01 | `euclidean_steps` | `euclideanSteps` | 1 - 16 | 16 | steps | Total clock step resolution ($n$) |
-| 02 | `manifold_type` | `manifoldType` | 0 - 3 | 0 | - | 0: Chladni, 1: Beam, 2: Vocal, 3: Horn |
-| 02 | `modal_frequency` | `modalFrequency` | 20.0 - 2000.0 | 220.0 | Hz | Base fundamental frequency ($f_0$) |
+| 01 | `poisson_density` | `poissonDensity` | 0.0 - 50.0 | 0.0 | Hz | Mean stochastic trigger rate ($\lambda$, 0 - 3000 EPM) |
+| 01 | `euclidean_enable`| `euclideanEnable` | 0 - 1 | 0 | Bool | Euclidean polyrhythm clock arm/disarm toggle |
+| 01 | `euclidean_pulses`| `euclideanPulses` | 0 - 32 | 4 | pulses | Active Euclidean pulses ($k$) |
+| 01 | `euclidean_steps` | `euclideanSteps` | 1 - 32 | 16 | steps | Total clock step resolution ($n$) |
+| 02 | `manifold_type` | `manifoldType` | 0 - 4 | 0 | - | 0: Chladni, 1: Beam, 2: Vocal, 3: Horn, 4: Diffuse |
+| 02 | `modal_frequency` | `modalFrequency` | 20.0 - 5000.0 | 440.0 | Hz | Base fundamental frequency ($f_0$) |
 | 02 | `modal_damping` | `modalDamping` | 0.05 - 10.0 | 1.80 | s | RT60 modal decay time |
-| 02 | `material_profile`| `materialProfile`| 0 - 4 | 2 | - | 0: Wood, 1: Glass, 2: Steel, 3: Brass, 4: Nylon |
-| 02 | `modal_coupling` | `modalCoupling` | 0.0 - 1.0 | 0.40 | % | Householder energy scattering depth |
-| 02 | `modal_spread` | `modalSpread` | 0.25 - 2.0 | 1.00 | x | Overtone frequency ratio stretching factor |
-| 02 | `modal_q` | `modalQ` | 1.0 - 500.0 | 50.0 | Q | Resonance sharpness multiplier |
-| 03 | `lorenz_rate` | `lorenzRate` | 0.01 - 10.0 | 0.85 | Hz | Chaotic orbit speed ($\omega_{\mathrm{rate}}$) |
+| 02 | `material_profile`| `materialProfile`| 0 - 4 | 0 | - | 0: Wood, 1: Glass, 2: Steel, 3: Brass, 4: Nylon |
+| 02 | `modal_coupling` | `modalCoupling` | 0.0 - 1.0 | 0.25 | % | Householder energy scattering depth |
+| 02 | `modal_spread` | `modalSpread` | 0.20 - 3.00 | 1.00 | x | Overtone frequency ratio stretching factor |
+| 02 | `modal_q` | `modalQ` | 5.0 - 500.0 | 85.0 | Q | Calibrated resonance sharpness multiplier |
+| 03 | `lorenz_morph_alpha` | `lorenzMorphAlpha` | 0.0 - 1.0 | 0.00 | - | Adjacent manifold / Slot A-B morph coordinate |
+| 03 | `lorenz_rate` | `lorenzRate` | 0.01 - 10.0 | 0.50 | Hz | Chaotic orbit speed ($\omega_{\mathrm{rate}}$) |
 | 03 | `lorenz_chaos` | `lorenzChaos` | 0.0 - 1.0 | 0.50 | % | Attractor non-linearity depth ($\rho$) |
-| 03 | `lorenz_freq_mod` | `lorenzFreqMod` | 0.0 - 100.0 | 15.0 | % | Modal frequency detune depth |
-| 03 | `lorenz_q_mod` | `lorenzQMod` | 0.0 - 100.0 | 20.0 | % | Modal Q-factor breathing depth |
+| 03 | `lorenz_freq_mod` | `lorenzFreqMod` | 0.0 - 1.0 (0 - 100%) | 0.20 (20%) | % | Modal frequency detune depth (up to 300 cents) |
+| 03 | `lorenz_q_mod` | `lorenzQMod` | 0.0 - 1.0 (0 - 100%) | 0.15 (15%) | % | Modal Q-factor breathing depth |
+| 03 | `lorenz_morph_steer` | `lorenzMorphSteer` | 0.0 - 1.0 (0 - 100%) | 0.00 (0%) | % | Dynamic Lorenz attractor morph steering depth |
 | 04 | `chorus_enable` | `chorusEnable` | 0 - 1 | 1 | Bool | BBD chorus network bypass toggle |
-| 04 | `chorus_rate_hz` | `chorusRateHz` | 0.05 - 8.0 | 0.65 | Hz | Tri-phase LFO modulation rate |
-| 04 | `chorus_depth_ms` | `chorusDepthMs` | 0.1 - 5.0 | 1.40 | ms | BBD delay modulation amplitude |
+| 04 | `chorus_rate_hz` | `chorusRateHz` | 0.05 - 8.0 | 0.80 | Hz | Tri-phase LFO modulation rate |
+| 04 | `chorus_depth_ms` | `chorusDepthMs` | 0.1 - 10.0 | 2.50 | ms | BBD delay modulation amplitude |
 | 04 | `chorus_dimension`| `chorusDimension`| 0.0 - 1.0 | 0.75 | % | Dimension D cross-phase matrix width |
-| 04 | `chorus_mix` | `chorusMix` | 0.0 - 100.0 | 45.0 | % | Wet/dry chorus balance |
-| 05 | `golden_pan_spread`| `goldenPanSpread`| 0.0 - 100.0 | 85.0 | % | Golden angle modal stereo dispersion |
-| 05 | `vactrol_lpg_cutoff`| `vactrolLpgCutoff`| 20.0 - 20000.0 | 14000.0 | Hz | Buchla dynamic lowpass gate ceiling |
-| 05 | `drive_saturation`| `driveSaturation`| 0.0 - 100.0 | 25.0 | % | Hermite soft-knee saturation drive |
+| 04 | `chorus_mix` | `chorusMix` | 0.0 - 1.0 (0 - 100%) | 0.50 (50%) | % | Wet/dry chorus balance |
+| 05 | `golden_pan_spread`| `goldenPanSpread`| 0.0 - 1.0 (0 - 100%) | 0.80 (80%) | % | Golden angle modal stereo dispersion |
+| 05 | `vactrol_lpg_cutoff`| `vactrolLpgCutoff`| 20.0 - 20000.0 | 12000.0 | Hz | Buchla dynamic lowpass gate ceiling |
+| 05 | `drive_saturation`| `driveSaturation`| 0.0 - 1.0 (0 - 100%) | 0.25 (25%) | % | Hermite soft-knee saturation drive |
+| 05 | `soft_limiter` | `softLimiter` | 0 - 1 | 1 | Bool | Hermite soft-knee saturator toggle (brickwall retained) |
 | 05 | `master_trim_db` | `masterTrimDb` | -24.0 - +12.0 | 0.0 | dB | Master output volume trim |
-| 05 | `dry_wet_mix` | `dryWetMix` | 0.0 - 100.0 | 65.0 | % | Exciter dry vs resonator wet balance |
-| 05 | `power_state` | `powerState` | 0 - 1 | 0 | Bool | Master instrument standby toggle |
-| 06 | `display_mode` | `displayMode` | 0 - 2 | 0 | - | CRT mode (0: Chladni, 1: Attractor, 2: FFT) |
+| 05 | `dry_wet_mix` | `dryWetMix` | 0.0 - 1.0 (0 - 100%) | 0.65 (65%) | % | Exciter dry vs resonator wet balance |
+| 05 | `power_state` | `powerState` | 0 - 1 | 1* | Bool | Master instrument power (*Standby on Standalone/Web boot) |
+| 06 | `display_mode` | `displayMode` | 0 - 2 | 0 | - | CRT mode (0: Chladni, 1: Attractor, 2: Modal FFT) |

@@ -270,16 +270,18 @@ export class LorenzMorpher {
   applyToEngine(engine, morphed = null, timeConstant = 0.03) {
     if (!engine || !engine.isInitialized || !engine.ctx) return;
 
+    const rawSteer = engine.params.lorenz_morph_steer ?? 0.0;
+    const steerNorm = rawSteer > 1.0 ? rawSteer / 100.0 : rawSteer;
     const frame = morphed || this.morph(
-      engine.params.lorenz_morph_alpha || 0.5,
+      engine.params.lorenz_morph_alpha ?? 0.0,
       engine.lorenzState,
-      engine.params.lorenz_morph_steer || 0.0
+      steerNorm
     );
 
     const now = engine.ctx.currentTime;
     const tau = Math.max(0.005, timeConstant);
 
-    const maxNyquist = (engine.ctx && engine.ctx.sampleRate) ? (engine.ctx.sampleRate * 0.49) : 22000;
+    const maxNyquist = (engine.ctx && engine.ctx.sampleRate) ? (engine.ctx.sampleRate * 0.48) : 22000;
 
     for (let i = 0; i < 16; i++) {
       if (engine.modes && engine.modes[i]) {

@@ -55,14 +55,14 @@ void SpatialChorus::setMode(DimensionMode mode) noexcept {
 
 void SpatialChorus::setParameters(float rateHz, float depthMs, float mix) noexcept {
     mDimensionMode = DimensionMode::Manual;
-    mRateHz = std::clamp(std::isfinite(rateHz) ? rateHz : 0.55f, 0.05f, 5.0f);
-    mDepthMs = std::clamp(std::isfinite(depthMs) ? depthMs : 2.20f, 0.1f, 5.0f);
-    mMix = std::clamp(std::isfinite(mix) ? mix : 0.45f, 0.0f, 1.0f);
+    mRateHz = safeClamp(rateHz, 0.05f, 8.0f, 0.55f);
+    mDepthMs = safeClamp(depthMs, 0.1f, 5.0f, 2.20f);
+    mMix = safeClamp(mix, 0.0f, 1.0f, 0.45f);
     updateLfoIncrement();
 }
 
 void SpatialChorus::setDimensionSpread(float spread) noexcept {
-    mDimensionSpread = std::clamp(std::isfinite(spread) ? spread : 1.0f, 0.0f, 2.0f);
+    mDimensionSpread = safeClamp(spread, 0.0f, 2.0f, 1.0f);
 }
 
 void SpatialChorus::updateLfoIncrement() noexcept {
@@ -128,7 +128,7 @@ void SpatialChorus::process(float inL, float inR, float& outL, float& outR) noex
         return;
     }
 
-    if (!std::isfinite(mLfoPhase)) [[unlikely]] {
+    if (!isFinite(mLfoPhase)) [[unlikely]] {
         mLfoPhase = 0.0f;
     }
 

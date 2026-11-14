@@ -7,7 +7,7 @@ KineticExciter::KineticExciter() noexcept {
 }
 
 void KineticExciter::prepare(double sampleRate) noexcept {
-    mSampleRate = (sampleRate > 100.0) ? static_cast<float>(sampleRate) : 48000.0f;
+    mSampleRate = (isFinite(sampleRate) && sampleRate > 100.0) ? static_cast<float>(sampleRate) : 48000.0f;
     mVactrolPluck.prepare(sampleRate);
     mVactrolPluck.setCutoffRange(50.0f, 16000.0f);
     mVactrolPluck.setDecayTime(0.065f);
@@ -17,14 +17,17 @@ void KineticExciter::prepare(double sampleRate) noexcept {
     mBowVelocitySmoother.setTimeConstant(0.005f);
     mBowPressureSmoother.setSampleRate(mSampleRate);
     mBowPressureSmoother.setTimeConstant(0.005f);
+    mRosinGrainFilter.setCutoff(mSampleRate, 800.0f);
 
     // External audio input gain slewing (10 ms crossfade, click-free)
     mExtGainSmoother.setSampleRate(mSampleRate);
     mExtGainSmoother.setTimeConstant(0.010f);
 
-    // Sample-rate invariant DC blocking (15 Hz) filter coefficient
-    mDcR = 1.0f - (kTwoPi * 15.0f / mSampleRate);
+    // Sample-rate invariant DC blocking (15 Hz) filter coefficient & telemetry envelope
+    mDcR = std::exp(-kTwoPi * 15.0f / mSampleRate);
     mExtPulseDecayCoeff = std::exp(-1.0f / (mSampleRate * 0.025f));
+    const float srScale = 48000.0f / mSampleRate;
+    mActivityDecayCoeff = (std::abs(srScale - 1.0f) < 1.0e-6f) ? 0.992f : std::pow(0.992f, srScale);
 
     // 2-pole input conditioning filters (~35 Hz HPF anti-rumble, ~15 kHz LPF anti-hash)
     mExtAntiRumbleHpf.prepare(mSampleRate, 35.0f);
@@ -42,6 +45,7 @@ void KineticExciter::reset() noexcept {
 
     mBowVelocitySmoother.reset(0.0f);
     mBowPressureSmoother.reset(0.0f);
+    mRosinGrainFilter.reset();
     mFrictionState = 0.0f;
 
     mVactrolPluck.reset();
@@ -67,10 +71,8 @@ void KineticExciter::reset() noexcept {
 }
 
 void KineticExciter::triggerStrike(float velocity, float hardness) noexcept {
-    const float cleanVel = std::isfinite(velocity) ? velocity : 0.7f;
-    const float cleanHard = std::isfinite(hardness) ? hardness : 0.65f;
-    const float vel = std::clamp(cleanVel, 0.01f, 1.0f);
-    const float hard = std::clamp(cleanHard, 0.0f, 1.0f);
+    const float vel = safeClamp(velocity, 0.01f, 1.0f, 0.7f);
+    const float hard = safeClamp(hardness, 0.0f, 1.0f, 0.65f);
 
     // Hardness modulates Hertzian contact stiffness and non-linear exponent
     // Soft mallet: alpha = 2.6, lower stiffness, prolonged contact duration
@@ -97,9 +99,11 @@ void KineticExciter::triggerStrikeButton(int buttonIndex, float velocity) noexce
     triggerChimeKey(kButtonKeyMap[static_cast<size_t>(idx)], velocity);
 }
 
-void KineticExciter::triggerChimeKey(int keyIndex, float velocity) noexcept {
+void KineticExciter::triggerChimeKey(int keyIndex, float velocity, float freqOverrideHz) noexcept {
     const int idx = std::clamp(keyIndex, 0, static_cast<int>(kNumChimeKeys - 1));
-    const float noteHz = mChimeRootHz * mScaleRatios[static_cast<size_t>(idx)];
+    const float noteHz = (isFinite(freqOverrideHz) && freqOverrideHz > 0.0f)
+        ? std::clamp(freqOverrideHz, 20.0f, 20000.0f)
+        : (mChimeRootHz * mScaleRatios[static_cast<size_t>(idx)]);
 
     mLastChimeHz = noteHz;
     mNewChimeTriggered = true;
@@ -119,19 +123,25 @@ bool KineticExciter::hasNewChimeTrigger(float& outHz) noexcept {
 }
 
 void KineticExciter::setFriction(float bowVelocity, float bowPressure) noexcept {
-    mBowVelocitySmoother.setTarget(std::clamp(bowVelocity, 0.0f, 2.0f));
-    mBowPressureSmoother.setTarget(std::clamp(bowPressure, 0.0f, 2.0f));
+    mBowVelocitySmoother.setTarget(safeClamp(bowVelocity, 0.0f, 2.0f, 0.0f));
+    mBowPressureSmoother.setTarget(safeClamp(bowPressure, 0.0f, 2.0f, 0.0f));
 }
 
 void KineticExciter::setPoissonRain(bool enable, float epm, float humanize) noexcept {
     const bool wasEnabled = mPoissonEnable;
     const float prevEpm = mPoissonEpm;
     mPoissonEnable = enable;
-    mPoissonEpm = std::clamp(epm, 1.0f, 1200.0f);
-    mPoissonHumanize = std::clamp(humanize, 0.0f, 1.0f);
+    mPoissonEpm = safeClamp(epm, 1.0f, 3000.0f, 18.0f);
+    mPoissonHumanize = safeClamp(humanize, 0.0f, 1.0f, 0.5f);
     if (mPoissonEnable) {
-        if (!wasEnabled || mPoissonCountdown <= 0 || std::abs(mPoissonEpm - prevEpm) > 0.01f) {
+        if (!wasEnabled || mPoissonCountdown <= 0) {
             updatePoissonCountdown();
+        } else if (std::abs(mPoissonEpm - prevEpm) > 0.01f && prevEpm > 0.0f) {
+            // Rescale remaining countdown proportionally so continuous rate automation never stalls triggers
+            const double ratio = static_cast<double>(prevEpm) / static_cast<double>(mPoissonEpm);
+            const double scaled = static_cast<double>(mPoissonCountdown) * ratio;
+            const long long maxSamples = static_cast<long long>(mSampleRate * 60.0f);
+            mPoissonCountdown = static_cast<int>(std::clamp(std::llround(scaled), 1LL, std::max(1LL, maxSamples)));
         }
     } else {
         mPoissonCountdown = 0;
@@ -141,7 +151,7 @@ void KineticExciter::setPoissonRain(bool enable, float epm, float humanize) noex
 void KineticExciter::setEuclidean(bool enable, int pulses, int steps, float bpm) noexcept {
     const int clampedSteps = std::clamp(steps, 2, 32);
     const int clampedPulses = std::clamp(pulses, 0, clampedSteps);
-    const float clampedBpm = std::clamp(bpm, 20.0f, 300.0f);
+    const float clampedBpm = safeClamp(bpm, 20.0f, 300.0f, 120.0f);
     const bool bpmChanged = std::abs(clampedBpm - mEuclideanBpm) > 0.01f;
     mEuclideanEnable = enable;
     mEuclideanSteps = clampedSteps;
@@ -154,12 +164,12 @@ void KineticExciter::setEuclidean(bool enable, int pulses, int steps, float bpm)
 
 void KineticExciter::setExternalInput(bool enable, float sensitivity, float directMix) noexcept {
     mExtEnable = enable;
-    const float clampedSens = std::clamp(sensitivity, 0.0f, 5.0f);
+    const float clampedSens = safeClamp(sensitivity, 0.0f, 5.0f, 1.0f);
     if (std::abs(clampedSens - mExtSensitivity) > 1.0e-6f) {
         mExtSensitivity = clampedSens;
         mCalibratedExtSensitivity = (mExtSensitivity > 0.0f) ? std::pow(mExtSensitivity, 1.25f) : 0.0f;
     }
-    mExtDirectMix = std::clamp(directMix, 0.0f, 1.0f);
+    mExtDirectMix = safeClamp(directMix, 0.0f, 1.0f, 0.35f);
     mExtGainSmoother.setTarget(enable ? 1.0f : 0.0f);
 }
 
@@ -171,7 +181,7 @@ void KineticExciter::setMicrotonalScale(MicrotonalScale scale) noexcept {
 }
 
 void KineticExciter::setChimeRootHz(float rootHz) noexcept {
-    mChimeRootHz = std::clamp(rootHz, 20.0f, 2000.0f);
+    mChimeRootHz = safeClamp(rootHz, 20.0f, 2000.0f, 220.0f);
 }
 
 void KineticExciter::computeScaleRatios() noexcept {
@@ -356,10 +366,12 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
             // Stick phase: locked contact balancing external shear force
             frictionForce = std::clamp(vRel * 400.0f, -fs, +fs);
         } else {
-            // Slip phase: Stribeck velocity curve with normal-force-scaled viscous damping
+            // Slip phase: Stribeck velocity curve with rosin micro-asperities & viscous damping
             const float sgn = (vRel > 0.0f) ? 1.0f : -1.0f;
             const float decay = std::exp(-(vRel * vRel) / (vStribeck * vStribeck));
-            frictionForce = sgn * (fc + (fs - fc) * decay) + 0.12f * fn * vRel;
+            const float rosinGrain = mRosinGrainFilter.process(mPrng.nextSignedFloat());
+            const float rosinMod = 1.0f + 0.12f * rosinGrain;
+            frictionForce = sgn * (fc + (fs - fc) * decay) * rosinMod + 0.12f * fn * vRel;
         }
 
         frictionOut = frictionForce * 0.35f;
@@ -400,7 +412,7 @@ float KineticExciter::processSample(float externalAudioIn, float bodyVelocity) n
     }
 
     exciterSum = flushDenormal(exciterSum);
-    mExciterActivity = flushDenormal(0.992f * mExciterActivity + 0.008f * std::abs(exciterSum));
+    mExciterActivity = flushDenormal(mActivityDecayCoeff * mExciterActivity + (1.0f - mActivityDecayCoeff) * std::abs(exciterSum));
     return exciterSum;
 }
 

@@ -168,11 +168,12 @@ export class Mr16WebEngine {
       vactrol_sag: 0.35,
       ext_input_gain: 0.0,
       poisson_density: 0.0,
+      euclidean_enable: false,
       euclidean_pulses: 4,
       euclidean_steps: 16,
 
       // Deck 02
-      manifold_type: 0, // 0: Chladni, 1: Beam, 2: Vocal, 3: Horn
+      manifold_type: 0, // 0: Chladni, 1: Beam, 2: Vocal, 3: Horn, 4: Diffuse
       modal_frequency: 220.0,
       modal_damping: 1.80,
       material_profile: 2, // 0: Wood, 1: Glass, 2: Steel, 3: Brass, 4: Nylon
@@ -186,7 +187,7 @@ export class Mr16WebEngine {
       lorenz_chaos: 0.50, // maps to rho in [12, 45]
       lorenz_freq_mod: 15.0,
       lorenz_q_mod: 20.0,
-      lorenz_morph_alpha: 0.50,
+      lorenz_morph_alpha: 0.0,
       lorenz_morph_steer: 0.0,
 
       // Deck 04
@@ -210,13 +211,18 @@ export class Mr16WebEngine {
 
     // Bipolar modal overtone dispersion mode
     this.bipolarSpread = false;
+    this.modes = [];
+    this.modalGains = [];
 
     // Telemetry storage
     this.modalEnergies = new Float32Array(16);
     this.modalFreqs = new Float32Array(16);
+    this.modalBaseQs = new Float32Array(16);
     this.modalQNorms = new Float32Array(16);
     this.timeData = new Float32Array(512);
+    this._telemetryScratch = new Uint8Array(64);
     this.transientKick = 0;
+    this._lorenzRafId = null;
 
     // Lorenz Attractor Differential State
     this.lorenzState = {
@@ -285,6 +291,14 @@ export class Mr16WebEngine {
     this._buildAudioGraph();
     this._startLorenzModulationLoop();
     this.isInitialized = true;
+    if (this.isPowered) {
+      if (this.params.poisson_density > 0.05) {
+        this.setPoissonDensity(this.params.poisson_density);
+      }
+      if (Boolean(this.params.euclidean_enable) && (Number(this.params.euclidean_pulses) || 0) > 0) {
+        this.setEuclidean(Number(this.params.euclidean_pulses) || 0, Number(this.params.euclidean_steps) || 16);
+      }
+    }
   }
 
   _buildAudioGraph() {
@@ -303,15 +317,22 @@ export class Mr16WebEngine {
     this.dcBlocker.frequency.setValueAtTime(35, ctx.currentTime);
     this.dcBlocker.Q.setValueAtTime(0.707, ctx.currentTime);
 
-    // Hermite Saturator (Strict True Brickwall 1.00 / 0.0 dBFS)
+    // Hermite Saturator (Strict True Brickwall 1.00 / 0.0 dBFS) & Resonator Drive
+    this.driveGain = ctx.createGain();
+    const initDrive = Math.max(0.5, 1.0 + (((this.params.drive_saturation ?? 25.0) - 25.0) / 100.0) * 1.5);
+    this.driveGain.gain.setValueAtTime(initDrive, ctx.currentTime);
+
+    this._hermiteCurve = generateHermiteCurve(1024, this.params.saturator_knee ?? 0.72, this.params.saturator_ceiling ?? 1.00);
     this.saturator = ctx.createWaveShaper();
-    this.saturator.curve = generateHermiteCurve(1024, 0.72, 1.00);
+    this.saturator.curve = this.params.soft_limiter !== false ? this._hermiteCurve : null;
     this.saturator.oversample = '2x';
+
+    const nyquistSafeMax = Math.min(20000, (ctx.sampleRate || 48000) * 0.48);
 
     // Buchla 292 Dynamic LPG Filter
     this.vactrolLpg = ctx.createBiquadFilter();
     this.vactrolLpg.type = 'lowpass';
-    this.vactrolLpg.frequency.setValueAtTime(this.params.vactrol_lpg_cutoff, ctx.currentTime);
+    this.vactrolLpg.frequency.setValueAtTime(Math.max(20, Math.min(nyquistSafeMax, this.params.vactrol_lpg_cutoff)), ctx.currentTime);
     this.vactrolLpg.Q.setValueAtTime(0.707, ctx.currentTime);
 
     // Summing & Routing
@@ -329,13 +350,14 @@ export class Mr16WebEngine {
 
     this.extLpf = ctx.createBiquadFilter();
     this.extLpf.type = 'lowpass';
-    this.extLpf.frequency.setValueAtTime(15000, ctx.currentTime);
+    this.extLpf.frequency.setValueAtTime(Math.min(15000, nyquistSafeMax), ctx.currentTime);
     this.extLpf.Q.setValueAtTime(0.707, ctx.currentTime);
 
     this.extInputGain = ctx.createGain();
-    const initExtGain = this.params.ext_input_gain > 1.0
-      ? this.params.ext_input_gain / 100.0
-      : (this.params.ext_input_gain || 0.0);
+    const initExtDb = typeof this.params.ext_input_gain === 'number' ? this.params.ext_input_gain : 0.0;
+    const initExtGain = initExtDb <= -23.9
+      ? 0.0
+      : Math.pow(10.0, Math.max(-24.0, Math.min(12.0, initExtDb)) / 20.0);
     this.extInputGain.gain.setValueAtTime(initExtGain, ctx.currentTime);
 
     this.extInputNode.connect(this.extHpf);
@@ -353,7 +375,8 @@ export class Mr16WebEngine {
     this.resonatorBusR.gain.setValueAtTime(0.5, ctx.currentTime);
 
     // Connect Dynamics chain
-    this.vactrolLpg.connect(this.saturator);
+    this.vactrolLpg.connect(this.driveGain);
+    this.driveGain.connect(this.saturator);
     this.saturator.connect(this.dcBlocker);
     this.dcBlocker.connect(this.masterGain);
     this.masterGain.connect(this.analyser);
@@ -584,7 +607,17 @@ export class Mr16WebEngine {
   // --- Parameter Update & Synchronization ---
   setParam(id, val) {
     if (this.params[id] === undefined) return;
+    if (id === 'euclidean_enable') {
+      val = typeof val === 'number' ? val > 0.5 : Boolean(val);
+    } else if (id === 'soft_limiter' || id === 'chorus_enable' || id === 'power_state') {
+      val = typeof val === 'number' ? val > 0.5 : Boolean(val);
+    }
     this.params[id] = val;
+
+    if (id === 'power_state') {
+      this.setPower(Boolean(val));
+      return;
+    }
 
     if (!this.isInitialized || !this.ctx) return;
     const ctx = this.ctx;
@@ -630,9 +663,35 @@ export class Mr16WebEngine {
         this.updatePanners();
         break;
 
-      case 'vactrol_lpg_cutoff':
-        this.vactrolLpg.frequency.setTargetAtTime(Math.max(20, Math.min(20000, val)), now, 0.02);
+      case 'vactrol_lpg_cutoff': {
+        const maxCutoff = Math.min(20000, (ctx.sampleRate || 48000) * 0.48);
+        this.vactrolLpg.frequency.setTargetAtTime(Math.max(20, Math.min(maxCutoff, val)), now, 0.02);
         break;
+      }
+
+      case 'drive_saturation': {
+        if (this.driveGain) {
+          const pct = Math.max(0.0, Math.min(100.0, Number(val) || 0.0));
+          const driveFactor = Math.max(0.5, 1.0 + ((pct - 25.0) / 100.0) * 1.5);
+          this.driveGain.gain.setTargetAtTime(driveFactor, now, 0.02);
+        }
+        break;
+      }
+
+      case 'soft_limiter': {
+        if (this.saturator) {
+          const active = Boolean(val);
+          if (active) {
+            const knee = this.params.saturator_knee ?? 0.72;
+            const ceiling = this.params.saturator_ceiling ?? 1.00;
+            this._hermiteCurve = generateHermiteCurve(1024, knee, ceiling);
+            this.saturator.curve = this._hermiteCurve;
+          } else {
+            this.saturator.curve = null;
+          }
+        }
+        break;
+      }
 
       case 'master_trim_db': {
         const gainLinear = Math.pow(10, val / 20);
@@ -660,9 +719,11 @@ export class Mr16WebEngine {
         break;
 
       case 'ext_input_gain': {
-        const normGain = val > 1.0 ? val / 100 : val;
+        const linearGain = val <= -23.9
+          ? 0.0
+          : Math.pow(10.0, Math.max(-24.0, Math.min(12.0, val)) / 20.0);
         if (this.extInputGain) {
-          this.extInputGain.gain.setTargetAtTime(normGain, now, 0.02);
+          this.extInputGain.gain.setTargetAtTime(linearGain, now, 0.02);
         }
         break;
       }
@@ -671,8 +732,9 @@ export class Mr16WebEngine {
       case 'saturator_knee': {
         const knee = this.params.saturator_knee ?? 0.72;
         const ceiling = this.params.saturator_ceiling ?? 1.00;
-        if (this.saturator) {
-          this.saturator.curve = generateHermiteCurve(1024, knee, ceiling);
+        this._hermiteCurve = generateHermiteCurve(1024, knee, ceiling);
+        if (this.saturator && Boolean(this.params.soft_limiter)) {
+          this.saturator.curve = this._hermiteCurve;
         }
         break;
       }
@@ -681,27 +743,51 @@ export class Mr16WebEngine {
         this.setPoissonDensity(val);
         break;
 
+      case 'euclidean_enable':
+      case 'euclidean_pulses':
+      case 'euclidean_steps':
+        if (this.isPowered && Boolean(this.params.euclidean_enable) && (Number(this.params.euclidean_pulses) || 0) > 0) {
+          this.setEuclidean(Number(this.params.euclidean_pulses) || 0, Number(this.params.euclidean_steps) || 16);
+        } else {
+          this.stopEuclidean();
+        }
+        break;
+
       case 'power_state':
         this.setPower(Boolean(val));
         break;
     }
   }
 
+  _computeAdjacentMorphAlpha() {
+    const baseAlpha = Math.max(0.0, Math.min(1.0, Number(this.params.lorenz_morph_alpha ?? 0.0)));
+    const rawSteer = Number(this.params.lorenz_morph_steer ?? 0.0);
+    const steerNorm = Math.max(0.0, Math.min(1.0, rawSteer > 1.0 ? rawSteer / 100.0 : rawSteer));
+    if (steerNorm <= 0.0001) return baseAlpha;
+    const normX = Math.max(-1.0, Math.min(1.0, (this.lorenzState?.x || 0.0) / 20.0));
+    const normY = Math.max(-1.0, Math.min(1.0, (this.lorenzState?.y || 0.0) / 28.0));
+    const steerDelta = 0.5 * (normX * 0.65 + normY * 0.35);
+    return Math.max(0.0, Math.min(1.0, baseAlpha + steerNorm * steerDelta));
+  }
+
   updateModalFrequencies(immediate = false) {
-    if (!this.ctx || !this.modes.length) return;
+    if (!this.ctx || !this.modes?.length) return;
     const now = this.ctx.currentTime;
     const f0 = this.params.modal_frequency;
     const spread = this.params.modal_spread;
 
-    // Manifold ratio table
-    let ratios;
-    switch (this.params.manifold_type) {
-      case 1: ratios = MANIFOLD_RATIOS.BEAM; break;
-      case 2: ratios = MANIFOLD_RATIOS.VOCAL; break;
-      case 3: ratios = MANIFOLD_RATIOS.HORN; break;
-      case 4: ratios = MANIFOLD_RATIOS.DIFFUSE; break;
-      default: ratios = MANIFOLD_RATIOS.CHLADNI; break;
-    }
+    // Manifold ratio table (with continuous adjacent-manifold morphing matching C++ ModalResonatorMatrix)
+    const manifoldOrder = [
+      MANIFOLD_RATIOS.CHLADNI,
+      MANIFOLD_RATIOS.BEAM,
+      MANIFOLD_RATIOS.VOCAL,
+      MANIFOLD_RATIOS.HORN,
+      MANIFOLD_RATIOS.DIFFUSE
+    ];
+    const mIdx = Math.max(0, Math.min(4, Math.round(Number(this.params.manifold_type) || 0)));
+    const ratiosA = manifoldOrder[mIdx] || MANIFOLD_RATIOS.CHLADNI;
+    const ratiosB = manifoldOrder[(mIdx + 1) % manifoldOrder.length] || MANIFOLD_RATIOS.BEAM;
+    const effectiveMorph = this._computeAdjacentMorphAlpha();
 
     let profile;
     switch (this.params.material_profile) {
@@ -723,7 +809,9 @@ export class Mr16WebEngine {
         const effectiveRatio = Math.max(0.05, 1.0 - (1.0 - subR) * spread);
         fm = f0 * effectiveRatio;
       } else {
-        const rm = ratios[i] || (1 + i);
+        const rA = ratiosA[i] || (1 + i);
+        const rB = ratiosB[i] || (1 + i);
+        const rm = rA + effectiveMorph * (rB - rA);
         // Inharmonic stiffness dispersion and cluster beating doublet splitting:
         // r_m' = r_m * sqrt(1 + B * m^2) * [1 + D * sin(m * pi / 2.5)]
         const dispersion = Math.sqrt(1.0 + stiffnessB * i * i);
@@ -732,7 +820,7 @@ export class Mr16WebEngine {
         fm = f0 * (1 + (rmPrime - 1) * spread);
       }
 
-      const maxNyquist = (this.ctx && this.ctx.sampleRate) ? (this.ctx.sampleRate * 0.49) : 22000;
+      const maxNyquist = (this.ctx && this.ctx.sampleRate) ? Math.min(22000, this.ctx.sampleRate * 0.48) : 20000;
       const clampedFm = Math.max(20, Math.min(maxNyquist, fm));
       this.modalFreqs[i] = clampedFm;
       if (immediate) {
@@ -745,7 +833,7 @@ export class Mr16WebEngine {
   }
 
   updateModalDamping(immediate = false) {
-    if (!this.ctx || !this.modes.length) return;
+    if (!this.ctx || !this.modes?.length) return;
     const now = this.ctx.currentTime;
     const baseDamping = this.params.modal_damping; // seconds
     const userQ = this.params.modal_q || 85.0;
@@ -770,6 +858,7 @@ export class Mr16WebEngine {
       // Q = pi * fm * tau / ln(1000) ~ 0.455 * fm * tau
       const qCalc = 0.455 * fm * tau * profile.qScale * (userQ / 85.0);
       const clampedQ = Math.max(profile.minQ, Math.min(profile.maxQ, qCalc));
+      this.modalBaseQs[i] = clampedQ;
 
       const weight = modeWeights[i] !== undefined ? modeWeights[i] : 1.0;
 
@@ -823,22 +912,34 @@ export class Mr16WebEngine {
       this.updateModalFrequencies();
       this.updateModalDamping();
     } else {
+      if (!this.morpher) {
+        this.morpher = new LorenzMorpher();
+      }
       this.updateMorph();
     }
   }
 
   updateMorph() {
-    if (!this.ctx || !this.modes.length || !this.morpher) return;
+    if (!this.ctx || !this.modes.length) return;
+    if (!this.customProfileActive) {
+      this.updateModalFrequencies();
+      return;
+    }
+    if (!this.morpher) return;
+    const rawSteer = Number(this.params.lorenz_morph_steer ?? 0.0);
+    const steerNorm = rawSteer > 1.0 ? rawSteer / 100.0 : rawSteer;
     const morphed = this.morpher.morph(
-      this.params.lorenz_morph_alpha !== undefined ? this.params.lorenz_morph_alpha : 0.5,
+      this.params.lorenz_morph_alpha ?? 0.0,
       this.lorenzState,
-      this.params.lorenz_morph_steer !== undefined ? this.params.lorenz_morph_steer : 0.0
+      steerNorm
     );
     const now = this.ctx.currentTime;
+    const maxNyquist = (this.ctx && this.ctx.sampleRate) ? Math.min(22000, this.ctx.sampleRate * 0.48) : 20000;
     for (let i = 0; i < 16; i++) {
       if (this.modes[i]) {
-        this.modalFreqs[i] = morphed.frequencies[i];
-        this.modes[i].frequency.setTargetAtTime(morphed.frequencies[i], now, 0.03);
+        const safeF = Math.max(20, Math.min(maxNyquist, morphed.frequencies[i]));
+        this.modalFreqs[i] = safeF;
+        this.modes[i].frequency.setTargetAtTime(safeF, now, 0.03);
         this.modes[i].Q.setTargetAtTime(morphed.qFactors[i], now, 0.03);
       }
       if (this.modalGains[i]) {
@@ -916,23 +1017,29 @@ export class Mr16WebEngine {
   setPower(isPowered) {
     this.isPowered = Boolean(isPowered);
     this.params.power_state = this.isPowered;
+    if (!this.isPowered) {
+      this.stopPoissonRain();
+      this.stopEuclidean();
+    }
+    if (typeof this.onPowerStateChanged === 'function') {
+      this.onPowerStateChanged(this.isPowered);
+    }
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
     if (!this.isPowered) {
       this.masterGain.gain.setTargetAtTime(0.0, now, 0.05);
-      this.stopPoissonRain();
     } else {
       if (this.ctx.state === 'suspended') {
         this.ctx.resume();
       }
       const gainLinear = Math.pow(10, this.params.master_trim_db / 20);
       this.masterGain.gain.setTargetAtTime(gainLinear, now, 0.05);
-      if (this.params.poisson_density > 0) {
+      if (this.params.poisson_density > 0.05) {
         this.setPoissonDensity(this.params.poisson_density);
       }
-    }
-    if (typeof this.onPowerStateChanged === 'function') {
-      this.onPowerStateChanged(this.isPowered);
+      if (Boolean(this.params.euclidean_enable) && (Number(this.params.euclidean_pulses) || 0) > 0) {
+        this.setEuclidean(Number(this.params.euclidean_pulses) || 0, Number(this.params.euclidean_steps) || 16);
+      }
     }
   }
 
@@ -973,10 +1080,14 @@ export class Mr16WebEngine {
 
   // --- Deck 03: Chaotic Lorenz Modulation & Tri-Phase Chorus Sweep Loop ---
   _startLorenzModulationLoop() {
+    if (this._lorenzRafId && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(this._lorenzRafId);
+      this._lorenzRafId = null;
+    }
     let lastTime = performance.now();
 
     const loop = (nowTime) => {
-      const dt = Math.min(0.05, (nowTime - lastTime) / 1000);
+      const dt = Math.min(0.05, Math.max(0.0, (nowTime - lastTime) / 1000));
       lastTime = nowTime;
 
       if (this.ctx && this.isPowered) {
@@ -985,33 +1096,56 @@ export class Mr16WebEngine {
         this._collectTelemetry();
       }
 
-      if (typeof requestAnimationFrame === 'function') {
-        requestAnimationFrame(loop);
+      if (typeof requestAnimationFrame === 'function' && this.isInitialized) {
+        this._lorenzRafId = requestAnimationFrame(loop);
       }
     };
 
     if (typeof requestAnimationFrame === 'function') {
-      requestAnimationFrame(loop);
+      this._lorenzRafId = requestAnimationFrame(loop);
     }
   }
 
   _stepLorenz(dt) {
     const sigma = 10.0;
-    const rho = 12.0 + (this.params.lorenz_chaos || 0.5) * 33.0; // [12, 45]
+    const rho = 12.0 + (this.params.lorenz_chaos ?? 0.5) * 33.0; // [12, 45]
     const beta = 8.0 / 3.0;
-    const speed = (this.params.lorenz_rate || 0.85) * 1.5;
+    const speed = Math.max(0.01, this.params.lorenz_rate ?? 0.85) * 1.5;
+    const h = Math.min(0.025, Math.max(0.0, dt) * speed);
 
     let x = this.lorenzState.x;
     let y = this.lorenzState.y;
     let z = this.lorenzState.z;
 
-    const dx = sigma * (y - x);
-    const dy = x * (rho - z) - y;
-    const dz = x * y - beta * z;
+    // 4th-order Runge-Kutta (RK4) integration for unconditionally smooth butterfly orbits
+    const k1x = sigma * (y - x);
+    const k1y = x * (rho - z) - y;
+    const k1z = x * y - beta * z;
 
-    x += dx * dt * speed;
-    y += dy * dt * speed;
-    z += dz * dt * speed;
+    const x2 = x + 0.5 * h * k1x;
+    const y2 = y + 0.5 * h * k1y;
+    const z2 = z + 0.5 * h * k1z;
+    const k2x = sigma * (y2 - x2);
+    const k2y = x2 * (rho - z2) - y2;
+    const k2z = x2 * y2 - beta * z2;
+
+    const x3 = x + 0.5 * h * k2x;
+    const y3 = y + 0.5 * h * k2y;
+    const z3 = z + 0.5 * h * k2z;
+    const k3x = sigma * (y3 - x3);
+    const k3y = x3 * (rho - z3) - y3;
+    const k3z = x3 * y3 - beta * z3;
+
+    const x4 = x + h * k3x;
+    const y4 = y + h * k3y;
+    const z4 = z + h * k3z;
+    const k4x = sigma * (y4 - x4);
+    const k4y = x4 * (rho - z4) - y4;
+    const k4z = x4 * y4 - beta * z4;
+
+    x += (h / 6.0) * (k1x + 2.0 * k2x + 2.0 * k3x + k4x);
+    y += (h / 6.0) * (k1y + 2.0 * k2y + 2.0 * k3y + k4y);
+    z += (h / 6.0) * (k1z + 2.0 * k2z + 2.0 * k3z + k4z);
 
     // Anti-blowup safety guard: check radius ||u|| > 120.0 (r2 > 14400.0)
     const r2 = x * x + y * y + z * z;
@@ -1033,17 +1167,21 @@ export class Mr16WebEngine {
     const normZ = Math.max(-1, Math.min(1, (z - 25.0) / 25.0));
 
     // Dynamic modulation of modal frequencies & Q
-    const freqModDepth = (this.params.lorenz_freq_mod / 100) * 0.025; // +/- 2.5%
-    const qModDepth = (this.params.lorenz_q_mod / 100) * 0.35; // +/- 35%
+    const freqModDepth = ((this.params.lorenz_freq_mod ?? 15.0) / 100) * 0.025; // +/- 2.5%
+    const qModDepth = ((this.params.lorenz_q_mod ?? 20.0) / 100) * 0.35; // +/- 35%
 
+    if (!this.ctx) return;
     const curTime = this.ctx.currentTime;
-    const maxNyquist = (this.ctx && this.ctx.sampleRate) ? (this.ctx.sampleRate * 0.49) : 22000;
+    const maxNyquist = (this.ctx && this.ctx.sampleRate) ? (this.ctx.sampleRate * 0.48) : 22000;
+
+    const rawSteer = Number(this.params.lorenz_morph_steer ?? 0.0);
+    const steerNorm = Math.max(0.0, Math.min(1.0, rawSteer > 1.0 ? rawSteer / 100.0 : rawSteer));
 
     if (this.customProfileActive && this.morpher) {
       const morphed = this.morpher.morph(
-        this.params.lorenz_morph_alpha !== undefined ? this.params.lorenz_morph_alpha : 0.5,
+        this.params.lorenz_morph_alpha ?? 0.0,
         this.lorenzState,
-        this.params.lorenz_morph_steer !== undefined ? this.params.lorenz_morph_steer : 0.0
+        steerNorm
       );
       for (let i = 0; i < 16; i++) {
         if (this.modes[i]) {
@@ -1067,12 +1205,21 @@ export class Mr16WebEngine {
       return;
     }
 
+    if (steerNorm > 0.0001) {
+      this.updateModalFrequencies();
+    }
+
     for (let i = 0; i < 16; i++) {
       if (this.modes[i]) {
         const baseF = this.modalFreqs[i] || 220;
         const modF = (i % 2 === 0) ? (baseF * (1 + normX * freqModDepth)) : (baseF * (1 + normY * freqModDepth));
         const safeModF = Math.max(20, Math.min(maxNyquist, modF));
         this.modes[i].frequency.setTargetAtTime(safeModF, curTime, 0.03);
+
+        const baseQ = this.modalBaseQs[i] || 85.0;
+        const qShift = (i % 2 === 0) ? (1.0 + normZ * qModDepth) : (1.0 - normZ * qModDepth * 0.5);
+        const safeModQ = Math.max(5.0, Math.min(500.0, baseQ * qShift));
+        this.modes[i].Q.setTargetAtTime(safeModQ, curTime, 0.03);
       }
     }
   }
@@ -1101,8 +1248,8 @@ export class Mr16WebEngine {
   }
 
   _collectTelemetry() {
-    // Mode energies for CRT Modal FFT & Chladni figure
-    const scratch = new Uint8Array(64);
+    // Mode energies for CRT Modal FFT & Chladni figure (reuse pre-allocated scratch buffer: 0 GC)
+    const scratch = this._telemetryScratch;
     for (let i = 0; i < 16; i++) {
       if (this.modeAnalysers[i]) {
         this.modeAnalysers[i].getByteTimeDomainData(scratch);
@@ -1421,6 +1568,7 @@ export class Mr16WebEngine {
         this.triggerStrike(hardness, vel);
         scheduleNext();
       }, delayMs);
+      this.poissonTimer?.unref?.();
     };
 
     scheduleNext();
@@ -1438,8 +1586,10 @@ export class Mr16WebEngine {
    */
   setEuclidean(pulses, steps, bpm = 120) {
     this.stopEuclidean();
-    const k = Math.max(1, Math.min(steps, pulses));
-    const n = Math.max(2, steps);
+    const rawPulses = Math.round(Number(pulses) || 0);
+    if (rawPulses <= 0) return;
+    const n = Math.max(1, Math.round(Number(steps) || 16));
+    const k = Math.max(1, Math.min(n, rawPulses));
 
     // Bjorklund Euclidean rhythm generator
     const pattern = new Array(n).fill(false);
@@ -1457,6 +1607,7 @@ export class Mr16WebEngine {
       }
       this.euclideanStepIndex = (this.euclideanStepIndex + 1) % n;
     }, stepIntervalMs);
+    this.euclideanTimer?.unref?.();
   }
 
   stopEuclidean() {
@@ -1464,5 +1615,24 @@ export class Mr16WebEngine {
       clearInterval(this.euclideanTimer);
       this.euclideanTimer = null;
     }
+  }
+
+  destroy() {
+    this.isPowered = false;
+    this.isInitialized = false;
+    if (this._lorenzRafId && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(this._lorenzRafId);
+      this._lorenzRafId = null;
+    }
+    this.stopPoissonRain();
+    this.stopEuclidean();
+    if (this.frictionNoiseSource) {
+      try { this.frictionNoiseSource.stop(); } catch (_) {}
+      this.frictionNoiseSource = null;
+    }
+    if (this.ctx && typeof this.ctx.close === 'function') {
+      try { this.ctx.close(); } catch (_) {}
+    }
+    this.ctx = null;
   }
 }

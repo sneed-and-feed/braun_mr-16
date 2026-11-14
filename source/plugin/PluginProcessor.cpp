@@ -8,17 +8,30 @@ BRAUN_MR16AudioProcessor::BRAUN_MR16AudioProcessor()
       apvts(*this, nullptr, "Parameters", mr16::createParameterLayout())
 {
     atomicPointers.initialize(apvts);
-    atomicPointers.euclideanEnable = &mEuclideanEnable;
     recorderThread.startThread();
 #if MR16_HAS_DSP_ENGINE
     mr16Engine.reset();
 #endif
+    if (wrapperType == wrapperType_Standalone)
+    {
+        setPower(false);
+    }
+    startTimerHz(30);
 }
 
 BRAUN_MR16AudioProcessor::~BRAUN_MR16AudioProcessor()
 {
+    stopTimer();
     stopRecording();
     recorderThread.stopThread(2000);
+}
+
+void BRAUN_MR16AudioProcessor::timerCallback()
+{
+    if (mPendingPowerWakeNotify.exchange(false, std::memory_order_acq_rel))
+    {
+        setPower(true);
+    }
 }
 
 const juce::String BRAUN_MR16AudioProcessor::getName() const
@@ -80,6 +93,7 @@ void BRAUN_MR16AudioProcessor::setPresetParameters(const mr16::Mr16ParameterSnap
     setParamFloat(mr16::ParamIDs::vactrolSag, s.vactrolSag);
     setParamFloat(mr16::ParamIDs::extInputGain, s.extInputGainDb);
     setParamFloat(mr16::ParamIDs::poissonDensity, s.poissonDensity);
+    setParamBool(mr16::ParamIDs::euclideanEnable, s.euclideanEnable);
     setParamFloat(mr16::ParamIDs::euclideanPulses, static_cast<float>(s.euclideanPulses));
     setParamFloat(mr16::ParamIDs::euclideanSteps, static_cast<float>(s.euclideanSteps));
 
@@ -93,10 +107,12 @@ void BRAUN_MR16AudioProcessor::setPresetParameters(const mr16::Mr16ParameterSnap
     setParamFloat(mr16::ParamIDs::modalQ, s.modalQ);
 
     // Deck 03
+    setParamFloat(mr16::ParamIDs::lorenzMorphAlpha, s.lorenzMorphAlpha);
     setParamFloat(mr16::ParamIDs::lorenzRate, s.lorenzRate);
     setParamFloat(mr16::ParamIDs::lorenzChaos, s.lorenzChaos);
     setParamFloat(mr16::ParamIDs::lorenzFreqMod, s.lorenzFreqMod);
     setParamFloat(mr16::ParamIDs::lorenzQMod, s.lorenzQMod);
+    setParamFloat(mr16::ParamIDs::lorenzMorphSteer, s.lorenzMorphSteer);
 
     // Deck 04
     setParamBool(mr16::ParamIDs::chorusEnable, s.chorusEnable);
@@ -109,6 +125,7 @@ void BRAUN_MR16AudioProcessor::setPresetParameters(const mr16::Mr16ParameterSnap
     setParamFloat(mr16::ParamIDs::goldenPanSpread, s.goldenPanSpread);
     setParamFloat(mr16::ParamIDs::vactrolLpgCutoff, s.vactrolLpgCutoff);
     setParamFloat(mr16::ParamIDs::driveSaturation, s.driveSaturationDb);
+    setParamBool(mr16::ParamIDs::softLimiter, s.softLimiter);
     setParamFloat(mr16::ParamIDs::masterTrimDb, s.masterTrimDb);
     setParamFloat(mr16::ParamIDs::dryWetMix, s.dryWetMix);
     setParamBool(mr16::ParamIDs::powerState, s.powerState);
@@ -116,7 +133,11 @@ void BRAUN_MR16AudioProcessor::setPresetParameters(const mr16::Mr16ParameterSnap
     // Deck 06
     setParamChoice(mr16::ParamIDs::displayMode, static_cast<float>(mr16::indexFromDisplayMode(s.displayMode)));
 
+    isPoweredOn.store(s.powerState, std::memory_order_relaxed);
+    mLastObservedParamPower.store(s.powerState, std::memory_order_relaxed);
+    mPendingPowerWakeNotify.store(false, std::memory_order_release);
     mEuclideanEnable.store(s.euclideanEnable, std::memory_order_relaxed);
+    mStateSyncEpoch.fetch_add(1, std::memory_order_release);
 }
 
 #if MR16_HAS_DSP_ENGINE
@@ -125,16 +146,12 @@ void BRAUN_MR16AudioProcessor::setPresetParameters(const braun::mr16::Mr16Parame
     mr16::Mr16ParameterSnapshot s;
 
     // Map exciter
-    if (p.poissonEnable) s.exciterType = mr16::ExciterType::Strike;
-    else if (p.exciterBowVelocity > 0.05f) s.exciterType = mr16::ExciterType::Friction;
-    else if (p.externalAudioEnable) s.exciterType = mr16::ExciterType::ExtIn;
-    else s.exciterType = mr16::ExciterType::Strike;
-
+    s.exciterType    = mr16::exciterTypeFromIndex(p.exciterMode);
     s.strikeVelocity = p.exciterStrikeVelocity;
     s.strikeHardness = p.exciterStrikeHardness;
-    s.frictionForce  = p.exciterBowPressure;
-    s.frictionSpeed  = p.exciterBowVelocity;
-    s.vactrolSag     = p.vactrolSagAmount;
+    s.frictionForce  = (p.exciterBowPressure > 0.0f) ? p.exciterBowPressure : p.uiFrictionForce;
+    s.frictionSpeed  = (p.exciterBowVelocity > 0.0f) ? p.exciterBowVelocity : p.uiFrictionSpeed;
+    s.vactrolSag     = p.vactrolSagEnable ? p.vactrolSagAmount : 0.0f;
     s.extInputGainDb = (p.externalSensitivity > 0.0f) ? (20.0f * std::log10(p.externalSensitivity)) : 0.0f;
     s.poissonDensity = p.poissonEnable ? (p.poissonEpm / 60.0f) : 0.0f;
     s.euclideanEnable = p.euclideanEnable;
@@ -143,19 +160,21 @@ void BRAUN_MR16AudioProcessor::setPresetParameters(const braun::mr16::Mr16Parame
     mEuclideanEnable.store(p.euclideanEnable, std::memory_order_relaxed);
 
     // Map modal matrix
-    s.manifoldType   = static_cast<mr16::ManifoldType>(static_cast<int>(p.manifold));
-    s.modalFrequency = p.fundamentalHz;
-    s.modalDamping   = p.decayScale;
+    s.manifoldType    = static_cast<mr16::ManifoldType>(static_cast<int>(p.manifold));
+    s.modalFrequency  = p.fundamentalHz;
+    s.modalDamping    = p.decayScale;
     s.materialProfile = static_cast<mr16::MaterialProfile>(static_cast<int>(p.material));
-    s.modalCoupling  = p.couplingDepth;
-    s.modalSpread    = 1.0f;
-    s.modalQ         = 50.0f;
+    s.modalCoupling   = p.couplingDepth;
+    s.modalSpread     = std::clamp(p.overtoneSpread, 0.2f, 3.0f);
+    s.modalQ          = std::clamp(p.modalQScale * 85.0f, 5.0f, 500.0f);
 
     // Map attractor
-    s.lorenzRate    = p.chaosRateHz;
-    s.lorenzChaos   = p.chaosDepth;
-    s.lorenzFreqMod = std::clamp(p.chaosDetuneCents / 100.0f, 0.0f, 1.0f);
-    s.lorenzQMod    = p.chaosDepth * 0.3f;
+    s.lorenzMorphAlpha = std::clamp(p.manifoldMorph, 0.0f, 1.0f);
+    s.lorenzRate       = p.chaosRateHz;
+    s.lorenzChaos      = p.chaosDepth;
+    s.lorenzFreqMod    = std::clamp(p.chaosDetuneCents / 300.0f, 0.0f, 1.0f);
+    s.lorenzQMod       = std::clamp(p.chaosQMod, 0.0f, 1.0f);
+    s.lorenzMorphSteer = std::clamp(p.lorenzMorphSteer, 0.0f, 1.0f);
 
     // Map chorus
     s.chorusEnable    = p.chorusEnable;
@@ -179,12 +198,13 @@ void BRAUN_MR16AudioProcessor::setPresetParameters(const braun::mr16::Mr16Parame
 
     // Map dynamics
     s.goldenPanSpread   = p.stereoWidth;
-    s.vactrolLpgCutoff  = 12000.0f;
+    s.vactrolLpgCutoff  = std::clamp(p.vactrolLpgCutoff, 20.0f, 20000.0f);
     s.driveSaturationDb = p.driveSaturation;
+    s.softLimiter       = p.softLimiterEnable;
     s.masterTrimDb      = p.masterVolumeDb;
     s.dryWetMix         = p.dryWetMix;
     s.powerState        = !p.outputMute;
-    s.displayMode       = mr16::DisplayMode::Chladni;
+    s.displayMode       = mr16::displayModeFromIndex(p.displayMode);
 
     setPresetParameters(s);
 }
@@ -244,45 +264,73 @@ const std::vector<BRAUN_MR16AudioProcessor::Preset>& BRAUN_MR16AudioProcessor::g
         std::vector<Preset> list;
         list.reserve(16);
 
-        auto makePreset = [](const char* name, float f0, mr16::ManifoldType mf, mr16::MaterialProfile mat,
-                             float damping, float coupling, float strikeVel, float strikeHard,
-                             float chaosRate, float chaosDepth, bool chorusOn, float chorusMix) {
+        auto makePreset = [](const char* name, int excType, float strikeHard, float strikeVel,
+                             float fricForce, float fricSpeed, float sag, float poissonHz,
+                             bool euclOn, int euclPulses, int euclSteps,
+                             mr16::ManifoldType mf, float f0, float damping, mr16::MaterialProfile mat,
+                             float coupling, float spread, float modalQVal,
+                             float chaosRate, float chaosDepth, float freqMod, float qMod,
+                             bool chorusOn, float chorusRate, float chorusDepth, float chorusDim, float chorusMix,
+                             float panSpread, float lpgCutoff, float drive, float trimDb, float dryWet,
+                             mr16::DisplayMode disp) {
             Preset p;
             p.name = name;
-            p.params.modalFrequency = f0;
-            p.params.manifoldType = mf;
-            p.params.materialProfile = mat;
-            p.params.modalDamping = damping;
-            p.params.modalCoupling = coupling;
-            p.params.strikeVelocity = strikeVel;
+            p.params.exciterType = mr16::exciterTypeFromIndex(excType);
             p.params.strikeHardness = strikeHard;
+            p.params.strikeVelocity = strikeVel;
+            p.params.frictionForce = fricForce;
+            p.params.frictionSpeed = fricSpeed;
+            p.params.vactrolSag = sag;
+            p.params.extInputGainDb = 0.0f;
+            p.params.poissonDensity = poissonHz;
+            p.params.euclideanEnable = euclOn;
+            p.params.euclideanPulses = euclPulses;
+            p.params.euclideanSteps = euclSteps;
+            p.params.manifoldType = mf;
+            p.params.modalFrequency = f0;
+            p.params.modalDamping = damping;
+            p.params.materialProfile = mat;
+            p.params.modalCoupling = coupling;
+            p.params.modalSpread = spread;
+            p.params.modalQ = modalQVal;
+            p.params.lorenzMorphAlpha = 0.0f;
             p.params.lorenzRate = chaosRate;
             p.params.lorenzChaos = chaosDepth;
+            p.params.lorenzFreqMod = freqMod;
+            p.params.lorenzQMod = qMod;
+            p.params.lorenzMorphSteer = 0.0f;
             p.params.chorusEnable = chorusOn;
+            p.params.chorusRateHz = chorusRate;
+            p.params.chorusDepthMs = chorusDepth;
+            p.params.chorusDimension = chorusDim;
             p.params.chorusMix = chorusMix;
-            p.params.dryWetMix = 0.65f;
+            p.params.goldenPanSpread = panSpread;
+            p.params.vactrolLpgCutoff = lpgCutoff;
+            p.params.driveSaturationDb = drive;
+            p.params.softLimiter = true;
+            p.params.masterTrimDb = trimDb;
+            p.params.dryWetMix = dryWet;
             p.params.powerState = true;
+            p.params.displayMode = disp;
             return p;
         };
 
-        list.push_back(makePreset("Chladni Zinc Plate", 220.0f, mr16::ManifoldType::ChladniPlate, mr16::MaterialProfile::Steel, 1.80f, 0.28f, 0.80f, 0.70f, 0.50f, 0.20f, true, 0.45f));
-        list.push_back(makePreset("Deep Marimba Bar", 110.0f, mr16::ManifoldType::StiffBeam, mr16::MaterialProfile::Wood, 0.85f, 0.15f, 0.85f, 0.40f, 0.30f, 0.10f, false, 0.20f));
-        list.push_back(makePreset("Hyperbolic Bell Flare", 330.0f, mr16::ManifoldType::PoincareHorn, mr16::MaterialProfile::Brass, 2.40f, 0.45f, 0.75f, 0.65f, 0.35f, 0.40f, true, 0.50f));
-        list.push_back(makePreset("Vocal Formant Choir", 146.83f, mr16::ManifoldType::VocalFormant, mr16::MaterialProfile::Nylon, 1.50f, 0.35f, 0.60f, 0.50f, 0.80f, 0.60f, true, 0.55f));
-        list.push_back(makePreset("Monsoon Zinc Roof", 185.0f, mr16::ManifoldType::ChladniPlate, mr16::MaterialProfile::Steel, 0.90f, 0.20f, 0.50f, 0.80f, 0.20f, 0.15f, true, 0.40f));
-        auto euclideanPreset = makePreset("Euclidean Glass Chime", 523.25f, mr16::ManifoldType::ChladniPlate, mr16::MaterialProfile::Glass, 2.00f, 0.30f, 0.70f, 0.75f, 0.40f, 0.25f, true, 0.50f);
-        euclideanPreset.params.euclideanEnable = true;
-        list.push_back(euclideanPreset);
-        list.push_back(makePreset("Bowed Crystal Rod", 440.0f, mr16::ManifoldType::StiffBeam, mr16::MaterialProfile::Glass, 3.20f, 0.38f, 0.40f, 0.60f, 0.60f, 0.30f, true, 0.50f));
-        list.push_back(makePreset("Dimension Brass Matrix", 261.63f, mr16::ManifoldType::PoincareHorn, mr16::MaterialProfile::Brass, 4.50f, 0.32f, 0.80f, 0.70f, 0.45f, 0.35f, true, 0.75f));
-        list.push_back(makePreset("Lorenz Butterfly Orbit", 196.0f, mr16::ManifoldType::ChladniPlate, mr16::MaterialProfile::Wood, 2.00f, 0.40f, 0.65f, 0.55f, 1.80f, 0.85f, true, 0.40f));
-        list.push_back(makePreset("Buchla Optical Pluck", 220.0f, mr16::ManifoldType::StiffBeam, mr16::MaterialProfile::Wood, 0.70f, 0.18f, 0.90f, 0.85f, 0.20f, 0.10f, false, 0.30f));
-        list.push_back(makePreset("Stiff Anvil Strike", 175.0f, mr16::ManifoldType::StiffBeam, mr16::MaterialProfile::Steel, 1.80f, 0.50f, 0.95f, 0.90f, 0.25f, 0.15f, true, 0.35f));
-        list.push_back(makePreset("Nylon Resonant Body", 130.81f, mr16::ManifoldType::ChladniPlate, mr16::MaterialProfile::Nylon, 0.80f, 0.12f, 0.70f, 0.45f, 0.15f, 0.05f, false, 0.25f));
-        list.push_back(makePreset("Hyperbolic Air Column", 293.66f, mr16::ManifoldType::PoincareHorn, mr16::MaterialProfile::Glass, 3.50f, 0.42f, 0.60f, 0.60f, 0.55f, 0.45f, true, 0.60f));
-        list.push_back(makePreset("Sub-Harmonic Drone", 65.41f, mr16::ManifoldType::ChladniPlate, mr16::MaterialProfile::Wood, 2.80f, 0.30f, 0.80f, 0.50f, 0.10f, 0.20f, true, 0.40f));
-        list.push_back(makePreset("Ethereal Space Chime", 659.25f, mr16::ManifoldType::PoincareHorn, mr16::MaterialProfile::Steel, 2.60f, 0.50f, 0.75f, 0.80f, 0.30f, 0.35f, true, 0.65f));
-        list.push_back(makePreset("Kinetischer Impuls Master", 220.0f, mr16::ManifoldType::ChladniPlate, mr16::MaterialProfile::Steel, 1.80f, 0.30f, 0.80f, 0.65f, 0.50f, 0.30f, true, 0.50f));
+        list.push_back(makePreset("CALIBRATED DEFAULT",         0, 0.65f, 0.80f, 0.50f, 0.40f, 0.35f,  0.0f, false, 4, 16, mr16::ManifoldType::ChladniPlate, 220.00f,  1.80f, mr16::MaterialProfile::Steel, 0.40f, 1.00f,  85.0f, 0.85f, 0.50f, 0.15f, 0.20f, true,  0.65f, 1.40f, 0.75f, 0.45f, 0.85f, 14000.0f, 0.25f,  0.0f, 0.65f, mr16::DisplayMode::Chladni));
+        list.push_back(makePreset("MARIMBA ROSEWOOD BAR",       0, 0.35f, 0.85f, 0.30f, 0.20f, 0.25f,  0.0f, false, 4, 16, mr16::ManifoldType::StiffBeam,    174.61f,  0.90f, mr16::MaterialProfile::Wood,  0.20f, 1.00f,  45.0f, 0.40f, 0.30f, 0.05f, 0.10f, true,  0.40f, 0.80f, 0.50f, 0.25f, 0.70f,  8500.0f, 0.15f,  0.0f, 0.70f, mr16::DisplayMode::ModalFft));
+        list.push_back(makePreset("CRYSTAL WINE GLASS",         1, 0.70f, 0.60f, 0.62f, 0.55f, 0.40f,  0.0f, false, 2, 16, mr16::ManifoldType::ChladniPlate, 587.33f,  4.50f, mr16::MaterialProfile::Glass, 0.35f, 0.85f, 220.0f, 0.30f, 0.40f, 0.08f, 0.15f, true,  0.50f, 1.20f, 0.80f, 0.40f, 0.90f, 16000.0f, 0.10f, -1.0f, 0.85f, mr16::DisplayMode::Chladni));
+        list.push_back(makePreset("TIBETAN BRONZE BELL",        0, 0.85f, 0.95f, 0.50f, 0.40f, 0.50f,  0.0f, false, 3, 16, mr16::ManifoldType::ChladniPlate, 130.81f,  5.20f, mr16::MaterialProfile::Brass, 0.78f, 1.25f, 160.0f, 0.60f, 0.65f, 0.18f, 0.35f, true,  0.35f, 2.20f, 0.90f, 0.50f, 0.95f, 12000.0f, 0.35f, -2.0f, 0.80f, mr16::DisplayMode::Chladni));
+        list.push_back(makePreset("CATHEDRAL TUBE DRONE",       2, 0.40f, 0.75f, 0.40f, 0.30f, 0.70f,  0.0f, false, 2, 16, mr16::ManifoldType::PoincareHorn,  65.41f,  6.00f, mr16::MaterialProfile::Brass, 0.50f, 1.10f, 110.0f, 0.25f, 0.45f, 0.10f, 0.25f, true,  0.28f, 1.80f, 0.85f, 0.45f, 0.85f,  4500.0f, 0.20f,  0.0f, 0.90f, mr16::DisplayMode::ModalFft));
+        list.push_back(makePreset("VOCAL FORMANT CHOIR",        2, 0.50f, 0.80f, 0.45f, 0.40f, 0.55f,  0.0f, false, 4, 16, mr16::ManifoldType::VocalFormant, 110.00f,  3.20f, mr16::MaterialProfile::Nylon, 0.30f, 1.00f,  70.0f, 0.70f, 0.55f, 0.25f, 0.30f, true,  0.55f, 2.00f, 0.85f, 0.55f, 0.80f,  7500.0f, 0.15f,  0.0f, 0.85f, mr16::DisplayMode::Attractor));
+        list.push_back(makePreset("POISSON ZINC ROOF",          0, 0.75f, 0.70f, 0.20f, 0.20f, 0.20f, 14.5f, false, 4, 16, mr16::ManifoldType::ChladniPlate, 330.00f,  1.20f, mr16::MaterialProfile::Steel, 0.45f, 1.15f,  95.0f, 0.90f, 0.40f, 0.12f, 0.15f, true,  0.45f, 1.00f, 0.60f, 0.30f, 0.95f, 15000.0f, 0.20f,  0.0f, 0.75f, mr16::DisplayMode::Chladni));
+        list.push_back(makePreset("EUCLIDEAN METALLOPHONE",     0, 0.80f, 0.85f, 0.30f, 0.30f, 0.30f,  0.0f, true,  5, 16, mr16::ManifoldType::StiffBeam,    329.63f,  2.40f, mr16::MaterialProfile::Brass, 0.55f, 1.05f, 125.0f, 0.50f, 0.35f, 0.10f, 0.15f, true,  0.60f, 1.50f, 0.70f, 0.35f, 0.85f, 13500.0f, 0.22f,  0.0f, 0.70f, mr16::DisplayMode::ModalFft));
+        list.push_back(makePreset("DIMENSION CELESTE",          0, 0.90f, 0.85f, 0.20f, 0.20f, 0.25f,  0.0f, false, 4, 16, mr16::ManifoldType::StiffBeam,    659.25f,  3.80f, mr16::MaterialProfile::Steel, 0.35f, 1.00f, 180.0f, 0.45f, 0.30f, 0.08f, 0.12f, true,  0.45f, 2.40f, 1.00f, 0.65f, 0.90f, 18000.0f, 0.12f, -1.0f, 0.75f, mr16::DisplayMode::Chladni));
+        list.push_back(makePreset("LORENZ CHAOTIC ORBIT",       0, 0.70f, 0.90f, 0.40f, 0.40f, 0.40f,  0.0f, false, 3, 16, mr16::ManifoldType::ChladniPlate, 196.00f,  4.00f, mr16::MaterialProfile::Steel, 0.60f, 1.20f, 140.0f, 2.40f, 0.85f, 0.45f, 0.60f, true,  0.70f, 1.60f, 0.80f, 0.40f, 0.90f, 12500.0f, 0.30f,  0.0f, 0.85f, mr16::DisplayMode::Attractor));
+        list.push_back(makePreset("BOWED TITANIUM SHEET",       1, 0.60f, 0.70f, 0.75f, 0.65f, 0.50f,  0.0f, false, 2, 16, mr16::ManifoldType::ChladniPlate, 146.83f,  3.80f, mr16::MaterialProfile::Steel, 0.50f, 1.10f, 150.0f, 0.60f, 0.50f, 0.15f, 0.25f, true,  0.35f, 1.80f, 0.75f, 0.45f, 0.85f,  9500.0f, 0.25f, -1.0f, 0.90f, mr16::DisplayMode::Chladni));
+        list.push_back(makePreset("HYPERBOLIC SUB RESONATOR",   0, 0.30f, 0.90f, 0.20f, 0.20f, 0.45f,  0.0f, false, 4, 16, mr16::ManifoldType::PoincareHorn,  43.65f,  2.50f, mr16::MaterialProfile::Wood,  0.30f, 0.90f,  55.0f, 0.30f, 0.30f, 0.05f, 0.10f, false, 0.30f, 1.00f, 0.40f, 0.00f, 0.40f,   450.0f, 0.15f,  1.0f, 0.70f, mr16::DisplayMode::ModalFft));
+        list.push_back(makePreset("AFRICAN BALAFON",            0, 0.75f, 0.85f, 0.30f, 0.30f, 0.30f,  0.0f, false, 5, 16, mr16::ManifoldType::StiffBeam,    196.00f,  1.40f, mr16::MaterialProfile::Wood,  0.45f, 1.15f,  50.0f, 0.50f, 0.40f, 0.12f, 0.20f, true,  0.50f, 1.20f, 0.65f, 0.30f, 0.75f, 11000.0f, 0.28f,  0.0f, 0.75f, mr16::DisplayMode::ModalFft));
+        list.push_back(makePreset("SOLAR WIND RESONANCE",       2, 0.45f, 0.65f, 0.40f, 0.40f, 0.65f, 32.0f, false, 3, 16, mr16::ManifoldType::PoincareHorn, 220.00f,  4.20f, mr16::MaterialProfile::Nylon, 0.40f, 1.10f,  90.0f, 0.35f, 0.55f, 0.18f, 0.30f, true,  0.40f, 2.00f, 0.85f, 0.50f, 0.90f,  8500.0f, 0.18f,  0.0f, 0.80f, mr16::DisplayMode::Attractor));
+        list.push_back(makePreset("FROSTED GLASS ARPEGGIO",     0, 0.85f, 0.80f, 0.30f, 0.30f, 0.30f,  0.0f, true,  7, 12, mr16::ManifoldType::ChladniPlate, 880.00f,  3.60f, mr16::MaterialProfile::Glass, 0.40f, 0.90f, 210.0f, 0.65f, 0.45f, 0.14f, 0.20f, true,  0.75f, 1.50f, 0.80f, 0.50f, 0.90f, 17000.0f, 0.14f, -1.0f, 0.75f, mr16::DisplayMode::Chladni));
+        list.push_back(makePreset("INFINITE MODAL SINGULARITY", 0, 0.70f, 0.80f, 0.50f, 0.50f, 0.40f,  0.0f, false, 1, 16, mr16::ManifoldType::ChladniPlate, 220.00f, 10.00f, mr16::MaterialProfile::Steel, 0.98f, 1.00f, 250.0f, 1.10f, 0.75f, 0.20f, 0.40f, true,  0.40f, 2.20f, 0.95f, 0.50f, 0.95f, 14000.0f, 0.65f, -3.0f, 0.95f, mr16::DisplayMode::Attractor));
 
         return list;
     }();
@@ -292,12 +340,16 @@ const std::vector<BRAUN_MR16AudioProcessor::Preset>& BRAUN_MR16AudioProcessor::g
 
 void BRAUN_MR16AudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+    mSustainPedalActive.store(false, std::memory_order_relaxed);
+    mPitchBendSemitones.store(0.0f, std::memory_order_relaxed);
+    mModWheelNorm.store(0.0f, std::memory_order_relaxed);
+
 #if MR16_HAS_DSP_ENGINE
     mr16Engine.prepare(sampleRate, samplesPerBlock);
 
     const auto snapshot = atomicPointers.loadSnapshot();
+    mEuclideanEnable.store(snapshot.euclideanEnable, std::memory_order_relaxed);
     auto dspParams = snapshot.toDspParams();
-    dspParams.euclideanEnable = mEuclideanEnable.load(std::memory_order_relaxed);
     mr16Engine.setParameters(dspParams);
     mr16Engine.reset();
 #endif
@@ -321,6 +373,9 @@ void BRAUN_MR16AudioProcessor::releaseResources()
 
 void BRAUN_MR16AudioProcessor::reset()
 {
+    mSustainPedalActive.store(false, std::memory_order_relaxed);
+    mPitchBendSemitones.store(0.0f, std::memory_order_relaxed);
+    mModWheelNorm.store(0.0f, std::memory_order_relaxed);
     mPendingEngineReset.store(true, std::memory_order_release);
 #if MR16_HAS_DSP_ENGINE
     mr16Engine.reset();
@@ -355,13 +410,14 @@ void BRAUN_MR16AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     outChannels[0] = buffer.getWritePointer(0);
     outChannels[1] = (numChannels > 1) ? buffer.getWritePointer(1) : outChannels[0];
 
-    // Synchronize APVTS powerState parameter changes from host automation or GUI
-    if (atomicPointers.powerState != nullptr)
+    // Synchronize APVTS powerState parameter changes from host automation or GUI (edge-triggered)
+    if (atomicPointers.powerState != nullptr && !mPendingPowerWakeNotify.load(std::memory_order_acquire))
     {
         const bool paramPower = (atomicPointers.powerState->load(std::memory_order_relaxed) > 0.5f);
-        const bool currentPower = isPoweredOn.load(std::memory_order_relaxed);
-        if (paramPower != currentPower)
+        const bool lastObserved = mLastObservedParamPower.load(std::memory_order_relaxed);
+        if (paramPower != lastObserved)
         {
+            mLastObservedParamPower.store(paramPower, std::memory_order_relaxed);
             isPoweredOn.store(paramPower, std::memory_order_relaxed);
             if (!paramPower)
                 mPendingEngineReset.store(true, std::memory_order_release);
@@ -376,8 +432,10 @@ void BRAUN_MR16AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 #endif
     }
 
-    // Standby Power Gating: If powered down, output clean silence unless smoothly awakened
-    // by MIDI Note-On, incoming audio energy, or queued exciter triggers
+    // Standby Power Gating: If powered down, output clean silence unless explicitly awakened
+    // by interactive MIDI Note-On or queued UI exciter triggers. Never wake on ambient audio
+    // input (which would defeat Standby on active DAW audio tracks and wake Standalone on cold
+    // boot from laptop/interface microphone noise).
     if (!isPoweredOn.load(std::memory_order_relaxed))
     {
         bool hasNoteOn = false;
@@ -394,30 +452,19 @@ void BRAUN_MR16AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
             }
         }
 
-        // Detect incoming audio energy to wake up the plugin
-        bool hasAudioInput = false;
-        const auto* mainInputBus = getBus(true, 0);
-        if (mainInputBus != nullptr && mainInputBus->isEnabled() && getTotalNumInputChannels() > 0)
-        {
-            const float mag0 = buffer.getMagnitude(0, 0, numSamples);
-            const float mag1 = (numChannels > 1) ? buffer.getMagnitude(1, 0, numSamples) : 0.0f;
-            if (std::max(mag0, mag1) > 0.0005f) // -66 dB threshold
-            {
-                hasAudioInput = true;
-            }
-        }
-
-        // Check if there are queued exciter events in mr16Engine
+        // Check if there are queued interactive exciter events in mr16Engine
         bool hasQueuedTriggers = false;
 #if MR16_HAS_DSP_ENGINE
         if (mr16Engine.hasPendingEvents())
             hasQueuedTriggers = true;
 #endif
 
-        if (hasNoteOn || hasAudioInput || hasQueuedTriggers)
+        if (hasNoteOn || hasQueuedTriggers)
         {
-            // Smoothly wake the synthesizer / resonator from standby
-            setPower(true);
+            // Real-time lock-free wake: never call setValueNotifyingHost on the audio thread!
+            // Message-thread timer flushes the APVTS power_state parameter asynchronously.
+            isPoweredOn.store(true, std::memory_order_relaxed);
+            mPendingPowerWakeNotify.store(true, std::memory_order_release);
         }
         else
         {
@@ -427,46 +474,85 @@ void BRAUN_MR16AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
             mr16Engine.reset();
 #endif
             buffer.clear();
-            pushScopeSamples(outChannels[0], outChannels[1], numSamples);
+            const float* zeroL = buffer.getReadPointer(0);
+            const float* zeroR = (numChannels > 1) ? buffer.getReadPointer(1) : zeroL;
+            pushScopeSamples(zeroL, zeroR, numSamples);
             midiMessages.clear();
             return;
         }
     }
 
-    // Process incoming MIDI Note-On, Note-Off, and CC events for active engine
+    // Process incoming MIDI Note-On, Pitch Bend, and CC events strictly lock-free (0 heap allocations)
     for (const auto metadata : midiMessages)
     {
         if (metadata.numBytes >= 3)
         {
             const auto* rawData = metadata.data;
             const uint8_t status = rawData[0] & 0xF0;
-            const uint8_t note = rawData[1] & 0x7F;
-            const uint8_t vel = rawData[2] & 0x7F;
-            if (status == 0x90 && vel > 0)
+            const uint8_t data1 = rawData[1] & 0x7F;
+            const uint8_t data2 = rawData[2] & 0x7F;
+            if (status == 0x90 && data2 > 0)
             {
 #if MR16_HAS_DSP_ENGINE
-                mr16Engine.enqueueMidiNoteOn(static_cast<int>(note), static_cast<float>(vel) / 127.0f);
+                mr16Engine.enqueueMidiNoteOn(static_cast<int>(data1), static_cast<float>(data2) / 127.0f);
 #endif
             }
-            else if (status == 0xB0 && note == 64)
+            else if (status == 0xB0)
             {
-                // Sustain pedal CC 64
-                const bool sustainOn = (vel >= 64);
-                if (auto* freezeParam = apvts.getParameter(mr16::ParamIDs::vactrolSag.getParamID()))
+                if (data1 == 64)
                 {
-                    if (sustainOn)
-                        freezeParam->setValueNotifyingHost(1.0f);
+                    // Sustain pedal CC 64: non-destructively extends modal decay while held, releasing cleanly on < 64
+                    mSustainPedalActive.store(data2 >= 64, std::memory_order_relaxed);
                 }
+                else if (data1 == 1)
+                {
+                    // Mod Wheel CC 1: additive Householder inter-modal scattering coupling
+                    mModWheelNorm.store(static_cast<float>(data2) / 127.0f, std::memory_order_relaxed);
+                }
+                else if (data1 == 120 || data1 == 121 || data1 == 123)
+                {
+                    // All Sound Off / Reset All Controllers / All Notes Off
+                    mSustainPedalActive.store(false, std::memory_order_relaxed);
+                    mModWheelNorm.store(0.0f, std::memory_order_relaxed);
+                    mPitchBendSemitones.store(0.0f, std::memory_order_relaxed);
+                    if (data1 == 120)
+                    {
+#if MR16_HAS_DSP_ENGINE
+                        mr16Engine.reset();
+#endif
+                    }
+                }
+            }
+            else if (status == 0xE0)
+            {
+                // 14-bit Pitch Bend (+/- 2 semitones)
+                const int bend14 = static_cast<int>(data1) | (static_cast<int>(data2) << 7);
+                const float bendNorm = std::clamp(static_cast<float>(bend14 - 8192) / 8192.0f, -1.0f, 1.0f);
+                mPitchBendSemitones.store(bendNorm * 2.0f, std::memory_order_relaxed);
             }
         }
     }
 
     // Wait-free POD snapshot load with std::memory_order_relaxed (0 locks, 0 dynamic allocations)
     const auto snapshot = atomicPointers.loadSnapshot();
+    mEuclideanEnable.store(snapshot.euclideanEnable, std::memory_order_relaxed);
 
 #if MR16_HAS_DSP_ENGINE
     auto dspParams = snapshot.toDspParams();
-    dspParams.euclideanEnable = mEuclideanEnable.load(std::memory_order_relaxed);
+    if (mSustainPedalActive.load(std::memory_order_relaxed))
+    {
+        dspParams.decayScale = std::min(20.0f, dspParams.decayScale * 3.5f);
+    }
+    const float pbSemi = mPitchBendSemitones.load(std::memory_order_relaxed);
+    if (std::abs(pbSemi) > 1.0e-4f)
+    {
+        dspParams.fundamentalHz = std::clamp(dspParams.fundamentalHz * braun::mr16::semitonesToRatio(pbSemi), 20.0f, 5000.0f);
+    }
+    const float modWheel = mModWheelNorm.load(std::memory_order_relaxed);
+    if (modWheel > 1.0e-4f)
+    {
+        dspParams.couplingDepth = std::clamp(dspParams.couplingDepth + modWheel, 0.0f, 1.0f);
+    }
     // Guarantee that DSP engine mute state strictly tracks isPoweredOn
     dspParams.outputMute = !isPoweredOn.load(std::memory_order_relaxed);
     mr16Engine.setParameters(dspParams);
@@ -489,15 +575,41 @@ void BRAUN_MR16AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         pushScopeSamples(inChannels[0], inChannels[1], numSamples);
     }
 
-    mr16Engine.processBlock(inChannels[0], inChannels[1], outChannels[0], outChannels[1], numSamples);
-
-    // Apply branchless subnormal flush on output samples
-    for (int i = 0; i < numSamples; ++i)
+    if (numChannels >= 2)
     {
-        outChannels[0][i] = braun::mr16::flushDenormal(outChannels[0][i]);
-        if (numChannels > 1)
+        mr16Engine.processBlock(inChannels[0], inChannels[1], outChannels[0], outChannels[1], numSamples);
+
+        for (int i = 0; i < numSamples; ++i)
         {
+            outChannels[0][i] = braun::mr16::flushDenormal(outChannels[0][i]);
             outChannels[1][i] = braun::mr16::flushDenormal(outChannels[1][i]);
+        }
+
+        // Zero any auxiliary output channels > 2
+        for (int ch = 2; ch < numChannels; ++ch)
+        {
+            buffer.clear(ch, 0, numSamples);
+        }
+    }
+    else
+    {
+        // Mono output bus: render stereo in fixed stack chunks and downmix 0.5*(L+R)
+        // (0 heap allocations for any block size, preserving balanced stereo/Dimension-D energy)
+        constexpr int kMonoChunk = 512;
+        float tmpL[kMonoChunk];
+        float tmpR[kMonoChunk];
+        int offset = 0;
+        while (offset < numSamples)
+        {
+            const int chunk = std::min(kMonoChunk, numSamples - offset);
+            const float* chunkInL = (inChannels[0] != nullptr) ? (inChannels[0] + offset) : nullptr;
+            const float* chunkInR = (inChannels[1] != nullptr) ? (inChannels[1] + offset) : nullptr;
+            mr16Engine.processBlock(chunkInL, chunkInR, tmpL, tmpR, chunk);
+            for (int s = 0; s < chunk; ++s)
+            {
+                outChannels[0][offset + s] = braun::mr16::flushDenormal(0.5f * (tmpL[s] + tmpR[s]));
+            }
+            offset += chunk;
         }
     }
 
@@ -551,15 +663,15 @@ void BRAUN_MR16AudioProcessor::triggerStrikeButton(int buttonIndex, float veloci
 #endif
 }
 
-void BRAUN_MR16AudioProcessor::triggerChimeKey(int keyIndex, float velocity) noexcept
+void BRAUN_MR16AudioProcessor::triggerChimeKey(int keyIndex, float velocity, float freqHz) noexcept
 {
     if (!isPoweredOn.load(std::memory_order_relaxed))
         setPower(true);
 
 #if MR16_HAS_DSP_ENGINE
-    mr16Engine.enqueueTriggerChime(keyIndex, velocity);
+    mr16Engine.enqueueTriggerChime(keyIndex, velocity, freqHz);
 #else
-    juce::ignoreUnused(keyIndex, velocity);
+    juce::ignoreUnused(keyIndex, velocity, freqHz);
 #endif
 }
 
@@ -627,6 +739,7 @@ void BRAUN_MR16AudioProcessor::getScopeSamples(float* destL, float* destR, int n
 void BRAUN_MR16AudioProcessor::setScopeSource(int source) noexcept
 {
     mScopeSource.store(source, std::memory_order_relaxed);
+    mStateSyncEpoch.fetch_add(1, std::memory_order_release);
 }
 
 int BRAUN_MR16AudioProcessor::getScopeSource() const noexcept
@@ -740,6 +853,7 @@ void BRAUN_MR16AudioProcessor::getStateInformation(juce::MemoryBlock& destData)
     state.setProperty("currentProgram", mCurrentProgram, nullptr);
     state.setProperty("scopeSource", mScopeSource.load(std::memory_order_relaxed), nullptr);
     state.setProperty("isPoweredOn", isPoweredOn.load(std::memory_order_relaxed), nullptr);
+    state.setProperty("euclideanEnable", isEuclideanEnabled(), nullptr);
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     copyXmlToBinary(*xml, destData);
 }
@@ -755,20 +869,44 @@ void BRAUN_MR16AudioProcessor::setStateInformation(const void* data, int sizeInB
         if (vt.hasProperty("scopeSource"))
             mScopeSource.store(static_cast<int>(vt.getProperty("scopeSource")), std::memory_order_relaxed);
 
-        bool restoredPower = true;
-        if (vt.hasProperty("isPoweredOn"))
-        {
-            restoredPower = static_cast<bool>(vt.getProperty("isPoweredOn"));
-        }
-        else if (auto* p = apvts.getRawParameterValue(mr16::ParamIDs::powerState.getParamID()))
-        {
-            restoredPower = (p->load(std::memory_order_relaxed) > 0.5f);
-        }
+        const bool hasEuclideanParamChild = vt.getChildWithProperty("id", mr16::ParamIDs::euclideanEnable.getParamID()).isValid();
+        const bool hasLegacyEuclideanProp = vt.hasProperty("euclideanEnable");
+        const bool legacyEuclideanVal = hasLegacyEuclideanProp ? static_cast<bool>(vt.getProperty("euclideanEnable")) : false;
+
+        const bool hasExplicitPowerProp = vt.hasProperty("isPoweredOn");
+        const bool explicitPowerVal = hasExplicitPowerProp ? static_cast<bool>(vt.getProperty("isPoweredOn")) : true;
 
         apvts.replaceState(vt);
 
-        // Explicitly sync power state
+        if (!hasEuclideanParamChild && hasLegacyEuclideanProp)
+            setEuclideanEnable(legacyEuclideanVal);
+        else
+            mEuclideanEnable.store(isEuclideanEnabled(), std::memory_order_relaxed);
+
+        bool restoredPower = explicitPowerVal;
+        if (!hasExplicitPowerProp)
+        {
+            if (auto* p = apvts.getRawParameterValue(mr16::ParamIDs::powerState.getParamID()))
+                restoredPower = (p->load(std::memory_order_relaxed) > 0.5f);
+        }
+
+        // Standalone cold-boot monitor protection: never auto-blast saved self-oscillating,
+        // Poisson rain, Euclidean, or bowed friction state when StandaloneFilterWindow reloads .settings
+        if (wrapperType == wrapperType_Standalone && !mInitialStandaloneStateLoaded)
+        {
+            mInitialStandaloneStateLoaded = true;
+            restoredPower = false;
+            setEuclideanEnable(false);
+            if (auto* pPoisson = apvts.getParameter(mr16::ParamIDs::poissonDensity.getParamID()))
+                pPoisson->setValueNotifyingHost(0.0f);
+#if MR16_HAS_DSP_ENGINE
+            mr16Engine.reset();
+#endif
+        }
+
+        // Explicitly sync power state & notify Editor
         setPower(restoredPower);
+        mStateSyncEpoch.fetch_add(1, std::memory_order_release);
     }
 }
 

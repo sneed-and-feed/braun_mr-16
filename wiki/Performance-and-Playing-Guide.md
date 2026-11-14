@@ -93,13 +93,13 @@ The MR-16 features six harmonic scales designed specifically for resonant physic
 - **Acoustic Mood:** Nocturnal, deep, brooding melancholy. Accentuates the deep fundamental resonances of the Poincaré hyperbolic horn and dense bell bronze.
 
 ### 6. `PYTHAGOREAN JUST`
-- **Intervals:** Derived from pure mathematical integer frequency ratios:
-  
-  ```math
-  f_k = f_{\mathrm{root}} \cdot \left(\frac{3}{2}\right)^p \cdot 2^{-q}
-  ```
+**Intervals:** Derived from pure mathematical integer frequency ratios:
 
-- **Acoustic Mood:** Pure harmonic consonant transparency. Because 3:2 fifths are geometrically aligned without the 2-cent compromise of 12-Tone Equal Temperament (12-TET), sustained modal chords produce zero phase cancellation or acoustic warbling.
+```math
+f_k = f_{\mathrm{root}} \cdot \left(\frac{3}{2}\right)^p \cdot 2^{-q}
+```
+
+**Acoustic Mood:** Pure harmonic consonant transparency. Because 3:2 fifths are geometrically aligned without the 2-cent compromise of 12-Tone Equal Temperament (12-TET), sustained modal chords produce zero phase cancellation or acoustic warbling.
 
 ### Root Frequency Tuning
 The base pitch of the entire performance strip can be snapped to six standard concert acoustic roots:
@@ -155,7 +155,7 @@ The MR-16 can perform autonomously as a generative sound installation without hu
 
 The MR-16 responds fully to standard USB/Bluetooth MIDI keyboards, pad controllers, and MPE transmitters:
 
-- **MIDI Note On:** Instantly updates `modal_frequency` to match the incoming note ($f = 440 \cdot 2^{(m - 69)/12}$), re-exciting the 16 modes with incoming key velocity.
+- **MIDI Note On:** Instantly updates `modal_frequency` to match the incoming note $(f = 440 \cdot 2^{(m - 69)/12})$, re-exciting the 16 modes with incoming key velocity.
 - **Pitch Bend Wheel:** Smoothly glides the fundamental frequency by $\pm 2$ semitones with continuous real-time filter interpolation.
 - **Modulation Wheel (CC 1):** Mapped by default to `modal_coupling`, smoothly increasing Householder sympathetic ring-down and inharmonic feedback as the wheel is advanced.
 - **Sustain Pedal (CC 64):** Multiplies `modal_damping` by $3.5\times$ while depressed, allowing struck chords and chime clusters to sustain naturally.

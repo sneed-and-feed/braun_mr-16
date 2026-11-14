@@ -3,7 +3,10 @@
 namespace braun::mr16 {
 
 void VactrolGate::prepare(double sampleRate) noexcept {
-    mSampleRate = (sampleRate > 100.0) ? static_cast<float>(sampleRate) : 48000.0f;
+    mSampleRate = (isFinite(sampleRate) && sampleRate > 100.0) ? static_cast<float>(sampleRate) : 48000.0f;
+    const float srScale = 48000.0f / mSampleRate;
+    mEnvAttackCoeff  = (std::abs(srScale - 1.0f) < 1.0e-6f) ? 0.02f   : (1.0f - std::pow(1.0f - 0.02f, srScale));
+    mEnvReleaseCoeff = (std::abs(srScale - 1.0f) < 1.0e-6f) ? 0.0005f : (1.0f - std::pow(1.0f - 0.0005f, srScale));
     reset();
 }
 
@@ -18,31 +21,31 @@ void VactrolGate::reset() noexcept {
 }
 
 void VactrolGate::setControlVoltage(float cv) noexcept {
-    mTargetCv = std::clamp(cv, 0.0f, 1.0f);
+    mTargetCv = safeClamp(cv, 0.0f, 1.0f, 0.0f);
 }
 
 void VactrolGate::setDynamicSag(float sagAmount) noexcept {
-    mDynamicSag = std::clamp(sagAmount, 0.0f, 1.0f);
+    mDynamicSag = safeClamp(sagAmount, 0.0f, 1.0f, 0.50f);
 }
 
 void VactrolGate::setCutoffRange(float minHz, float maxHz) noexcept {
-    mMinCutoff = std::clamp(minHz, 20.0f, 1000.0f);
-    mMaxCutoff = std::clamp(maxHz, mMinCutoff + 100.0f, mSampleRate * 0.495f);
+    mMinCutoff = safeClamp(minHz, 20.0f, 1000.0f, 40.0f);
+    mMaxCutoff = safeClamp(maxHz, mMinCutoff + 100.0f, mSampleRate * 0.48f, 14000.0f);
 }
 
 void VactrolGate::setDecayTime(float decaySec) noexcept {
-    mTauDecay = std::clamp(decaySec, 0.010f, 2.500f);
+    mTauDecay = safeClamp(decaySec, 0.010f, 2.500f, 0.080f);
 }
 
 void VactrolGate::trigger(float velocity) noexcept {
-    const float vel = std::clamp(velocity, 0.0f, 1.0f);
+    const float vel = safeClamp(velocity, 0.0f, 1.0f, 0.0f);
     // Sudden excitation jump in LED control voltage
     mConductance = std::min(1.0f, mConductance + vel);
 }
 
 void VactrolGate::updateConductance(float targetCv) noexcept {
     const float dt = 1.0f / mSampleRate;
-    const float u = std::clamp(targetCv, 0.0f, 1.0f);
+    const float u = safeClamp(targetCv, 0.0f, 1.0f, 0.0f);
 
     float tau;
     if (u >= mConductance) {
@@ -61,17 +64,17 @@ void VactrolGate::updateConductance(float targetCv) noexcept {
     // Non-linear perceptual mapping to cutoff frequency
     const float gNonLin = std::pow(mConductance, 1.8f);
     mCurrentCutoff = mMinCutoff * std::pow(mMaxCutoff / mMinCutoff, gNonLin);
-    mCurrentCutoff = std::clamp(mCurrentCutoff, 20.0f, mSampleRate * 0.495f);
+    mCurrentCutoff = safeClamp(mCurrentCutoff, 20.0f, mSampleRate * 0.48f, mMinCutoff);
 }
 
 float VactrolGate::processSample(float input) noexcept {
-    if (!std::isfinite(input)) [[unlikely]] {
+    if (!isFinite(input)) [[unlikely]] {
         return 0.0f;
     }
 
     // Dynamic envelope follower for self-sagging
     const float absIn = std::abs(input);
-    const float envAlpha = (absIn > mEnvFollower) ? 0.02f : 0.0005f;
+    const float envAlpha = (absIn > mEnvFollower) ? mEnvAttackCoeff : mEnvReleaseCoeff;
     mEnvFollower += envAlpha * (absIn - mEnvFollower);
     mEnvFollower = flushDenormal(mEnvFollower);
 
@@ -111,12 +114,12 @@ float VactrolGate::processSample(float input) noexcept {
 }
 
 void VactrolGate::processStereo(float inL, float inR, float& outL, float& outR) noexcept {
-    if (!std::isfinite(inL)) inL = 0.0f;
-    if (!std::isfinite(inR)) inR = 0.0f;
+    if (!isFinite(inL)) inL = 0.0f;
+    if (!isFinite(inR)) inR = 0.0f;
 
     // Combined input magnitude for envelope tracking
     const float maxMag = std::max(std::abs(inL), std::abs(inR));
-    const float envAlpha = (maxMag > mEnvFollower) ? 0.02f : 0.0005f;
+    const float envAlpha = (maxMag > mEnvFollower) ? mEnvAttackCoeff : mEnvReleaseCoeff;
     mEnvFollower += envAlpha * (maxMag - mEnvFollower);
     mEnvFollower = flushDenormal(mEnvFollower);
 

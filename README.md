@@ -1,7 +1,7 @@
 # BRAUN MR-16 · Modaler Resonator & Kinetischer Impulssynthesizer
 
-[![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(208%2F208%20C%2B%2B%20%7C%20221%2F221%20Web)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
-[![Version: 1.0.14](https://img.shields.io/badge/Version-1.0.14-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_mr-16/releases/tag/v1.0.14)
+[![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(216%2F216%20C%2B%2B%20%7C%20230%2F230%20Web)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
+[![Version: 1.1.0](https://img.shields.io/badge/Version-1.1.0-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_mr-16/releases/tag/v1.1.0)
 [![CI](https://github.com/sneed-and-feed/braun_mr-16/actions/workflows/build-and-release.yml/badge.svg)](https://github.com/sneed-and-feed/braun_mr-16/actions)
 [![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](#4-daw-setup--installation-paths)
 [![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](#4-daw-setup--installation-paths)
@@ -21,13 +21,13 @@
 
 The **BRAUN MR-16** is a physical acoustic modal resonator and kinetic impulse synthesizer completing the Dieter Rams ambient trilogy:
 1. **BRAUN AS-42**: Melodic & Harmonic Voice (felt piano acoustic modeling, Eno tape loops, microtonal drones).
-2. **BRAUN MR-16**: Physical Acoustic Body & Kinetic Strike (tactile transient exciters, 16-pole modal resonator matrix, 4 geometric manifolds, 3D Lorenz attractor, and tri-phase spatial BBD chorus).
+2. **BRAUN MR-16**: Physical Acoustic Body & Kinetic Strike (tactile transient exciters, 16-pole modal resonator matrix, 5 geometric manifolds, 3D Lorenz attractor, and tri-phase spatial BBD chorus).
 3. **BRAUN RB-26**: Spatial Diffusion Reverb (Poincaré hyperbolic cavity, 8-line FDN, Shepard-Risset spirals).
 
 In acoustic physics, exciters and resonant bodies are coupled systems. The MR-16 models this interaction directly:
-- **Kinetic Exciter Engine**: Hunt-Crossley mass-spring mallet strike, Karnopp stick-slip friction bow, Buchla 292 optical vactrol pluck, and external stereo line input.
-- **Autonomous Clocks**: Stochastic Poisson rain generator and Euclidean polyrhythmic sequencer driving a 16-key microtonal chime strip.
-- **16-Pole Modal Resonator Matrix**: 16 parallel 2nd-order topology-preserving state variable filters across 4 manifolds (Biharmonic Chladni plate, stiff struck beam, vocal tract, Poincaré horn) with 5 material damping profiles (wood, glass, steel, brass, nylon) and mutual Householder energy scattering.
+- **Kinetic Exciter Engine**: Hunt-Crossley mass-spring mallet strike, closed-loop Karnopp stick-slip friction bow, Buchla 292 optical vactrol pluck, and external stereo line input.
+- **Autonomous Clocks**: Stochastic Poisson rain generator (0–50 Hz) and Euclidean polyrhythmic sequencer driving a 16-key microtonal chime strip.
+- **16-Pole Modal Resonator Matrix**: 16 parallel 2nd-order topology-preserving state variable filters across 5 manifolds (Biharmonic Chladni plate, stiff struck beam, vocal tract, Poincaré horn, diffuse acoustic plate) with 5 material damping profiles (wood, glass, steel, brass, nylon) and mutual Householder energy scattering.
 - **Continuous Modulation & Space**: 3D chaotic Lorenz attractor modulating modal frequencies and Q spread; golden-ratio stereo panning ($\Phi = 137.5^\circ$); tri-phase BBD chorus with Roland Dimension D mono phase cancellation immunity.
 - **DSP Performance**: Algorithmic lookahead latency is **0 samples** (zero latency). Hermite BoundedSaturator provides linear transparency below $-2.85\text{ dBFS}$ ($0.72$) and asymptotic saturation ceiling at $+0.42\text{ dBFS}$ ($1.05$), with multi-tier modal anti-runaway clamping.
 
@@ -53,14 +53,14 @@ Open `http://localhost:3816/` in Chrome, Edge, Firefox, or Safari for the full 1
 
 ---
 
-## 3. Distributable Release Packages (v1.0.14)
+## 3. Distributable Release Packages (v1.1.0)
 
-Pre-compiled binary packages and cryptographic manifests published under [GitHub Releases v1.0.14](https://github.com/sneed-and-feed/braun_mr-16/releases/tag/v1.0.14):
+Pre-compiled binary packages and cryptographic manifests published under [GitHub Releases v1.1.0](https://github.com/sneed-and-feed/braun_mr-16/releases/tag/v1.1.0):
 
 | Platform | Format | Architecture | Distribution Package Archive | Verification Manifest |
 |:---|:---|:---|:---|:---|
-| **Windows** | Complete Bundle (Standalone, VST3, CLAP) | x86_64 | [`BRAUN_MR16-v1.0.14-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.14/BRAUN_MR16-v1.0.14-Windows-x64.zip) | `releases/SHA256SUMS.txt` |
-| **Windows** | VST3 Plugin Only | x86_64 | [`BRAUN_MR16-v1.0.14-VST3-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.0.14/BRAUN_MR16-v1.0.14-VST3-Windows-x64.zip) | `releases/SHA256SUMS.txt` |
+| **Windows** | Complete Bundle (Standalone, VST3, CLAP) | x86_64 | [`BRAUN_MR16-v1.1.0-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.1.0/BRAUN_MR16-v1.1.0-Windows-x64.zip) | `releases/SHA256SUMS.txt` |
+| **Windows** | VST3 Plugin Only | x86_64 | [`BRAUN_MR16-v1.1.0-VST3-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_mr-16/releases/download/v1.1.0/BRAUN_MR16-v1.1.0-VST3-Windows-x64.zip) | `releases/SHA256SUMS.txt` |
 
 Verify cryptographic archive integrity:
 
@@ -108,8 +108,9 @@ sha256sum -c releases/SHA256SUMS.txt
 
 ## 6. Documentation & Architecture Reference
 
-- **[ARCHITECTURE.md](ARCHITECTURE.md)**: Full engineering specification, 73-line Mermaid signal-flow diagram, mathematical derivations for Decks 01-07, 32-parameter APVTS table, and Linux build instructions.
-- **[VERIFICATION_CHECKLIST.md](VERIFICATION_CHECKLIST.md)**: Complete test registry with 207 C++ headless tests and 206 Web Audio automated tests passing at 100%.
+- **[ARCHITECTURE.md](ARCHITECTURE.md)**: Full engineering specification, 73-line Mermaid signal-flow diagram, mathematical derivations for Decks 01-07, 37-parameter APVTS table, and Linux build instructions.
+- **[VERIFICATION_CHECKLIST.md](VERIFICATION_CHECKLIST.md)**: Complete test registry with 216 C++ headless tests (+ 6 core invariants) and 230 Web Audio automated tests passing at 100%.
+- **[CHANGELOG.md](CHANGELOG.md)**: Detailed version history and technical release notes.
 
 ---
 

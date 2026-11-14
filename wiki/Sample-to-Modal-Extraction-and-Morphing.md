@@ -94,7 +94,7 @@ At $f_s = 48\text{ kHz}$ and $N = 4096$, each FFT bin has a width of:
 \Delta f = \frac{f_s}{N} = \frac{48000}{4096} \approx 11.71875\text{ Hz}
 ```
 
-Relying solely on discrete bin indices causes substantial pitch quantization errors (up to $\pm 5.86\text{ Hz}$). When a local maximum is identified ($y_0 > y_{-1}$ and $y_0 > y_{+1}$), the MR-16 performs **parabolic interpolation on the logarithmic magnitude spectrum**:
+Relying solely on discrete bin indices causes substantial pitch quantization errors (up to $\pm 5.86\text{ Hz}$). When a local maximum is identified $(y_0 > y_{-1}, \; y_0 > y_{+1})$, the MR-16 performs **parabolic interpolation on the logarithmic magnitude spectrum**:
 
 ```math
 \alpha = 20\log_{10}(y_{-1}), \quad \beta = 20\log_{10}(y_0), \quad \gamma = 20\log_{10}(y_{+1})
@@ -124,7 +124,7 @@ Detected peaks are sorted by descending amplitude and passed through an inter-pe
 - The top 16 dominant peaks are selected and sorted in ascending order of frequency ($f_0 < f_1 < \dots < f_{15}$).
 
 ### Stage 5: Multi-Slice Temporal Envelope Regression for $Q$-Factors
-A static FFT only reveals where resonant frequencies lie, not how long they ring. To determine the physical damping factor $\alpha_k$ and quality factor $Q_k$ of each mode, the extractor analyzes 6 successive time slices spaced across the sample duration.
+A static FFT only reveals where resonant frequencies lie, not how long they ring. To determine the physical damping and quality factors $(\alpha_k, Q_k)$ of each mode, the extractor analyzes 6 successive time slices spaced across the sample duration.
 
 For each mode $m$, the local spectral energy is tracked across time:
 
@@ -144,7 +144,7 @@ The decay rate slope $\alpha_m$ is determined via:
 \alpha_m = -\frac{\sum (t_s - \bar{t})(y_s - \bar{y})}{\sum (t_s - \bar{t})^2}
 ```
 
-From physical vibration theory, the modal quality factor $Q_m$ and $RT_{60}$ decay time are given by:
+From physical vibration theory, the modal quality factor and decay time $(Q_m, \mathrm{RT}_{60})$ are given by:
 
 ```math
 Q_m = \frac{\pi \, f_m}{\alpha_m}
@@ -192,25 +192,25 @@ Once profiles are loaded into **Slot A** and **Slot B**, the MR-16 performs real
 ```
 
 ### Geodesic Interpolation Mathematics
-Linear parameter interpolation ($\theta = (1 - \alpha)\theta_A + \alpha \theta_B$) distorts pitch intervals and causes perceived volume dips. The MR-16 uses **geodesic manifold interpolation**:
+Linear parameter interpolation $(\theta = (1 - \alpha)\theta_A + \alpha \theta_B)$ distorts pitch intervals and causes perceived volume dips. The MR-16 uses **geodesic manifold interpolation**:
 
-1. **Log-Frequency Interpolation (Preserves Musical Intervals):**
-   
-   ```math
-   f_i(\alpha) = f_{A,i}^{1 - \alpha_i} \cdot f_{B,i}^{\alpha_i} = \exp\left( (1 - \alpha_i) \ln(f_{A,i}) + \alpha_i \ln(f_{B,i}) \right)
-   ```
+#### 1. Log-Frequency Interpolation (Preserves Musical Intervals)
 
-2. **Log-$Q$ Damping Factor Interpolation:**
-   
-   ```math
-   Q_i(\alpha) = Q_{A,i}^{1 - \alpha_i} \cdot Q_{B,i}^{\alpha_i} = \exp\left( (1 - \alpha_i) \ln(Q_{A,i}) + \alpha_i \ln(Q_{B,i}) \right)
-   ```
+```math
+f_i(\alpha) = f_{A,i}^{1 - \alpha_i} \cdot f_{B,i}^{\alpha_i} = \exp\left( (1 - \alpha_i) \ln(f_{A,i}) + \alpha_i \ln(f_{B,i}) \right)
+```
 
-3. **Constant-Power Gain Crossfading:**
-   
-   ```math
-   \mathrm{gain}_i(\alpha) = \sqrt{(1 - \alpha_i) \cdot \mathrm{gain}_{A,i}^2 + \alpha_i \cdot \mathrm{gain}_{B,i}^2}
-   ```
+#### 2. Log-$Q$ Damping Factor Interpolation
+
+```math
+Q_i(\alpha) = Q_{A,i}^{1 - \alpha_i} \cdot Q_{B,i}^{\alpha_i} = \exp\left( (1 - \alpha_i) \ln(Q_{A,i}) + \alpha_i \ln(Q_{B,i}) \right)
+```
+
+#### 3. Constant-Power Gain Crossfading
+
+```math
+\mathrm{gain}_i(\alpha) = \sqrt{(1 - \alpha_i) \cdot \mathrm{gain}_{A,i}^2 + \alpha_i \cdot \mathrm{gain}_{B,i}^2}
+```
 
 ### 3D Lorenz Attractor Trajectory Steering
 Engaging `LORENZ STEER` dynamically perturbs the interpolation coordinate $\alpha_i$ for each individual mode using the real-time coordinates of the 3D Lorenz attractor $(x(t), y(t), z(t))$:

@@ -3,11 +3,14 @@
 namespace braun::mr16 {
 
 void ModalResonatorMatrix::prepare(double sampleRate) noexcept {
-    mSampleRate = (sampleRate > 100.0) ? static_cast<float>(sampleRate) : 48000.0f;
-    const float fc = 3600.0f;
+    mSampleRate = (isFinite(sampleRate) && sampleRate > 100.0) ? static_cast<float>(sampleRate) : 48000.0f;
+    const float fc = std::min(3600.0f, mSampleRate * 0.45f);
     mTailFilterCoeff = 1.0f - std::exp(-kTwoPi * fc / mSampleRate);
     mDelaySamples1 = std::clamp(static_cast<int>(0.0137f * mSampleRate), 1, static_cast<int>(kDiffuserBufferSize - 1));
     mDelaySamples2 = std::clamp(static_cast<int>(0.0193f * mSampleRate), 1, static_cast<int>(kDiffuserBufferSize - 1));
+    const float srScale = 48000.0f / mSampleRate;
+    mRadiationCoeff = 0.08f * srScale;
+    mEnergyDecayCoeff = (std::abs(srScale - 1.0f) < 1.0e-6f) ? 0.992f : std::pow(0.992f, srScale);
     reset();
 }
 
@@ -22,8 +25,6 @@ void ModalResonatorMatrix::reset() noexcept {
     mModFreqMultipliers.fill(1.0f);
     mModQSpread = 1.0f;
     mModPanOffset = 0.0f;
-    mQScale = 1.0f;
-    mOvertoneSpread = 1.0f;
     mQNorm.fill(1.0f);
 
     mInitialized = false;
@@ -90,7 +91,7 @@ void ModalResonatorMatrix::updateMaterialParameters() noexcept {
 }
 
 void ModalResonatorMatrix::setFundamentalHz(float f0Hz) noexcept {
-    const float clamped = std::clamp(f0Hz, 20.0f, 4000.0f);
+    const float clamped = safeClamp(f0Hz, 20.0f, 5000.0f, 220.0f);
     if (mInitialized && std::abs(clamped - mFundamentalHz) < 1.0e-5f) {
         return;
     }
@@ -100,7 +101,7 @@ void ModalResonatorMatrix::setFundamentalHz(float f0Hz) noexcept {
 }
 
 void ModalResonatorMatrix::setManifold(ManifoldType type, float morph) noexcept {
-    const float clampedMorph = std::clamp(morph, 0.0f, 1.0f);
+    const float clampedMorph = safeClamp(morph, 0.0f, 1.0f, 0.0f);
     if (mInitialized && mManifold == type && std::abs(clampedMorph - mManifoldMorph) < 1.0e-6f) {
         return;
     }
@@ -148,7 +149,7 @@ void ModalResonatorMatrix::setMaterial(MaterialType material) noexcept {
 }
 
 void ModalResonatorMatrix::setDecayScale(float decayScale) noexcept {
-    const float clamped = std::clamp(decayScale, 0.05f, 20.0f);
+    const float clamped = safeClamp(decayScale, 0.05f, 20.0f, 1.0f);
     if (mInitialized && std::abs(clamped - mDecayScale) < 1.0e-5f) {
         return;
     }
@@ -158,7 +159,7 @@ void ModalResonatorMatrix::setDecayScale(float decayScale) noexcept {
 }
 
 void ModalResonatorMatrix::setQScale(float qScale) noexcept {
-    const float clamped = std::clamp(qScale, 0.05f, 20.0f);
+    const float clamped = safeClamp(qScale, 0.05f, 20.0f, 1.0f);
     if (mInitialized && std::abs(clamped - mQScale) < 1.0e-5f) {
         return;
     }
@@ -168,7 +169,7 @@ void ModalResonatorMatrix::setQScale(float qScale) noexcept {
 }
 
 void ModalResonatorMatrix::setOvertoneSpread(float spread) noexcept {
-    const float clamped = std::clamp(spread, 0.2f, 3.0f);
+    const float clamped = safeClamp(spread, 0.2f, 3.0f, 1.0f);
     if (mInitialized && std::abs(clamped - mOvertoneSpread) < 1.0e-5f) {
         return;
     }
@@ -177,11 +178,11 @@ void ModalResonatorMatrix::setOvertoneSpread(float spread) noexcept {
 }
 
 void ModalResonatorMatrix::setCouplingDepth(float coupling) noexcept {
-    mCouplingDepth = std::clamp(coupling, 0.0f, 1.0f);
+    mCouplingDepth = safeClamp(coupling, 0.0f, 1.0f, 0.25f);
 }
 
 void ModalResonatorMatrix::setStereoWidth(float width) noexcept {
-    const float clamped = std::clamp(width, 0.0f, 1.5f);
+    const float clamped = safeClamp(width, 0.0f, 1.5f, 0.85f);
     if (mInitialized && std::abs(clamped - mStereoWidth) < 1.0e-5f) {
         return;
     }
@@ -213,7 +214,7 @@ void ModalResonatorMatrix::calculateDampingAndQ() noexcept {
             break;
     }
 
-    const float nyquist = mSampleRate * 0.495f;
+    const float nyquist = mSampleRate * 0.48f;
 
     for (size_t i = 0; i < kNumModes; ++i) {
         float effectiveRatio = 1.0f;
@@ -242,21 +243,23 @@ void ModalResonatorMatrix::calculateDampingAndQ() noexcept {
 
         mEffectiveUnspreadRatios[i] = effectiveRatio;
 
-        const float cleanF0 = std::isfinite(mFundamentalHz) ? mFundamentalHz : 220.0f;
+        const float cleanF0 = isFinite(mFundamentalHz) ? mFundamentalHz : 220.0f;
         const float f = std::clamp(cleanF0 * effectiveRatio, 20.0f, nyquist);
         const float fKhz = f * 0.001f;
         const float loss = eta0 + eta1 * std::pow(fKhz, mu);
         const float baseQ = (loss > 1.0e-5f) ? (1.0f / loss) : 1000.0f;
-        const float cleanBaseQ = std::isfinite(baseQ) ? baseQ : 50.0f;
-        const float cleanDecay = std::isfinite(mDecayScale) ? mDecayScale : 1.0f;
+        const float cleanBaseQ = isFinite(baseQ) ? baseQ : 50.0f;
+        const float cleanDecay = isFinite(mDecayScale) ? mDecayScale : 1.0f;
         mBaseQ[i] = std::clamp(cleanBaseQ * cleanDecay * mQScale, 0.5f, 4000.0f);
         mCouplingQDamping[i] = 1.0f / std::sqrt(1.0f + mBaseQ[i] * 0.05f);
     }
 }
 
 void ModalResonatorMatrix::updateFilterCoefficients() noexcept {
-    const float nyquist = mSampleRate * 0.495f;
-    const float spreadFactor = std::clamp(mOvertoneSpread, 0.2f, 3.0f);
+    const float nyquist = mSampleRate * 0.48f;
+    const float spreadFactor = safeClamp(mOvertoneSpread, 0.2f, 3.0f, 1.0f);
+    const float nyquistRollStart = mSampleRate * 0.45f;
+    const float nyquistRollEnd   = mSampleRate * 0.49f;
 
     for (size_t i = 0; i < kNumModes; ++i) {
         const float unspreadRatio = mEffectiveUnspreadRatios[i];
@@ -278,18 +281,26 @@ void ModalResonatorMatrix::updateFilterCoefficients() noexcept {
         }
 
         // Effective modulated center frequency
-        const float mult = std::isfinite(mModFreqMultipliers[i]) ? mModFreqMultipliers[i] : 1.0f;
-        const float cleanF0 = std::isfinite(mFundamentalHz) ? mFundamentalHz : 220.0f;
+        const float mult = isFinite(mModFreqMultipliers[i]) ? mModFreqMultipliers[i] : 1.0f;
+        const float cleanF0 = isFinite(mFundamentalHz) ? mFundamentalHz : 220.0f;
         const float rawF = cleanF0 * effectiveRatio * mult;
-        const float f = std::clamp(std::isfinite(rawF) ? rawF : 220.0f, 10.0f, nyquist);
+        const float cleanRawF = isFinite(rawF) ? rawF : 220.0f;
+        const float f = std::clamp(cleanRawF, 10.0f, nyquist);
         mCurrentFrequencies[i] = f;
 
+        // Smooth C1 ultrasonic excitation rolloff prevents near-Nyquist mode pileup/whistling
+        float nyquistGuard = 1.0f;
+        if (cleanRawF > nyquistRollStart) {
+            const float t = std::clamp((cleanRawF - nyquistRollStart) / (nyquistRollEnd - nyquistRollStart), 0.0f, 1.0f);
+            nyquistGuard = 1.0f - t * t * (3.0f - 2.0f * t);
+        }
+
         // Effective modulated Q-factor with modal spread
-        const float cleanSpread = std::isfinite(mModQSpread) ? mModQSpread : 1.0f;
+        const float cleanSpread = isFinite(mModQSpread) ? mModQSpread : 1.0f;
         const float qSpread = (i >= 8) ? cleanSpread : (1.0f / std::max(0.1f, cleanSpread));
-        const float cleanBaseQ = std::isfinite(mBaseQ[i]) ? mBaseQ[i] : 50.0f;
+        const float cleanBaseQ = isFinite(mBaseQ[i]) ? mBaseQ[i] : 50.0f;
         const float rawQ = cleanBaseQ * qSpread;
-        const float q = std::clamp(std::isfinite(rawQ) ? rawQ : 50.0f, 0.5f, 4000.0f);
+        const float q = std::clamp(isFinite(rawQ) ? rawQ : 50.0f, 0.5f, 4000.0f);
 
         // Zavalishin TPT State Variable Filter coefficients
         const float g = std::tan(kPi * (f / mSampleRate));
@@ -300,10 +311,8 @@ void ModalResonatorMatrix::updateFilterCoefficients() noexcept {
         mK[i] = k;
         mA1[i] = a1;
 
-        // Q-dependent energy normalization factor:
-        // Scales modal excitation by a factor proportional to 1 / sqrt(1 + 0.05 * Q)
-        // Calibrated so that nominal and high-Q modes maintain balanced acoustic energy without limiter blowout
-        mQNorm[i] = std::sqrt(28.0f / (1.0f + 0.05f * q));
+        // Q-dependent energy normalization factor with ultrasonic Nyquist guard
+        mQNorm[i] = std::sqrt(28.0f / (1.0f + 0.05f * q)) * nyquistGuard;
     }
 }
 
@@ -315,7 +324,7 @@ void ModalResonatorMatrix::calculateSpatialPanning() noexcept {
 
         // Constant-power sine/cosine panning
         const float p = 0.5f + 0.5f * mStereoWidth * std::sin(angleRad);
-        const float cleanP = std::isfinite(p) ? p : 0.5f;
+        const float cleanP = isFinite(p) ? p : 0.5f;
         const float panNorm = std::clamp(cleanP, 0.0f, 1.0f);
 
         mPanL[i] = std::cos(kHalfPi * panNorm);
@@ -363,10 +372,9 @@ void ModalResonatorMatrix::processSample(float exciterInput, float& outL, float&
         const float vLp = mG[i] * vBp + mS2[i];
 
         // Non-linear radiation resistance / quadratic velocity damping:
-        // Physical acoustic air drag on fast-moving membrane/bar: F_rad ~ v^2
+        // Physical acoustic air drag on fast-moving membrane/bar: F_rad ~ v^2 (sample-rate scaled)
         const float vSq = vBp * vBp;
-        constexpr float kRadiationCoeff = 0.08f;
-        const float radDamp = 1.0f / (1.0f + kRadiationCoeff * vSq);
+        const float radDamp = 1.0f / (1.0f + mRadiationCoeff * vSq);
         float nextS1 = (2.0f * vBp - mS1[i]) * radDamp;
         float nextS2 = 2.0f * vLp - mS2[i];
 
@@ -400,9 +408,9 @@ void ModalResonatorMatrix::processSample(float exciterInput, float& outL, float&
         rawMode = std::clamp(rawMode, -1.0f, 1.0f);
         modeOutputs[i] = flushDenormal(rawMode);
 
-        // Real-time modal energy envelope tracking for Phosphor CRT Scope
+        // Real-time modal energy envelope tracking for Phosphor CRT Scope (sample-rate scaled)
         const float absVal = std::abs(modeOutputs[i]);
-        mModalEnergies[i] = flushDenormal(0.992f * mModalEnergies[i] + 0.008f * absVal);
+        mModalEnergies[i] = flushDenormal(mEnergyDecayCoeff * mModalEnergies[i] + (1.0f - mEnergyDecayCoeff) * absVal);
     }
 
     // 2. Physical Contractive Inter-Modal Coupling Network (Nearest-Neighbor & Body Dispersion)

@@ -280,31 +280,43 @@ describe('BRAUN MR-16 Automated DSP Verification Checklist', () => {
   });
 
   //----------------------------------------------------------------------------
-  describe('6. 31-Parameter APVTS & Web Audio Metadata Map', () => {
-    it('verifies all 31 parameters are declared in web engine params', async () => {
+  describe('6. 37-Parameter APVTS & Web Audio Metadata Map', () => {
+    it('verifies all 36 DSP/audio APVTS parameters are declared in web engine params (plus display_mode in Parameters.h)', async () => {
       const engineModule = await import('./js/audio/mr16_web_engine.js');
       const engine = new engineModule.Mr16WebEngine();
 
       const expectedParams = [
-        // Deck 01 (10)
+        // Deck 01 (11)
         'exciter_type', 'strike_hardness', 'strike_velocity',
         'friction_force', 'friction_speed', 'vactrol_sag',
-        'ext_input_gain', 'poisson_density', 'euclidean_pulses', 'euclidean_steps',
+        'ext_input_gain', 'poisson_density', 'euclidean_enable', 'euclidean_pulses', 'euclidean_steps',
         // Deck 02 (7)
         'manifold_type', 'modal_frequency', 'modal_damping',
         'material_profile', 'modal_coupling', 'modal_spread', 'modal_q',
-        // Deck 03 (4)
-        'lorenz_rate', 'lorenz_chaos', 'lorenz_freq_mod', 'lorenz_q_mod',
+        // Deck 03 (6)
+        'lorenz_morph_alpha', 'lorenz_rate', 'lorenz_chaos',
+        'lorenz_freq_mod', 'lorenz_q_mod', 'lorenz_morph_steer',
         // Deck 04 (5)
         'chorus_enable', 'chorus_rate_hz', 'chorus_depth_ms', 'chorus_dimension', 'chorus_mix',
-        // Deck 05 (5)
-        'golden_pan_spread', 'vactrol_lpg_cutoff', 'drive_saturation', 'master_trim_db', 'dry_wet_mix'
+        // Deck 05 (7)
+        'golden_pan_spread', 'vactrol_lpg_cutoff', 'drive_saturation',
+        'soft_limiter', 'master_trim_db', 'dry_wet_mix', 'power_state'
       ];
 
       for (const param of expectedParams) {
         assert.ok(engine.params[param] !== undefined, `Parameter ${param} must exist in Mr16WebEngine`);
       }
-      assert.strictEqual(expectedParams.length, 31, 'Exactly 31 parameters declared in core tree');
+      assert.strictEqual(expectedParams.length, 36, 'Exactly 36 audio/DSP APVTS parameters declared in Mr16WebEngine');
+      assert.strictEqual(engine.params.modal_q, 85.0, 'Default modal_q must match calibrated C++ APVTS default (85.0)');
+      assert.strictEqual(engine.params.euclidean_enable, false, 'Default euclidean_enable must be disarmed (false)');
+      assert.strictEqual(engine.params.lorenz_morph_alpha, 0.0, 'Default lorenz_morph_alpha must be 0.0 (unmorphed)');
+      assert.strictEqual(engine.params.lorenz_morph_steer, 0.0, 'Default lorenz_morph_steer must be 0.0');
+      assert.strictEqual(engine.params.soft_limiter, true, 'Default soft_limiter must be enabled (true)');
+
+      const paramsHeader = fs.readFileSync(path.join(__dirname, '..', 'source', 'plugin', 'Parameters.h'), 'utf8');
+      for (const param of [...expectedParams, 'display_mode']) {
+        assert.ok(paramsHeader.includes(`"${param}"`), `Parameters.h must declare APVTS parameter "${param}"`);
+      }
     });
 
     it('verifies exciter_type parameter updates and friction generator state handling', async () => {
@@ -574,6 +586,272 @@ describe('BRAUN MR-16 Automated DSP Verification Checklist', () => {
       for (let i = 0; i < 16; i++) {
         assert.ok(qFactors[i] > 0.0 && qFactors[i] <= 1.0, `Q-norm factor ${i} (${qFactors[i]}) must be in (0, 1]`);
       }
+    });
+  });
+
+  //----------------------------------------------------------------------------
+  describe('11. v1.1.0 DSP, Parameter Scale & Lifecycle Regression Verification', () => {
+    it('verifies app.js _toJuceParamValue normalizes [0, 100]% preset params without <= 1.0% jump and maps display_mode 2 to MODAL_FFT', () => {
+      const appJs = fs.readFileSync(path.join(__dirname, 'js', 'app.js'), 'utf8');
+      assert.ok(appJs.includes('_toJuceParamValue(id, val)'), 'app.js must define _toJuceParamValue(id, val)');
+      assert.ok(appJs.includes("'MODAL_FFT'"), 'app.js must map display_mode 2 to MODAL_FFT');
+      assert.ok(appJs.includes('OfflineAudioContext'), 'app.js sample-to-modal extraction must decode via OfflineAudioContext without booting hardware WebAudio in JUCE mode');
+
+      const percentIds = new Set([
+        'lorenz_freq_mod', 'lorenz_q_mod', 'chorus_mix',
+        'golden_pan_spread', 'drive_saturation', 'dry_wet_mix'
+      ]);
+      const toJuceParamValue = (id, val) => {
+        const num = Number(val);
+        if (!Number.isFinite(num)) return 0.0;
+        if (percentIds.has(id)) {
+          return Math.max(0.0, Math.min(1.0, num / 100.0));
+        }
+        if (id === 'modal_coupling' || id === 'chorus_dimension') {
+          return Math.max(0.0, Math.min(1.0, num > 1.0 ? num / 100.0 : num));
+        }
+        return num;
+      };
+
+      // Sub-1% values must map linearly (0.5% -> 0.005, 1.0% -> 0.01) rather than jumping to 1.0 (100%)
+      assert.ok(Math.abs(toJuceParamValue('chorus_mix', 0.5) - 0.005) < 1e-9);
+      assert.ok(Math.abs(toJuceParamValue('chorus_mix', 1.0) - 0.01) < 1e-9);
+      assert.ok(Math.abs(toJuceParamValue('drive_saturation', 25.0) - 0.25) < 1e-9);
+      assert.ok(Math.abs(toJuceParamValue('dry_wet_mix', 100.0) - 1.0) < 1e-9);
+      assert.ok(Math.abs(toJuceParamValue('modal_coupling', 0.25) - 0.25) < 1e-9);
+      assert.ok(Math.abs(toJuceParamValue('chorus_dimension', 0.5) - 0.5) < 1e-9);
+    });
+
+    it('verifies Mr16WebEngine ext_input_gain dB law, drive_saturation pre-gain, and soft_limiter toggle', async () => {
+      const { Mr16WebEngine } = await import('./js/audio/mr16_web_engine.js');
+      const { HeadlessOfflineAudioContext } = await import('./headless-audio-context.mjs');
+      const ctx = new HeadlessOfflineAudioContext(2, 512, 48000);
+      const engine = new Mr16WebEngine();
+      await engine.init(ctx);
+
+      // ext_input_gain dB-to-linear law: 0 dB -> 1.0, +6 dB -> ~1.995, -6 dB -> ~0.501, -24 dB -> 0.0
+      engine.setParam('ext_input_gain', 0.0);
+      assert.ok(Math.abs(engine.extInputGain.gain.getValueAtTime(10.0) - 1.0) < 1e-4, '0 dB should map to unity 1.0');
+
+      engine.setParam('ext_input_gain', 6.0);
+      assert.ok(Math.abs(engine.extInputGain.gain.getValueAtTime(10.0) - Math.pow(10, 6 / 20)) < 1e-3, '+6 dB should map to ~1.995');
+
+      engine.setParam('ext_input_gain', -6.0);
+      assert.ok(Math.abs(engine.extInputGain.gain.getValueAtTime(10.0) - Math.pow(10, -6 / 20)) < 1e-3, '-6 dB should map to ~0.501');
+
+      engine.setParam('ext_input_gain', -24.0);
+      assert.ok(Math.abs(engine.extInputGain.gain.getValueAtTime(10.0) - 0.0) < 1e-6, '-24 dB floor should mute external input cleanly');
+
+      // drive_saturation pre-gain: 25% default -> 1.0 unity, 100% -> 2.125, 0% -> 0.625
+      assert.ok(engine.driveGain, 'driveGain node must exist before saturator');
+      engine.setParam('drive_saturation', 25.0);
+      assert.ok(Math.abs(engine.driveGain.gain.getValueAtTime(10.0) - 1.0) < 1e-4, '25% drive_saturation must be unity 1.0');
+      engine.setParam('drive_saturation', 100.0);
+      assert.ok(Math.abs(engine.driveGain.gain.getValueAtTime(10.0) - 2.125) < 1e-4, '100% drive_saturation must boost pre-limiter drive to 2.125');
+
+      // soft_limiter bypass / engage
+      engine.setParam('soft_limiter', false);
+      assert.strictEqual(engine.saturator.curve, null, 'Disabling soft_limiter must bypass WaveShaper curve');
+      engine.setParam('soft_limiter', true);
+      assert.ok(engine.saturator.curve instanceof Float32Array, 'Enabling soft_limiter must restore Hermite WaveShaper curve');
+      engine.destroy();
+    });
+
+    it('verifies RK4 _stepLorenz numerical stability at 10 Hz rate and live Q modulation', async () => {
+      const { Mr16WebEngine } = await import('./js/audio/mr16_web_engine.js');
+      const { HeadlessOfflineAudioContext } = await import('./headless-audio-context.mjs');
+      const ctx = new HeadlessOfflineAudioContext(2, 512, 48000);
+      const engine = new Mr16WebEngine();
+      await engine.init(ctx);
+
+      engine.setParam('lorenz_rate', 10.0);
+      engine.setParam('lorenz_chaos', 1.0);
+      engine.setParam('lorenz_freq_mod', 50.0);
+      engine.setParam('lorenz_q_mod', 80.0);
+
+      for (let i = 0; i < 500; i++) {
+        engine._stepLorenz();
+        assert.ok(Number.isFinite(engine.lorenzState.x) && Math.abs(engine.lorenzState.x) < 60, 'RK4 Lorenz X must stay bounded');
+        assert.ok(Number.isFinite(engine.lorenzState.y) && Math.abs(engine.lorenzState.y) < 70, 'RK4 Lorenz Y must stay bounded');
+        assert.ok(Number.isFinite(engine.lorenzState.z) && engine.lorenzState.z > -10 && engine.lorenzState.z < 90, 'RK4 Lorenz Z must stay bounded');
+      }
+      const settledQ = engine.modes[0].Q.getValueAtTime(10.0);
+      assert.ok(Number.isFinite(settledQ) && settledQ >= 1.0, 'Modulated mode Q must stay finite and >= 1.0');
+      engine.destroy();
+    });
+
+    it('verifies 44.1 kHz Nyquist filter clamping and clean engine.destroy() lifecycle teardown', async () => {
+      const { Mr16WebEngine } = await import('./js/audio/mr16_web_engine.js');
+      const { HeadlessOfflineAudioContext } = await import('./headless-audio-context.mjs');
+      const ctx = new HeadlessOfflineAudioContext(2, 512, 44100);
+      const engine = new Mr16WebEngine();
+      await engine.init(ctx);
+
+      engine.setParam('manifold_type', 1); // StiffBeam (wide overtone ratios)
+      engine.setParam('modal_frequency', 2000.0);
+      engine.setParam('modal_spread', 2.0);
+      engine.setParam('vactrol_lpg_cutoff', 20000.0);
+
+      const maxAllowedHz = 44100 * 0.48 + 1e-3;
+      for (let i = 0; i < 16; i++) {
+        const modeHz = engine.modes[i].frequency.getValueAtTime(10.0);
+        assert.ok(modeHz <= maxAllowedHz,
+          `Mode ${i} frequency (${modeHz}) must clamp <= 0.48 * fs (${maxAllowedHz})`);
+      }
+      const lpgHz = engine.vactrolLpg.frequency.getValueAtTime(10.0);
+      assert.ok(lpgHz <= maxAllowedHz,
+        `LPG cutoff (${lpgHz}) must clamp <= 0.48 * fs at 44.1 kHz`);
+
+      engine.destroy();
+      assert.strictEqual(engine.isInitialized, false, 'destroy() must mark engine uninitialized');
+      assert.strictEqual(engine.isPowered, false, 'destroy() must power down engine');
+    });
+
+    it('verifies 1:1 parity of all 16 factory presets across C++ Mr16Engine, PluginProcessor, and Web JSON', () => {
+      const webPresetsJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'factory_presets.json'), 'utf8'));
+      const subPresetsJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'presets', 'factory_presets.json'), 'utf8'));
+      assert.deepStrictEqual(webPresetsJson, subPresetsJson, 'web/factory_presets.json and web/presets/factory_presets.json must match 1:1');
+      assert.strictEqual(webPresetsJson.presets.length, 16, 'Must define 16 factory presets');
+
+      const engineCpp = fs.readFileSync(path.join(__dirname, '..', 'source', 'dsp', 'Mr16Engine.cpp'), 'utf8');
+      const procCpp = fs.readFileSync(path.join(__dirname, '..', 'source', 'plugin', 'PluginProcessor.cpp'), 'utf8');
+      for (const p of webPresetsJson.presets) {
+        assert.ok(engineCpp.includes(`"${p.id}"`), `Mr16Engine.cpp must include preset id ${p.id}`);
+        assert.ok(engineCpp.includes(`"${p.name}"`), `Mr16Engine.cpp must include preset name ${p.name}`);
+        assert.ok(procCpp.includes(`"${p.name}"`), `PluginProcessor.cpp must include preset name ${p.name}`);
+      }
+    });
+
+    it('verifies WebView2 getResource() path-traversal guards and pre-AudioContext setPower() UI callback', async () => {
+      const editorCpp = fs.readFileSync(path.join(__dirname, '..', 'source', 'plugin', 'PluginEditor.cpp'), 'utf8');
+      assert.ok(editorCpp.includes('path.contains("..")') && editorCpp.includes('path.containsChar(\':\')'),
+        'PluginEditor::getResource must reject path traversal and drive specifiers');
+      assert.ok(editorCpp.includes('file.isAChildOf(baseDir)'),
+        'PluginEditor::getResource must enforce baseDir containment');
+
+      const { Mr16WebEngine } = await import('./js/audio/mr16_web_engine.js');
+      const engine = new Mr16WebEngine();
+      const observedStates = [];
+      engine.onPowerStateChanged = (state) => observedStates.push(state);
+      engine.setParam('power_state', true);
+      engine.setPower(false);
+      assert.deepStrictEqual(observedStates, [true, false],
+        'setPower / setParam(power_state) must fire onPowerStateChanged even when AudioContext is null (JUCE mode)');
+    });
+  });
+
+  //----------------------------------------------------------------------------
+  describe('12. v1.1.0 Round-2 Functional Wiring & Preset Parity', () => {
+    it('verifies euclidean_enable factory preset parity, WebEngine timer lifecycle, and Standby wake-on-enable rules', async () => {
+      const presetsJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'factory_presets.json'), 'utf8'));
+      const enabledIds = presetsJson.presets.filter((p) => p.params.euclidean_enable === true).map((p) => p.id);
+      assert.deepStrictEqual(enabledIds, ['EUCLIDEAN_METALLOPHONE', 'FROSTED_GLASS_ARPEGGIO'],
+        'Only EUCLIDEAN_METALLOPHONE (index 7) and FROSTED_GLASS_ARPEGGIO (index 14) may enable euclidean_enable by default');
+      for (const p of presetsJson.presets) {
+        assert.strictEqual(typeof p.params.euclidean_enable, 'boolean', `Preset ${p.id} must define boolean euclidean_enable`);
+      }
+
+      const { Mr16WebEngine } = await import('./js/audio/mr16_web_engine.js');
+      const engine = new Mr16WebEngine();
+      engine.isInitialized = true;
+      engine.ctx = {
+        currentTime: 0,
+        state: 'running',
+        suspend: async () => {},
+        resume: async () => {}
+      };
+      engine.masterGain = {
+        gain: {
+          cancelScheduledValues: () => {},
+          setValueAtTime: () => {},
+          setTargetAtTime: () => {}
+        }
+      };
+
+      // Disarmed by default even when powered on
+      engine.setPower(true);
+      assert.strictEqual(engine.euclideanTimer, null, 'Disarmed euclidean_enable must not start euclideanTimer on power-on');
+
+      // Armed with positive pulses starts timer; pulses = 0 stops timer; power-off stops timer
+      engine.setParam('euclidean_pulses', 5);
+      engine.setParam('euclidean_steps', 16);
+      engine.setParam('euclidean_enable', true);
+      assert.notStrictEqual(engine.euclideanTimer, null, 'Enabling euclidean_enable while powered must start euclideanTimer');
+
+      engine.setParam('euclidean_pulses', 0);
+      assert.strictEqual(engine.euclideanTimer, null, 'Zero Euclidean pulses must disarm euclideanTimer');
+
+      engine.setParam('euclidean_pulses', 5);
+      assert.notStrictEqual(engine.euclideanTimer, null, 'Restoring positive Euclidean pulses while armed must restart timer');
+
+      engine.setPower(false);
+      assert.strictEqual(engine.euclideanTimer, null, 'Standby power-off must stop euclideanTimer');
+
+      const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+      assert.ok(indexHtml.includes('id="btn-audition-euclidean"'), 'index.html must expose #btn-audition-euclidean');
+
+      const appJs = fs.readFileSync(path.join(__dirname, 'js', 'app.js'), 'utf8');
+      assert.ok(appJs.includes("_emitJuceParam('currentProgram'"), 'app.js must notify C++ host via currentProgram on factory preset select');
+      assert.ok(appJs.includes("_emitJuceParam('euclidean_enable'"), 'app.js must bind euclidean_enable to JUCE/Web parameter state');
+    });
+
+    it('verifies 16-key Chime Strip microtonal frequency forwarding across Web UI and C++ IPC handler', () => {
+      const appJs = fs.readFileSync(path.join(__dirname, 'js', 'app.js'), 'utf8');
+      assert.ok(appJs.includes("type: 'chime', key: index, vel: velocity, freq"),
+        'app.js triggerChimeKey must forward per-key microtonal freq over JUCE exciterTrigger IPC');
+
+      const editorCpp = fs.readFileSync(path.join(__dirname, '..', 'source', 'plugin', 'PluginEditor.cpp'), 'utf8');
+      assert.ok(editorCpp.includes('processorRef.triggerChimeKey(key, vel, freq)'),
+        'PluginEditor::handleExciterTriggerFromWeb must pass freq to processorRef.triggerChimeKey');
+    });
+
+    it('verifies LorenzMorpher zero-alpha fidelity, WebEngine adjacent-manifold morphing, and calibrated preset modal_q', async () => {
+      const { Mr16WebEngine } = await import('./js/audio/mr16_web_engine.js');
+      const { LorenzMorpher } = await import('./js/audio/lorenz_morpher.js');
+
+      const engine = new Mr16WebEngine();
+      engine.isInitialized = true;
+      engine.ctx = { currentTime: 0, sampleRate: 48000 };
+      const makeParamMock = () => ({ setValueAtTime: () => {}, setTargetAtTime: () => {} });
+      engine.modes = Array.from({ length: 16 }, () => ({ frequency: makeParamMock(), Q: makeParamMock() }));
+      engine.modalGains = Array.from({ length: 16 }, () => ({ gain: makeParamMock() }));
+      engine.updateModalFrequencies();
+      const baseMode2 = engine.modalFreqs[2];
+
+      // Continuous adjacent-manifold morphing in standard (!customProfileActive) mode
+      engine.setParam('lorenz_morph_alpha', 0.5);
+      const halfMorphedMode2 = engine.modalFreqs[2];
+      engine.setParam('lorenz_morph_alpha', 1.0);
+      const fullMorphedMode2 = engine.modalFreqs[2];
+
+      assert.ok(halfMorphedMode2 > baseMode2 && fullMorphedMode2 > halfMorphedMode2,
+        `CHLADNI -> BEAM adjacent manifold morph must monotonically shift mode 2 (${baseMode2} -> ${halfMorphedMode2} -> ${fullMorphedMode2})`);
+
+      // Lorenz steer dynamically perturbs effective morph alpha when customProfileActive is false
+      engine.setParam('lorenz_morph_alpha', 0.25);
+      const unsteeredMode2 = engine.modalFreqs[2];
+      engine.lorenzState.x = 12.0; // positive normalizedX
+      engine.setParam('lorenz_morph_steer', 80.0);
+      const steeredMode2 = engine.modalFreqs[2];
+      assert.notStrictEqual(steeredMode2, unsteeredMode2,
+        'Non-zero lorenz_morph_steer must dynamically steer adjacent-manifold modal frequencies');
+
+      // LorenzMorpher must honor explicit alpha = 0.0 (no falsy || 0.5 bug)
+      const morpher = new LorenzMorpher();
+      engine.setParam('lorenz_morph_alpha', 0.0);
+      engine.setParam('lorenz_morph_steer', 0.0);
+      morpher.applyToEngine(engine);
+      assert.ok(Math.abs(engine.modalFreqs[0] - 220.0) < 1.0e-3,
+        `LorenzMorpher.applyToEngine must preserve lorenz_morph_alpha = 0.0 (220 Hz Slot A, got ${engine.modalFreqs[0]})`);
+
+      // Calibrated per-preset modal_q parity across JSON, PluginProcessor.cpp, and Mr16Engine.cpp
+      const presetsJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'factory_presets.json'), 'utf8'));
+      const distinctQs = new Set(presetsJson.presets.map((p) => p.params.modal_q));
+      assert.ok(distinctQs.size >= 12, 'Factory presets must carry calibrated material-appropriate modal_q values (not uniform 85.0)');
+      const woodPreset = presetsJson.presets.find((p) => p.id === 'MARIMBA_ROSEWOOD_BAR');
+      const glassPreset = presetsJson.presets.find((p) => p.id === 'CRYSTAL_WINE_GLASS');
+      assert.ok(woodPreset && glassPreset && glassPreset.params.modal_q > woodPreset.params.modal_q,
+        'Crystal Wine Glass preset must have higher calibrated modal_q than Marimba Rosewood Bar');
     });
   });
 

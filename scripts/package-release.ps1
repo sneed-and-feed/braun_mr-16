@@ -36,7 +36,7 @@ Write-Host "====================================================================
 
 # 1. Version Resolution
 $PackageJsonPath = Join-Path $RootDir "package.json"
-$Version = "1.0.14"
+$Version = "1.1.0"
 if (Test-Path $PackageJsonPath) {
     try {
         $Pkg = Get-Content $PackageJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -216,7 +216,7 @@ Write-Host "[INFO] Wrote checksum manifest to $ChecksumFile"
 
 $ReleasesDir = Join-Path $RootDir "releases"
 if (Test-Path $ReleasesDir) {
-    $RootReleaseZips = Get-ChildItem -Path $ReleasesDir -Filter "*.zip" | Sort-Object FullName
+    $RootReleaseZips = Get-ChildItem -Path $ReleasesDir -Filter "BRAUN_MR16-v${Version}-*.zip" | Sort-Object Name
     if ($RootReleaseZips.Count -gt 0) {
         $ReleaseChecksumLines = [System.Collections.Generic.List[string]]::new()
         foreach ($Zip in $RootReleaseZips) {
