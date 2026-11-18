@@ -83,7 +83,7 @@ INSTALLATION GUIDE:
 3. Standalone: Launch 'BRAUN_MR16.exe' directly.
 """
 
-doc_files = ["README.txt", "README.md", "ARCHITECTURE.md", "CHANGELOG.md", "LICENSE"]
+doc_files = ["README.md", "ARCHITECTURE.md", "CHANGELOG.md", "LICENSE"]
 
 # 1. Package Windows-x64 full zip
 zip_path = os.path.join(release_dir, f"BRAUN_MR16-v{version}-Windows-x64.zip")

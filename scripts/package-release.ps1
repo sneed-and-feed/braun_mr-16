@@ -5,7 +5,7 @@
         Calculates SHA-256 cryptographic verification checksums.
     .DESCRIPTION
         Industrial distribution packaging tool adhering to DIN 1451 technical specification standards.
-        Outputs distribution artifacts to dist/windows and dist/web, generating SHA256SUMS.txt.
+        Outputs distribution artifacts to releases/ and dist/windows/, generating SHA256SUMS.txt.
     .PARAMETER ForceBuild
         Forces CMake reconfiguration and compilation even if existing Release binaries are detected.
     .PARAMETER SkipTests
@@ -25,8 +25,6 @@ $BuildDir = Join-Path $RootDir "build"
 $ArtefactsDir = Join-Path $BuildDir "BRAUN_MR16_artefacts\Release"
 $DistDir = Join-Path $RootDir "dist"
 $DistWinDir = Join-Path $DistDir "windows"
-$DistWebDir = Join-Path $DistDir "web"
-$StagingBase = Join-Path $DistDir "_staging"
 
 Write-Host "================================================================================"
 Write-Host "BRAUN MR-16 -- RELEASE PACKAGING PIPELINE"
@@ -124,7 +122,6 @@ if (-not $SkipTests) {
     Write-Host "[INFO] Executing headless DSP verification suite..."
     $CandidateTestPaths = @(
         (Join-Path $BuildDir "source\tests\Release\mr16_headless_dsp_tests.exe"),
-        (Join-Path $RootDir "build_tests\Release\mr16_headless_dsp_tests.exe"),
         (Join-Path $BuildDir "Release\mr16_headless_dsp_tests.exe"),
         (Join-Path $BuildDir "mr16_headless_dsp_tests.exe")
     )
@@ -152,35 +149,7 @@ if (-not $SkipTests) {
 }
 
 # 4. Preparation of Distribution Directories
-if (Test-Path $StagingBase) {
-    Remove-Item -Path $StagingBase -Recurse -Force
-}
 New-Item -ItemType Directory -Path $DistWinDir -Force | Out-Null
-New-Item -ItemType Directory -Path $DistWebDir -Force | Out-Null
-New-Item -ItemType Directory -Path $StagingBase -Force | Out-Null
-
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-
-function Create-ZipArchive {
-    param(
-        [string]$SourceDirectory,
-        [string]$DestinationZipPath
-    )
-    if (Test-Path $DestinationZipPath) {
-        Remove-Item -Path $DestinationZipPath -Force
-    }
-    [System.IO.Compression.ZipFile]::CreateFromDirectory(
-        $SourceDirectory,
-        $DestinationZipPath,
-        [System.IO.Compression.CompressionLevel]::Optimal,
-        $false
-    )
-    $Size = (Get-Item $DestinationZipPath).Length
-    Write-Host "[PACKAGE] Generated $(Split-Path -Leaf $DestinationZipPath) ($([math]::Round($Size / 1MB, 2)) MB / $Size bytes)"
-}
-
-$LicenseFile = Join-Path $RootDir "LICENSE"
-$ReadmeFile = Join-Path $RootDir "README.md"
 
 # ------------------------------------------------------------------------------
 # Package: Standard Consolidated Windows Release Bundles
@@ -228,11 +197,6 @@ if (Test-Path $ReleasesDir) {
         Write-Host "[INFO] Wrote releases checksum manifest to $ReleaseChecksumFile"
     }
 }
-
-# ------------------------------------------------------------------------------
-# 6. Cleanup Staging Directory
-# ------------------------------------------------------------------------------
-Remove-Item -Path $StagingBase -Recurse -Force
 
 Write-Host "================================================================================"
 Write-Host "RELEASE PACKAGING COMPLETED SUCCESSFULLY"
